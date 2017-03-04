@@ -1,20 +1,22 @@
-Need to populate this.
+Testing features of the userfaultfd API to evaluate as basis for
+dimmap2 
 
 # README #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+make
+./hello
 
 ### What is this repository for? ###
 
-* Quick summary
+* customized caching of external memory pages using userfaultfd
 * Version
 * [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
 
 ### How do I get set up? ###
 
-* Summary of set up
+* Summary of setup
 * Configuration
-* Dependencies
+* Dependencies: needs Linux 4.3+ for the userfaultfd feature
 * Database configuration
 * How to run tests
 * Deployment instructions
