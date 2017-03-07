@@ -1,0 +1,4 @@
+This is the same directory as the bitbucket userfd.
+To compile with the TESTBUFFER option,  make D=TESTBUFFER
+To use a file to read the page, make D=USEFILE
+multiple options make D=TESTBUFFER,USEFILE

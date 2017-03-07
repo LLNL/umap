@@ -24,8 +24,11 @@
 static volatile int stop;
 
 struct params {
-    int uffd;
-    long page_size;
+  int uffd;
+  long page_size;
+#ifdef USEFILE
+  int fd;
+#endif
 };
 int faultnum;
 
@@ -60,7 +63,13 @@ static void *handler(void *arg)
     struct params *p = arg;
     long page_size = p->page_size;
     char buf[page_size];
-    static void *lastpage = 0;
+
+#ifdef TESTBUFFER
+    static void *lastpage[16];
+    static int startix=0;
+    static int endix=0;
+#endif
+
     faultnum=0;
 
     for (;;) {
@@ -120,17 +129,26 @@ static void *handler(void *arg)
             //fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
 
 	    //releasing prev page here results in race condition with multiple app threads
-	    //if (lastpage!=0) {
-	    //fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
-	    //int ret = madvise(lastpage, page_size, MADV_DONTNEED);
-	    //if(ret == -1) { perror("madvise"); assert(0); }
-	    //}
-	    //lastpage = (void *)addr;
+	    // ifdef'ed code introduces a 16 element delay buffer
 
+#ifdef TESTBUFFER
+	    if (startix==(endix+1) % 16) { // buffer full
+	      int ret = madvise(lastpage[startix], page_size, MADV_DONTNEED);
+	      if(ret == -1) { perror("madvise"); assert(0); } 
+	      startix = (startix + 1) % 16;
+	    };
+	    lastpage[endix]= (void *)addr;
+	    endix = (endix +1) %16;
+#endif
+
+#ifdef USEFILE
+	    lseek(p->fd, 0, SEEK_SET);
+	    read(p->fd, buf, 10);
+#endif
             struct uffdio_copy copy;
             copy.src = (long long)buf;
             copy.dst = (long long)addr;
-            copy.len = page_size; 
+	    copy.len = page_size; 
             copy.mode = 0;
             if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
                 perror("ioctl/copy");
@@ -173,6 +191,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "unsupported userfaultfd api\n");
         exit(1);
     }
+    fprintf(stdout, "Feature bitmap %llx\n", uffdio_api.features);
 
     // allocate a memory region to be managed by userfaultfd
     region = mmap(NULL, page_size * num_pages, PROT_READ|PROT_WRITE,
@@ -201,12 +220,21 @@ int main(int argc, char **argv)
 
     fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
     // start the thread that will handle userfaultfd events
+
+
+
     stop = 0;
 
     struct params p;
     p.uffd = uffd;
     p.page_size = page_size;
-
+#ifdef USEFILE
+    p.fd = open("notes.txt", O_RDONLY);// | O_DIRECT);
+    if (p.fd == -1) {
+      perror("file open");
+      exit(1);
+    }
+#endif
     pthread_create(&uffd_thread, NULL, handler, &p);
     //printf("total number of fault:%d\n",faultnum);
     sleep(1);
@@ -219,6 +247,10 @@ int main(int argc, char **argv)
 
     // measure latency in batches
     long batch_size=num_pages/num_batches;  
+
+#ifdef TESTBUFFER
+    fprintf(stdout, "TESTBUFFER enabled\n");
+#endif
 
     // touch each page in the region
     int value;
@@ -238,8 +270,11 @@ int main(int argc, char **argv)
     	  //fprintf(stdout,"%d\n",faultnum);
     	  value += v;
 	  
+#ifndef TESTBUFFER
 	  int ret = madvise(cur+(i*1024 + j*1024), page_size, MADV_DONTNEED);
 	  if(ret == -1) { perror("madvise"); assert(0); } 
+#endif
+
         }
         uint64_t dur = getns() - start;
         latencies[i/batch_size] = dur/batch_size;
