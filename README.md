@@ -4,7 +4,9 @@ dimmap2
 # README #
 
 make
+
 export OMP_NUM_THREADS=<desired thread level concurrency>
+
 ./hello
 
 ### What is this repository for? ###
