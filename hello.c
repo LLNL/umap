@@ -128,6 +128,9 @@ static void *handler(void *arg)
             unsigned long long addr = msg.arg.pagefault.address;
             //fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
 
+	    unsigned long long page_begin = addr - (addr % pagesize);
+	    unsigned long long whichpage = (page_begin - (long long)params->begin) /  pagesize;
+
 	    //releasing prev page here results in race condition with multiple app threads
 	    // ifdef'ed code introduces a 16 element delay buffer
 
@@ -137,7 +140,8 @@ static void *handler(void *arg)
 	      if(ret == -1) { perror("madvise"); assert(0); } 
 	      startix = (startix + 1) % 16;
 	    };
-	    lastpage[endix]= (void *)addr;
+	    //lastpage[endix]= (void *)addr;
+	    lastpage[endix]= (void *)whichpage;
 	    endix = (endix +1) %16;
 #endif
 
@@ -147,7 +151,8 @@ static void *handler(void *arg)
 #endif
             struct uffdio_copy copy;
             copy.src = (long long)buf;
-            copy.dst = (long long)addr;
+            //copy.dst = (long long)addr;
+	    copy.dst = (long long)whichpage;
 	    copy.len = page_size; 
             copy.mode = 0;
             if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
