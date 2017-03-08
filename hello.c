@@ -128,8 +128,9 @@ static void *handler(void *arg)
             unsigned long long addr = msg.arg.pagefault.address;
             //fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
 
-	    unsigned long long page_begin = addr - (addr % pagesize);
-	    unsigned long long whichpage = (page_begin - (long long)params->begin) /  pagesize;
+	    unsigned long long page_begin = addr & 0xfffffffffffff000;
+
+	    //fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
 
 	    //releasing prev page here results in race condition with multiple app threads
 	    // ifdef'ed code introduces a 16 element delay buffer
@@ -141,7 +142,7 @@ static void *handler(void *arg)
 	      startix = (startix + 1) % 16;
 	    };
 	    //lastpage[endix]= (void *)addr;
-	    lastpage[endix]= (void *)whichpage;
+	    lastpage[endix]= (void *)page_begin;
 	    endix = (endix +1) %16;
 #endif
 
@@ -152,7 +153,7 @@ static void *handler(void *arg)
             struct uffdio_copy copy;
             copy.src = (long long)buf;
             //copy.dst = (long long)addr;
-	    copy.dst = (long long)whichpage;
+	    copy.dst = (long long)page_begin;
 	    copy.len = page_size; 
             copy.mode = 0;
             if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
@@ -234,7 +235,8 @@ int main(int argc, char **argv)
     p.uffd = uffd;
     p.page_size = page_size;
 #ifdef USEFILE
-    p.fd = open("notes.txt", O_RDONLY);// | O_DIRECT);
+    fprintf(stdout, "USEFILE enabled %s\n", "/tmp/notes.txt");
+    p.fd = open("/tmp/notes.txt", O_RDONLY);// | O_DIRECT);
     if (p.fd == -1) {
       perror("file open");
       exit(1);
@@ -268,7 +270,7 @@ int main(int argc, char **argv)
     	{
     	  //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
     	  //fprintf(stdout, "cur %x, adddress at i:%d, j:%d, %x\n", cur, i, j, &cur[i*1024 + j*1024]);
-    	  int v = cur[i*1024 + j*1024];
+    	  int v = cur[i*1024 + j*1024 + 5];
     	  //int v = *cur;
     	  //fprintf(stdout, "%llu\n", (unsigned long long)latencies[i]);
     	  //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
