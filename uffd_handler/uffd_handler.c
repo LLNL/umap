@@ -1,0 +1,187 @@
+// handler of userfaultfd
+
+#include <linux/userfaultfd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <stdint.h>
+#include <string.h>
+#include <assert.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+
+#include "uffd_handler.h"
+
+long get_page_size(void)
+{
+  long ret = sysconf(_SC_PAGESIZE);
+  if (ret == -1) {
+    perror("sysconf/pagesize");
+    exit(1);
+  }
+  assert(ret > 0);
+  return ret;
+}
+
+// initializer function
+int uffd_init(void *region) {
+  // open the userfault fd
+  uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+  if (uffd <  0) {
+    perror("userfaultfd syscall not available in this kernel");
+    exit(1);
+  }
+
+  // enable for api version and check features
+  struct uffdio_api uffdio_api;
+  uffdio_api.api = UFFD_API;
+  uffdio_api.features = 0;
+  if (ioctl(uffd, UFFDIO_API, &uffdio_api) == -1) {
+    perror("ioctl/uffdio_api");
+    exit(1);
+  }
+
+  if (uffdio_api.api != UFFD_API) {
+    fprintf(stderr, "unsupported userfaultfd api\n");
+    exit(1);
+  }
+  fprintf(stdout, "Feature bitmap %llx\n", uffdio_api.features);
+
+
+  // register the pages in the region for missing callbacks
+  struct uffdio_register uffdio_register;
+  uffdio_register.range.start = (unsigned long)region;
+  uffdio_register.range.len = page_size * num_pages;
+  uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
+  if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
+    perror("ioctl/uffdio_register");
+    exit(1);
+  }
+
+  if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) !=
+      UFFD_API_RANGE_IOCTLS) {
+    fprintf(stderr, "unexpected userfaultfd ioctl set\n");
+    exit(1);
+  }
+
+  fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
+  // start the thread that will handle userfaultfd events
+  return uffd;
+}
+
+// handler thread
+void *ufdd_handler(void *arg)
+{
+  struct params *p = arg;
+  long page_size = p->page_size;
+  char buf[page_size];
+
+#ifdef TESTBUFFER
+  static void *lastpage[16];
+  static int startix=0;
+  static int endix=0;
+#endif
+
+  p->faultnum=0;
+
+  for (;;) {
+    struct uffd_msg msg;
+
+    struct pollfd pollfd[1];
+    pollfd[0].fd = p->uffd;
+    pollfd[0].events = POLLIN;
+
+    // wait for a userfaultfd event to occur
+    int pollres = poll(pollfd, 1, 2000);
+
+    if (stop)
+      return NULL;
+
+    switch (pollres) {
+    case -1:
+      perror("poll/userfaultfd");
+      continue;
+    case 0:
+      continue;
+    case 1:
+      break;
+    default:
+      fprintf(stderr, "unexpected poll result\n");
+      exit(1);
+    }
+
+    if (pollfd[0].revents & POLLERR) {
+      fprintf(stderr, "pollerr\n");
+      exit(1);
+    }
+
+    if (!pollfd[0].revents & POLLIN) {
+      continue;
+    }
+
+    int readres = read(p->uffd, &msg, sizeof(msg));
+    if (readres == -1) {
+      if (errno == EAGAIN)
+	continue;
+      perror("read/userfaultfd");
+      exit(1);
+    }
+
+    if (readres != sizeof(msg)) {
+      fprintf(stderr, "invalid msg size\n");
+      exit(1);
+    }
+
+    // handle the page fault by copying a page worth of bytes
+    if (msg.event & UFFD_EVENT_PAGEFAULT)
+      {
+ 
+	p->faultnum = p->faultnum + 1;;
+	unsigned long long addr = msg.arg.pagefault.address;
+	//fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
+
+	unsigned long long page_begin = addr & 0xfffffffffffff000;
+
+	//fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
+
+	//releasing prev page here results in race condition with multiple app threads
+	// ifdef'ed code introduces a 16 element delay buffer
+
+#ifdef TESTBUFFER
+	if (startix==(endix+1) % 16) { // buffer full
+	  int ret = madvise(lastpage[startix], page_size, MADV_DONTNEED);
+	  if(ret == -1) { perror("madvise"); assert(0); } 
+	  startix = (startix + 1) % 16;
+	};
+	//lastpage[endix]= (void *)addr;
+	lastpage[endix]= (void *)page_begin;
+	endix = (endix +1) %16;
+#endif
+
+#ifdef USEFILE
+	lseek(p->fd, 0, SEEK_SET);  // reading the same thing
+	read(p->fd, buf, page_size);
+#endif
+	struct uffdio_copy copy;
+	copy.src = (long long)buf;
+	//copy.dst = (long long)addr;
+	copy.dst = (long long)page_begin;
+	copy.len = page_size; 
+	copy.mode = 0;
+	if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
+	  perror("ioctl/copy");
+	  exit(1);
+	}
+      }
+    //printf("number of fault:%d\n",p->faultnum);
+  }
+  return NULL;
+}
+
