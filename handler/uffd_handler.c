@@ -1,10 +1,11 @@
+// handler of userfaultfd
+
 #include <linux/userfaultfd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-//#include <sys/time.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
@@ -21,15 +22,8 @@
 #include <omp.h>
 #endif
 
-static volatile int stop;
+#include "uffd_handler.h"
 
-struct params {
-  int uffd;
-  long page_size;
-#ifdef USEFILE
-  int fd;
-#endif
-};
 int faultnum;
 
 static inline uint64_t getns(void)
@@ -40,7 +34,7 @@ static inline uint64_t getns(void)
     return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
 }
 
-/* ouble get_wtime() */
+/* double get_wtime() */
 /* { */
 /*     struct timeval now; */
 /*     gettimeofday(&now, NULL); */
@@ -58,7 +52,7 @@ static long get_page_size(void)
     return ret;
 }
 
-static void *handler(void *arg)
+static void *ufdd_handler(void *arg)
 {
     struct params *p = arg;
     long page_size = p->page_size;
@@ -147,8 +141,8 @@ static void *handler(void *arg)
 #endif
 
 #ifdef USEFILE
-	    lseek(p->fd, 0, SEEK_SET);
-	    read(p->fd, buf, 10);
+	    lseek(p->fd, 0, SEEK_SET);  // reading the same thing
+	    read(p->fd, buf, page_size);
 #endif
             struct uffdio_copy copy;
             copy.src = (long long)buf;
@@ -179,8 +173,8 @@ int main(int argc, char **argv)
 
     // open the userfault fd
     uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
-    if (uffd == -1) {
-        perror("syscall/userfaultfd");
+    if (uffd <  0) {
+        perror("userfaultfd syscall not available in this kernel");
         exit(1);
     }
 
@@ -236,7 +230,7 @@ int main(int argc, char **argv)
     p.page_size = page_size;
 #ifdef USEFILE
     fprintf(stdout, "USEFILE enabled %s\n", "/tmp/notes.txt");
-    p.fd = open("/tmp/notes.txt", O_RDONLY);// | O_DIRECT);
+    p.fd = open("/tmp/notes.txt", O_RDONLY;// | O_DIRECT);
     if (p.fd == -1) {
       perror("file open");
       exit(1);
