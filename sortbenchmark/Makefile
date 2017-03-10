@@ -10,6 +10,9 @@ ifdef D
 endif
 
 CXXFLAGS= $(DEFS) -std=c++11 -O3 -g -lpthread -fopenmp 
+LDFLAGS=-lpthread -fopenmp -lrt
+HEADERS=uffd_handler.h
+SOURCES=uffd_handler.c $(TARGET).cpp
 
 all: $(TARGET)
 

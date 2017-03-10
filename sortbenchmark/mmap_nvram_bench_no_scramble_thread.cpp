@@ -70,6 +70,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <errno.h>
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <fcntl.h>
@@ -80,7 +82,14 @@
 #include <omp.h>
 #endif
 
+extern "C" {
+#include "uffd_handler.h"
+}
+
 double get_wtime();
+
+// for uffd
+volatile int stop_uffd_handler;
 
 void create_files (const char* base_fname, int fnum, uint64_t file_size, bool do_fallocate);
 void init_data    (const char* base_fname, int fnum, uint64_t file_size);
@@ -89,6 +98,10 @@ void validate_data(const char* base_fname, int fnum, uint64_t file_size);
 
 
 int main(int argc, char** argv) {
+
+  // for uffd
+  int uffd;
+  pthread_t uffd_thread;
 
   if(argc != 4) {
     std::cerr << "Usage: " << argv[0] << " <base_filename> <total GBytes> <num workers>" <<std::endl;
