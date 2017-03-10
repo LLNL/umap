@@ -19,6 +19,8 @@
 
 #include "uffd_handler.h"
 
+struct uffdio_register uffdio_register;
+
 long get_page_size(void)
 {
   long ret = sysconf(_SC_PAGESIZE);
@@ -54,13 +56,12 @@ int uffd_init(void *region, long page_size, long num_pages) {
   }
   fprintf(stdout, "Feature bitmap %llx\n", uffdio_api.features);
 
-
-  // register the pages in the region for missing callbacks
   struct uffdio_register uffdio_register;
+  // register the pages in the region for missing callbacks
   uffdio_register.range.start = (unsigned long)region;
   uffdio_register.range.len = page_size * num_pages;
   uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
-  fprintf(stdout, "uffdio vals: %x, %d, %d\n", uffdio_register.range.start, uffdio_register.range.len, uffdio_register.mode);
+  fprintf(stdout, "uffdio vals: %x, %d, %ld, %d\n", uffdio_register.range.start, uffd, uffdio_register.range.len, uffdio_register.mode);
   if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
     perror("ioctl/uffdio_register");
     exit(1);
@@ -102,8 +103,10 @@ void *uffd_handler(void *arg)
     // wait for a userfaultfd event to occur
     int pollres = poll(pollfd, 1, 2000);
 
-    if (stop_uffd_handler)
+    if (stop_uffd_handler){
+      fprintf(stdout, "Stop seen, exit handler\n");
       return NULL;
+    }
 
     switch (pollres) {
     case -1:
@@ -181,7 +184,7 @@ void *uffd_handler(void *arg)
 	  exit(1);
 	}
       }
-    //printf("number of fault:%d\n",p->faultnum);
+
   }
   return NULL;
 }
@@ -190,11 +193,12 @@ int uffd_finalize(void *region, int uffd, long page_size, long num_pages) {
   struct uffdio_register uffdio_register;
   uffdio_register.range.start = (unsigned long)region;
   uffdio_register.range.len = page_size * num_pages;
-  uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
-  if (ioctl(uffd, UFFDIO_UNREGISTER, uffdio_register.range)) {
+
+  if (ioctl(uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
     fprintf(stderr, "ioctl unregister failure\n");
     return 1;
   }
+
   return 0;
 }
 

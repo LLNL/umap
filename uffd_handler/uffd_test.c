@@ -108,7 +108,9 @@ int main(int argc, char **argv)
     uint64_t dur = getns() - start;
     latencies[i/batch_size] = dur/batch_size;
     //fprintf(stdout, "%llu\n", (unsigned long long)latencies[i]);
+    fprintf(stdout, "."); fflush(stdout);
   }
+  fprintf(stdout,"\n");
   //------------------check when page is loaded----------------------
 
   /* #pragma omp parallel for private (value) */
