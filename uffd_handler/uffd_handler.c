@@ -31,9 +31,9 @@ long get_page_size(void)
 }
 
 // initializer function
-int uffd_init(void *region) {
+int uffd_init(void *region, long page_size, long num_pages) {
   // open the userfault fd
-  uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+  int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
   if (uffd <  0) {
     perror("userfaultfd syscall not available in this kernel");
     exit(1);
@@ -60,6 +60,7 @@ int uffd_init(void *region) {
   uffdio_register.range.start = (unsigned long)region;
   uffdio_register.range.len = page_size * num_pages;
   uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
+  fprintf(stdout, "uffdio vals: %x, %d, %d\n", uffdio_register.range.start, uffdio_register.range.len, uffdio_register.mode);
   if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
     perror("ioctl/uffdio_register");
     exit(1);
@@ -77,9 +78,9 @@ int uffd_init(void *region) {
 }
 
 // handler thread
-void *ufdd_handler(void *arg)
+void *uffd_handler(void *arg)
 {
-  struct params *p = arg;
+  params_t *p = arg;
   long page_size = p->page_size;
   char buf[page_size];
 
@@ -101,7 +102,7 @@ void *ufdd_handler(void *arg)
     // wait for a userfaultfd event to occur
     int pollres = poll(pollfd, 1, 2000);
 
-    if (stop)
+    if (stop_uffd_handler)
       return NULL;
 
     switch (pollres) {
@@ -183,5 +184,17 @@ void *ufdd_handler(void *arg)
     //printf("number of fault:%d\n",p->faultnum);
   }
   return NULL;
+}
+
+int uffd_finalize(void *region, int uffd, long page_size, long num_pages) {
+  struct uffdio_register uffdio_register;
+  uffdio_register.range.start = (unsigned long)region;
+  uffdio_register.range.len = page_size * num_pages;
+  uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
+  if (ioctl(uffd, UFFDIO_UNREGISTER, uffdio_register.range)) {
+    fprintf(stderr, "ioctl unregister failure\n");
+    return 1;
+  }
+  return 0;
 }
 

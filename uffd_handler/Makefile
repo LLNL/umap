@@ -11,6 +11,7 @@ endif
 
 CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt
 
+LDFLAGS=-lpthread -fopenmp -lrt
 HEADERS=uffd_handler.h
 SOURCES=uffd_handler.c $(TARGET).c
 
