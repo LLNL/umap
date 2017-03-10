@@ -9,7 +9,7 @@ ifdef D
   DEFS += $(patsubst %,-D%,$(subst $(SEP), ,$(D)))
 endif
 
-CFLAGS=-std=gnu99 $(DEFS) -O3 -g -pthread -fopenmp -lrt
+CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt
 
 all: $(TARGET)
 
