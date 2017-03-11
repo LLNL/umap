@@ -82,8 +82,16 @@
 #include <omp.h>
 #endif
 
+#ifndef __APPLE__
+extern "C" {
+#include "uffd_handler.h"
+}
+#endif
+
 double get_wtime();
 
+// for uffd
+volatile int stop_uffd_handler;
 
 void create_files (const char* base_fname, int fnum, uint64_t file_size, bool do_fallocate);
 void init_data    (const char* base_fname, int fnum, uint64_t file_size);
@@ -92,6 +100,10 @@ void validate_data(const char* base_fname, int fnum, uint64_t file_size);
 
 
 int main(int argc, char** argv) {
+
+  // for uffd
+  int uffd;
+  pthread_t uffd_thread;
 
   if(argc != 4) {
     std::cerr << "Usage: " << argv[0] << " <base_filename> <total GBytes> <num workers>" <<std::endl;
