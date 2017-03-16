@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <time.h>
 
+#define NUMPAGES 10000000
+#define NUMTHREADS 2
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -28,6 +30,43 @@ static inline uint64_t getns(void)
   return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
 }
 
+typedef struct {
+  int numpages;
+  int numthreads;
+  char *fn;
+} optstruct_t;
+
+void getoptions(optstruct_t &options, int argc, char *argv[]) {
+
+  int c;
+
+  while ((c = getopt(argc, argv, "s:c:f:r:b:l:")) != -1) {
+
+    switch(c) {
+    case 'p':
+      options.numpages = atoi(optarg);
+      if (options.numpages > 0)
+        break;
+      else goto R0;
+    case 't':
+      options.numthreads = atoi(optarg);
+      if (options.numthreads > 0)
+        break;
+      else goto R0;
+    case 'f':
+      options.fn = optarg;
+      break;
+    R0:
+    default:
+      cout << "Usage: " << argv[0] << endl;
+      cout << " -p [number of pages], default: " << NUMPAGES << endl;
+      cout << " -t [number of threads], default: " << NUMTHREADS << endl;
+      cout << " -f [file name], name of existing file to read pages from, default no -f" << endl;
+      exit(1);
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   int uffd;
@@ -37,8 +76,16 @@ int main(int argc, char **argv)
   pthread_t uffd_thread;
 
   page_size = get_page_size();
-  num_pages = 10000000;
 
+  options.numpages = NUMPAGES;
+  options.numthreads = NUMTHREADS;
+  options.fn = NULL;
+
+  getoptions(options, artc, argv);
+  
+  num_pages = options.numpages;
+  omp_set_num_threads(options.numthreads);
+  
   // allocate a memory region to be managed by userfaultfd
   region = mmap(NULL, page_size * num_pages, PROT_READ|PROT_WRITE,
 		MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, -1, 0);
@@ -57,13 +104,16 @@ int main(int argc, char **argv)
   p->page_size = page_size;
   p->faultnum = 0;
 #ifdef USEFILE
-  fprintf(stdout, "USEFILE enabled %s\n", "/tmp/notes.txt");
-  p->fd = open("/tmp/notes.txt", O_RDONLY);// | O_DIRECT);
+  if (!options.fn)
+    options.fn = "/tmp/abc.0";
+  fprintf(stdout, "USEFILE enabled %s\n", options.fn);
+  p->fd = open(options.fn, O_RDONLY);// | O_DIRECT);
   if (p.fd == -1) {
     perror("file open");
     exit(1);
   }
 #endif
+  
   pthread_create(&uffd_thread, NULL, uffd_handler, p);
   //printf("total number of fault:%d\n",faultnum);
   sleep(1);
