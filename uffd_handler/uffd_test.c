@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>    // optind
 #include <errno.h>
 #include <time.h>
 
@@ -36,32 +37,34 @@ typedef struct {
   char *fn;
 } optstruct_t;
 
-void getoptions(optstruct_t &options, int argc, char *argv[]) {
+optstruct_t options;
+
+void getoptions(optstruct_t *options, int argc, char *argv[]) {
 
   int c;
 
-  while ((c = getopt(argc, argv, "s:c:f:r:b:l:")) != -1) {
+  while ((c = getopt(argc, argv, "p:t:f")) != -1) {
 
     switch(c) {
     case 'p':
-      options.numpages = atoi(optarg);
-      if (options.numpages > 0)
+      options->numpages = atoi(optarg);
+      if (options->numpages > 0)
         break;
       else goto R0;
     case 't':
-      options.numthreads = atoi(optarg);
-      if (options.numthreads > 0)
+      options->numthreads = atoi(optarg);
+      if (options->numthreads > 0)
         break;
       else goto R0;
     case 'f':
-      options.fn = optarg;
+      options->fn = optarg;
       break;
     R0:
     default:
-      cout << "Usage: " << argv[0] << endl;
-      cout << " -p [number of pages], default: " << NUMPAGES << endl;
-      cout << " -t [number of threads], default: " << NUMTHREADS << endl;
-      cout << " -f [file name], name of existing file to read pages from, default no -f" << endl;
+      fprintf(stdout, "Usage: %s ",  argv[0]);
+      fprintf(stdout, " -p [number of pages], default: %d ", NUMPAGES);	
+      fprintf(stdout, " -t [number of threads], default: %d ",  NUMTHREADS);
+      fprintf(stdout, " -f [file name], name of existing file to read pages from, default no -f\n");
       exit(1);
     }
   }
@@ -81,7 +84,7 @@ int main(int argc, char **argv)
   options.numthreads = NUMTHREADS;
   options.fn = NULL;
 
-  getoptions(options, artc, argv);
+  getoptions(&options, argc, argv);
   
   num_pages = options.numpages;
   omp_set_num_threads(options.numthreads);
@@ -103,6 +106,7 @@ int main(int argc, char **argv)
   p->uffd = uffd_init(region, page_size, num_pages);
   p->page_size = page_size;
   p->faultnum = 0;
+  fprintf(stdout, "%d pages, %d threads\n", num_pages, options.numthreads);
 #ifdef USEFILE
   if (!options.fn)
     options.fn = "/tmp/abc.0";
