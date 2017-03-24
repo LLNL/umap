@@ -14,6 +14,7 @@
 
 #define NUMPAGES 10000000
 #define NUMTHREADS 2
+#define BUFFERSIZE 16
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -34,6 +35,7 @@ static inline uint64_t getns(void)
 typedef struct {
   int numpages;
   int numthreads;
+  int bufsize;
   char *fn;
 } optstruct_t;
 
@@ -56,6 +58,11 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
       if (options->numthreads > 0)
         break;
       else goto R0;
+    case 'b':
+      options->bufsize = atoi(optarg);
+      if (options->bufsize > 0)
+        break;
+      else goto R0;
     case 'f':
       options->fn = optarg;
       break;
@@ -64,6 +71,8 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
       fprintf(stdout, "Usage: %s ",  argv[0]);
       fprintf(stdout, " -p [number of pages], default: %d ", NUMPAGES);	
       fprintf(stdout, " -t [number of threads], default: %d ",  NUMTHREADS);
+      fprintf(stdout, " -b [page buffer size], default: %d ",  BUFFERSIZE);
+      
       fprintf(stdout, " -f [file name], name of existing file to read pages from, default no -f\n");
       exit(1);
     }
@@ -73,15 +82,16 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
 int main(int argc, char **argv)
 {
   int uffd;
-  long page_size;
+  long pagesize;
   long num_pages;
   void *region;
   pthread_t uffd_thread;
 
-  page_size = get_page_size();
+  pagesize = get_pagesize();
 
   options.numpages = NUMPAGES;
   options.numthreads = NUMTHREADS;
+  options.bufsize = BUFFERSIZE;
   options.fn = NULL;
 
   getoptions(&options, argc, argv);
@@ -90,7 +100,7 @@ int main(int argc, char **argv)
   omp_set_num_threads(options.numthreads);
   
   // allocate a memory region to be managed by userfaultfd
-  region = mmap(NULL, page_size * num_pages, PROT_READ|PROT_WRITE,
+  region = mmap(NULL, pagesize * num_pages, PROT_READ|PROT_WRITE,
 		MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, -1, 0);
   //MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
   if (region == MAP_FAILED) {
@@ -103,9 +113,11 @@ int main(int argc, char **argv)
   stop_uffd_handler = 0;
 
   params_t *p = malloc(sizeof(params_t));
-  p->uffd = uffd_init(region, page_size, num_pages);
-  p->page_size = page_size;
+  p->uffd = uffd_init(region, pagesize, num_pages);
+  p->pagesize = pagesize;
+  p->bufsize = options.bufsize;
   p->faultnum = 0;
+  p->base_addr = region;
   fprintf(stdout, "%d pages, %d threads\n", num_pages, options.numthreads);
 #ifdef USEFILE
   if (!options.fn)
@@ -131,10 +143,6 @@ int main(int argc, char **argv)
   // measure latency in batches
   long batch_size=num_pages/num_batches;  
 
-#ifdef TESTBUFFER
-  fprintf(stdout, "TESTBUFFER enabled\n");
-#endif
-
   // touch each page in the region
   int value;
   int *cur = region;
@@ -154,7 +162,7 @@ int main(int argc, char **argv)
 	value += v;
 	  
 #ifndef TESTBUFFER
-	int ret = madvise(cur+(i*1024 + j*1024), page_size, MADV_DONTNEED);
+	int ret = madvise(cur+(i*1024 + j*1024), pagesize, MADV_DONTNEED);
 	if(ret == -1) { perror("madvise"); assert(0); } 
 #endif
 
@@ -179,9 +187,9 @@ int main(int argc, char **argv)
   /*         //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode); */
   /*         //fprintf(stdout,"%d\n",faultnum); */
   /*         value += v; */
-  /* 	int ret = madvise(&cur[i*1024], page_size, MADV_DONTNEED); */
+  /* 	int ret = madvise(&cur[i*1024], pagesize, MADV_DONTNEED); */
   /* 	if(ret == -1) { perror("madvise"); assert(0); } */
-  /*         //cur += page_size; */
+  /*         //cur += pagesize; */
   /*     } */
   //-------------------------------------------------------------------
   stop_uffd_handler = 1;
@@ -189,14 +197,14 @@ int main(int argc, char **argv)
   //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
   fprintf(stdout,"total number of fault:%d, value is %d\n",p->faultnum,value);
 		
-  uffd_finalize(region, p->uffd, page_size, num_pages);
+  uffd_finalize(region, p->uffd, pagesize, num_pages);
 
   for (long i = 0; i < num_batches; i++) {
     fprintf(stdout, "%llu\n", (unsigned long long)latencies[i]);
   }
 
   free(latencies);
-  munmap(region, page_size * num_pages);
+  munmap(region, pagesize * num_pages);
 
   return 0;
 }

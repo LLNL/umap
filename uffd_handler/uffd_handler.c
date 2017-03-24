@@ -16,12 +16,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <openssl/sha.h>
 
 #include "uffd_handler.h"
 
 struct uffdio_register uffdio_register;
 
-long get_page_size(void)
+long get_pagesize(void)
 {
   long ret = sysconf(_SC_PAGESIZE);
   if (ret == -1) {
@@ -33,7 +34,7 @@ long get_page_size(void)
 }
 
 // initializer function
-int uffd_init(void *region, long page_size, long num_pages) {
+int uffd_init(void *region, long pagesize, long num_pages) {
   // open the userfault fd
   int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
   if (uffd <  0) {
@@ -59,7 +60,7 @@ int uffd_init(void *region, long page_size, long num_pages) {
   struct uffdio_register uffdio_register;
   // register the pages in the region for missing callbacks
   uffdio_register.range.start = (unsigned long)region;
-  uffdio_register.range.len = page_size * num_pages;
+  uffdio_register.range.len = pagesize * num_pages;
   uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
   fprintf(stdout, "uffdio vals: %x, %d, %ld, %d\n", uffdio_register.range.start, uffd, uffdio_register.range.len, uffdio_register.mode);
   if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
@@ -78,18 +79,18 @@ int uffd_init(void *region, long page_size, long num_pages) {
   return uffd;
 }
 
+
 // handler thread
 void *uffd_handler(void *arg)
 {
   params_t *p = arg;
-  long page_size = p->page_size;
-  char buf[page_size];
+  long pagesize = p->pagesize;
+  char buf[pagesize];
 
-#ifdef TESTBUFFER
-  static void *lastpage[16];
+  static void *lastpage = malloc(p->bufsize);
+  static unsigned char pagehash = malloc(p->bufsize*SHA_DIGEST_LENGTH);
   static int startix=0;
   static int endix=0;
-#endif
 
   p->faultnum=0;
 
@@ -153,31 +154,41 @@ void *uffd_handler(void *arg)
 
 	unsigned long long page_begin = addr & 0xfffffffffffff000;
 
+#ifdef USEFILE
+	lseek(p->fd, (unsigned long) (page_begin - p->base_addr), SEEK_SET);  // reading the same thing
+	fprintf(stderr,"file offset is %x \n", (unsigned long) (page_begin - p->base_addr) );
+	read(p->fd, buf, pagesize);
+#endif
+	
 	//fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
 
 	//releasing prev page here results in race condition with multiple app threads
 	// ifdef'ed code introduces a 16 element delay buffer
 
-#ifdef TESTBUFFER
 	if (startix==(endix+1) % 16) { // buffer full
-	  int ret = madvise(lastpage[startix], page_size, MADV_DONTNEED);
+#ifdef USEFILE
+	  unsigned char tmphash[SHA_DIGEST_LENGTH];
+	  SHA1(lastpage[startix], pagesize, tmphash);
+
+	  if (strcmp(tmphash, &pagehash[startix])) { // hashes don't match)
+	    lseek(p->fd, (unsigned long) (lastpage[startix] - p->base_addr), SEEK_SET);
+	    write(p->fd, lastpage[startix], pagesize);
+	  }
+ #endif
+	  int ret = madvise(lastpage[startix], pagesize, MADV_DONTNEED);
 	  if(ret == -1) { perror("madvise"); assert(0); } 
 	  startix = (startix + 1) % 16;
 	};
 	//lastpage[endix]= (void *)addr;
 	lastpage[endix]= (void *)page_begin;
+	SHA1(page_begin, pagesize, &pagehash[endix*SHA_DIGEST_LENGTH];
 	endix = (endix +1) %16;
-#endif
-
-#ifdef USEFILE
-	lseek(p->fd, 0, SEEK_SET);  // reading the same thing
-	read(p->fd, buf, page_size);
-#endif
+	
 	struct uffdio_copy copy;
 	copy.src = (long long)buf;
 	//copy.dst = (long long)addr;
 	copy.dst = (long long)page_begin;
-	copy.len = page_size; 
+	copy.len = pagesize; 
 	copy.mode = 0;
 	if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
 	  perror("ioctl/copy");
@@ -189,10 +200,10 @@ void *uffd_handler(void *arg)
   return NULL;
 }
 
-int uffd_finalize(void *region, int uffd, long page_size, long num_pages) {
+int uffd_finalize(void *region, int uffd, long pagesize, long num_pages) {
   struct uffdio_register uffdio_register;
   uffdio_register.range.start = (unsigned long)region;
-  uffdio_register.range.len = page_size * num_pages;
+  uffdio_register.range.len = pagesize * num_pages;
 
   if (ioctl(uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
     fprintf(stderr, "ioctl unregister failure\n");
