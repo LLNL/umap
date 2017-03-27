@@ -22,4 +22,4 @@ $(TARGET): $(OBJS)
 $(OBJS): $(SOURCES) $(HEADERS) Makefile
 
 clean:
-	rm -f $(TARGET) $(OBJS).o
+	rm -f $(TARGET) $(OBJS)
