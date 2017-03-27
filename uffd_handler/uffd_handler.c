@@ -87,13 +87,18 @@ void *uffd_handler(void *arg)
   long pagesize = p->pagesize;
   char buf[pagesize];
 
-  static void *lastpage = malloc(p->bufsize);
-  static unsigned char pagehash = malloc(p->bufsize*SHA_DIGEST_LENGTH);
+  typedef struct {
+     char sha1hash[SHA_DIGEST_LENGTH];
+  } sha1bucket_t;
+
+  static void *lastpage[16];
+  static sha1bucket_t pagehash[16];
   static int startix=0;
   static int endix=0;
 
   p->faultnum=0;
-
+  //lastpage = malloc(p->bufsize);
+  //pagehash = (unsigned char *) malloc(p->bufsize*SHA_DIGEST_LENGTH);
   for (;;) {
     struct uffd_msg msg;
 
@@ -149,15 +154,17 @@ void *uffd_handler(void *arg)
       {
  
 	p->faultnum = p->faultnum + 1;;
-	unsigned long long addr = msg.arg.pagefault.address;
+	void * addr = (void *)msg.arg.pagefault.address;
 	//fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
 
-	unsigned long long page_begin = addr & 0xfffffffffffff000;
+	void * page_begin = (void *) ((unsigned long long) addr & 0xfffffffffffff000);
 
 #ifdef USEFILE
 	lseek(p->fd, (unsigned long) (page_begin - p->base_addr), SEEK_SET);  // reading the same thing
 	fprintf(stderr,"file offset is %x \n", (unsigned long) (page_begin - p->base_addr) );
 	read(p->fd, buf, pagesize);
+#else
+	memset(buf,'$', pagesize);
 #endif
 	
 	//fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
@@ -165,12 +172,12 @@ void *uffd_handler(void *arg)
 	//releasing prev page here results in race condition with multiple app threads
 	// ifdef'ed code introduces a 16 element delay buffer
 
+	unsigned char tmphash[SHA_DIGEST_LENGTH];
+
 	if (startix==(endix+1) % 16) { // buffer full
 #ifdef USEFILE
-	  unsigned char tmphash[SHA_DIGEST_LENGTH];
-	  SHA1(lastpage[startix], pagesize, tmphash);
-
-	  if (strcmp(tmphash, &pagehash[startix])) { // hashes don't match)
+	  //SHA1(lastpage[startix], pagesize, &mphash);
+	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash,SHA_DIGEST_LENGTH )) { // hashes don't match)
 	    lseek(p->fd, (unsigned long) (lastpage[startix] - p->base_addr), SEEK_SET);
 	    write(p->fd, lastpage[startix], pagesize);
 	  }
@@ -181,7 +188,7 @@ void *uffd_handler(void *arg)
 	};
 	//lastpage[endix]= (void *)addr;
 	lastpage[endix]= (void *)page_begin;
-	SHA1(page_begin, pagesize, &pagehash[endix*SHA_DIGEST_LENGTH];
+	//SHA1((void *) buf, pagesize, &tmph);
 	endix = (endix +1) %16;
 	
 	struct uffdio_copy copy;

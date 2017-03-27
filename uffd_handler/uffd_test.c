@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>    // optind
 #include <errno.h>
@@ -124,7 +125,7 @@ int main(int argc, char **argv)
     options.fn = "/tmp/abc.0";
   fprintf(stdout, "USEFILE enabled %s\n", options.fn);
   p->fd = open(options.fn, O_RDONLY);// | O_DIRECT);
-  if (p.fd == -1) {
+  if (p->fd == -1) {
     perror("file open");
     exit(1);
   }
@@ -144,7 +145,7 @@ int main(int argc, char **argv)
   long batch_size=num_pages/num_batches;  
 
   // touch each page in the region
-  int value;
+  int value=0;
   int *cur = region;
 
 #pragma omp parallel for reduction(+:value) //private (value)
@@ -161,7 +162,7 @@ int main(int argc, char **argv)
 	//fprintf(stdout,"%d\n",faultnum);
 	value += v;
 	  
-#ifndef TESTBUFFER
+#if 0
 	int ret = madvise(cur+(i*1024 + j*1024), pagesize, MADV_DONTNEED);
 	if(ret == -1) { perror("madvise"); assert(0); } 
 #endif
