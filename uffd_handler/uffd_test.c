@@ -46,7 +46,7 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
 
   int c;
 
-  while ((c = getopt(argc, argv, "p:t:f")) != -1) {
+  while ((c = getopt(argc, argv, "p:t:f:b:")) != -1) {
 
     switch(c) {
     case 'p':

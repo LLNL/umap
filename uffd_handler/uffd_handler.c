@@ -91,13 +91,15 @@ void *uffd_handler(void *arg)
      char sha1hash[SHA_DIGEST_LENGTH];
   } sha1bucket_t;
 
-  static void *lastpage[16];
+  //  static void *lastpage[16];
+  static void **lastpage;
   static sha1bucket_t pagehash[16];
   static int startix=0;
   static int endix=0;
 
   p->faultnum=0;
-  //lastpage = malloc(p->bufsize);
+  lastpage = malloc(p->bufsize*sizeof(void*));
+
   //pagehash = (unsigned char *) malloc(p->bufsize*SHA_DIGEST_LENGTH);
   for (;;) {
     struct uffd_msg msg;
@@ -184,10 +186,11 @@ void *uffd_handler(void *arg)
 	  }
  #endif
 	  int ret = madvise(lastpage[startix], pagesize, MADV_DONTNEED);
+	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", lastpage, startix, lastpage+startix);
 	  if(ret == -1) { perror("madvise"); assert(0); } 
 	  startix = (startix + 1) % 16;
 	};
-	//lastpage[endix]= (void *)addr;
+	//	lastpage[endix]= (void *)addr;
 	lastpage[endix]= (void *)page_begin;
 	SHA1((void *) buf, pagesize, (unsigned char *) &pagehash[endix].sha1hash);
 	endix = (endix +1) %16;
