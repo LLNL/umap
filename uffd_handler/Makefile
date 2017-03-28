@@ -9,9 +9,9 @@ ifdef D
   DEFS += $(patsubst %,-D%,$(subst $(SEP), ,$(D)))
 endif
 
-CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt
+CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt -lssl -lcrypto
 
-LDFLAGS=-lpthread -fopenmp -lrt
+LDFLAGS=-lpthread -fopenmp -lrt -lssl -lcrypto
 HEADERS=uffd_handler.h
 SOURCES=uffd_handler.c $(TARGET).c
 

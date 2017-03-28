@@ -161,7 +161,7 @@ void *uffd_handler(void *arg)
 
 #ifdef USEFILE
 	lseek(p->fd, (unsigned long) (page_begin - p->base_addr), SEEK_SET);  // reading the same thing
-	fprintf(stderr,"file offset is %x \n", (unsigned long) (page_begin - p->base_addr) );
+	//fprintf(stderr,"file offset is %x \n", (unsigned long) (page_begin - p->base_addr) );
 	read(p->fd, buf, pagesize);
 #else
 	memset(buf,'$', pagesize);
@@ -172,12 +172,13 @@ void *uffd_handler(void *arg)
 	//releasing prev page here results in race condition with multiple app threads
 	// ifdef'ed code introduces a 16 element delay buffer
 
-	unsigned char tmphash[SHA_DIGEST_LENGTH];
+	char tmphash[SHA_DIGEST_LENGTH];
 
 	if (startix==(endix+1) % 16) { // buffer full
 #ifdef USEFILE
-	  //SHA1(lastpage[startix], pagesize, &mphash);
-	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash,SHA_DIGEST_LENGTH )) { // hashes don't match)
+	  SHA1(lastpage[startix], pagesize, tmphash);
+	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
+	    fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", lastpage[startix]);
 	    lseek(p->fd, (unsigned long) (lastpage[startix] - p->base_addr), SEEK_SET);
 	    write(p->fd, lastpage[startix], pagesize);
 	  }
@@ -188,7 +189,7 @@ void *uffd_handler(void *arg)
 	};
 	//lastpage[endix]= (void *)addr;
 	lastpage[endix]= (void *)page_begin;
-	//SHA1((void *) buf, pagesize, &tmph);
+	SHA1((void *) buf, pagesize, (unsigned char *) &pagehash[endix].sha1hash);
 	endix = (endix +1) %16;
 	
 	struct uffdio_copy copy;

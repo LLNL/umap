@@ -156,6 +156,7 @@ int main(int argc, char **argv)
 	//fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
 	//fprintf(stdout, "cur %x, adddress at i:%d, j:%d, %x\n", cur, i, j, &cur[i*1024 + j*1024]);
 	int v = cur[i*1024 + j*1024 + 5];
+	cur[i*1024 + j*1024 + 5] = i+j;
 	//int v = *cur;
 	//fprintf(stdout, "%llu\n", (unsigned long long)latencies[i]);
 	//fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
