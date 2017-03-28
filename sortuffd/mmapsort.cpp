@@ -82,16 +82,15 @@
 #include <omp.h>
 #endif
 
-#ifndef __APPLE__
+#ifdef UFFD
 extern "C" {
-#include "uffd_handler.h"
+#include "../uffd_handler/uffd_handler.h"
+
+volatile int stop_uffd_handler;
 }
 #endif
 
 double get_wtime();
-
-// for uffd
-volatile int stop_uffd_handler;
 
 void create_files (const char* base_fname, int fnum, uint64_t file_size, bool do_fallocate);
 void init_data    (const char* base_fname, int fnum, uint64_t file_size);
