@@ -124,7 +124,7 @@ int main(int argc, char **argv)
   if (!options.fn)
     options.fn = "/tmp/abc.0";
   fprintf(stdout, "USEFILE enabled %s\n", options.fn);
-  p->fd = open(options.fn, O_RDONLY);// | O_DIRECT);
+  p->fd = open(options.fn, O_RDWR, S_IRUSR|S_IWUSR);// | O_DIRECT);
   if (p->fd == -1) {
     perror("file open");
     exit(1);

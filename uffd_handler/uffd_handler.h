@@ -10,7 +10,11 @@ typedef struct params {
   int fd;
 } params_t;
 
+#ifdef __cplusplus
+extern "C" volatile int stop_uffd_handler;
+#else
 extern volatile int stop_uffd_handler;
+#endif
 
 int uffd_init(void *region, long page_size, long num_pages);
 void *uffd_handler(void *arg);

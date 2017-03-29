@@ -83,7 +83,7 @@ int uffd_init(void *region, long pagesize, long num_pages) {
 // handler thread
 void *uffd_handler(void *arg)
 {
-  params_t *p = arg;
+  params_t *p = (params_t *) arg;
   long pagesize = p->pagesize;
   char buf[pagesize];
 
@@ -98,7 +98,7 @@ void *uffd_handler(void *arg)
   static int endix=0;
 
   p->faultnum=0;
-  lastpage = malloc(p->bufsize*sizeof(void*));
+  lastpage = (void **) malloc(p->bufsize*sizeof(void*));
 
   //pagehash = (unsigned char *) malloc(p->bufsize*SHA_DIGEST_LENGTH);
   for (;;) {
@@ -180,7 +180,7 @@ void *uffd_handler(void *arg)
 #ifdef USEFILE
 	  SHA1(lastpage[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
-	    fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", lastpage[startix]);
+	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", lastpage[startix]);
 	    lseek(p->fd, (unsigned long) (lastpage[startix] - p->base_addr), SEEK_SET);
 	    write(p->fd, lastpage[startix], pagesize);
 	  }
@@ -192,7 +192,7 @@ void *uffd_handler(void *arg)
 	};
 	//	lastpage[endix]= (void *)addr;
 	lastpage[endix]= (void *)page_begin;
-	SHA1((void *) buf, pagesize, (unsigned char *) &pagehash[endix].sha1hash);
+	SHA1((unsigned char *) buf, pagesize, (unsigned char *) &pagehash[endix].sha1hash);
 	endix = (endix +1) %16;
 	
 	struct uffdio_copy copy;
