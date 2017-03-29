@@ -20,27 +20,31 @@ LDFLAGS+= -lrt
 endif
 
 ifneq (,$(findstring UFFD,$DEFS))
+UFFDOPTION=1
+else 
+UFFDOPTION=0
+endif
+
+ifeq ($(UFFDOPTION),1)
 UFFDLOC = ../uffd_handler
 UFFDLD= -lrt -lssl -lcrypto
 CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread
 HEADERS=$(UFFDLOC)/uffd_handler.h
+TARGETOBJ=$(TARGET).o uffd_handler.o
 else
 HEADERS=
-SOURCES=$(TARGET).cpp
 UFFDLD=
+TARGETOBJ=$(TARGET).o
 endif
 
-SOURCES+=$(TARGET).cpp
-
-OBJS+=$(SOURCES:.cpp=.o)
 
 all: $(TARGET)
 
-$(TARGET): $(TARGET).o uffd_handler.o
+$(TARGET): $(TARGETOBJ)
 	$(LINK.cpp) $^ $(LDFLAGS) $(UFFDLD) -o $@
 uffd_handler.o: $(HEADERS)
 	$(CC) $(UFFDLOC)/uffd_handler.c $(CFLAGS) -c -o $@
 $(TARGET).o: $(TARGET).cpp $(HEADERS)
 	$(CXX) $< $(CXXFLAGS) -c -o $@
 clean:
-	rm -f $(TARGET) $(OBJS) uffd_handler.o
+	rm -f $(TARGET) $(TARGET).o uffd_handler.o
