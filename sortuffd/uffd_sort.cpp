@@ -67,7 +67,7 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
   options->numpages = NUMPAGES;
   options->numthreads = NUMTHREADS;
   options->bufsize = BUFFERSIZE;
-  options.fn = "/tmp/abc";
+  options->fn = "/tmp/abc";
 
 
   while ((c = getopt(argc, argv, "p:t:f:b:")) != -1) {
@@ -119,7 +119,7 @@ void openandmap(const char *filename, int64_t numbytes, int &fd, void *&region) 
     exit(-1);
   }
 
-  if(posix_fallocate(fd,0,file_size) != 0) {
+  if(posix_fallocate(fd,0, numbytes) != 0) {
     perror("Fallocate failed");
   }
 
