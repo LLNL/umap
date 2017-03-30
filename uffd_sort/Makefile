@@ -1,7 +1,7 @@
 CXX=g++
 CC=gcc
 
-TARGET=mmapsort
+TARGET=uffd_sort
 
 DEFS=-D_GNU_SOURCE
 
