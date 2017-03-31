@@ -10,7 +10,7 @@ ifdef D
   DEFS += $(patsubst %,-D%,$(subst $(SEP), ,$(D)))
 endif
 
-CXXFLAGS= $(DEFS) -std=c++11 -O3 -g -lpthread -fopenmp
+CXXFLAGS= $(DEFS) -std=c++11  -g -lpthread -fopenmp # -O3
 
 LDFLAGS=-lpthread -fopenmp 
 
@@ -19,32 +19,19 @@ ifneq ($(OS), Darwin)
 LDFLAGS+= -lrt
 endif
 
-ifneq (,$(findstring UFFD,$DEFS))
-UFFDOPTION=1
-else 
-UFFDOPTION=0
-endif
-
-ifeq ($(UFFDOPTION),1)
 UFFDLOC = ../uffd_handler
 UFFDLD= -lrt -lssl -lcrypto
-CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread
+CFLAGS=-std=gnu99 $(DEFS) -g -lpthread # -O3
 HEADERS=$(UFFDLOC)/uffd_handler.h
 TARGETOBJ=$(TARGET).o uffd_handler.o
-else
-HEADERS=
-UFFDLD=
-TARGETOBJ=$(TARGET).o
-endif
-
 
 all: $(TARGET)
 
-$(TARGET): $(TARGETOBJ)
-	$(LINK.cpp) $^ $(LDFLAGS) $(UFFDLD) -o $@
+$(TARGET): $(TARGETOBJ) 
+	$(LINK.cpp) $(TARGETOBJ) -DUSEFILE $(LDFLAGS) $(UFFDLD) -o $@
 uffd_handler.o: $(HEADERS)
-	$(CC) $(UFFDLOC)/uffd_handler.c $(CFLAGS) -c -o $@
-$(TARGET).o: $(TARGET).cpp $(HEADERS)
+	$(CC) $(UFFDLOC)/uffd_handler.c $(CFLAGS) -DUSEFILE -c -o $@
+$(TARGET).o: $(TARGET).cpp
 	$(CXX) $< $(CXXFLAGS) -c -o $@
 clean:
 	rm -f $(TARGET) $(TARGET).o uffd_handler.o

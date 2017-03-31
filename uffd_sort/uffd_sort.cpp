@@ -36,13 +36,11 @@
 #include <omp.h>
 #endif
 
-#ifdef UFFD
 extern "C" {
 #include "../uffd_handler/uffd_handler.h"
 
 volatile int stop_uffd_handler;
 }
-#endif
 
 static inline uint64_t getns(void)
 {
@@ -67,7 +65,7 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
   options->numpages = NUMPAGES;
   options->numthreads = NUMTHREADS;
   options->bufsize = BUFFERSIZE;
-  options->fn = "/tmp/abc";
+  options->fn = (char *) "/tmp/abc";
 
 
   while ((c = getopt(argc, argv, "p:t:f:b:")) != -1) {
@@ -123,9 +121,8 @@ void openandmap(const char *filename, int64_t numbytes, int &fd, void *&region) 
     perror("Fallocate failed");
   }
 
-  
    // allocate a memory region to be managed by userfaultfd
-  region = mmap(NULL, pagesize * num_pages, PROT_READ|PROT_WRITE,
+  region = mmap(NULL, numbytes, PROT_READ|PROT_WRITE,
 		MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, -1, 0);
   if (region == MAP_FAILED) {
     perror("mmap");
@@ -133,39 +130,42 @@ void openandmap(const char *filename, int64_t numbytes, int &fd, void *&region) 
   }
 }
 
-void initdata(void *region, uint64_t rlen) {
-  int *r = (int *)region;
-  std::random_device rd;                                                                                                             std::mt19937 gen(rd());
+void initdata(uint64_t *region, int64_t rlen) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
   std::uniform_int_distribution<uint64_t> rnd_int;
 #pragma omp parallel for
-  for(int i=0; i< (rlen / sizeof(uint64_t)); ++i) {
-    r[i] = rnd_int(gen);;
+  for(int i=0; i< rlen; ++i) {
+    region[i] = rnd_int(gen);
   }
 }
 
-void validatedata(void *region, uint64_t rlen) {
-  for(uint64_t i=1; i< (rlen / sizeof(uint64_t)); ++i) {
-    if(pint[i] < pint[i-1]) {
-      std::cerr << "Worker " << fnum << "found an error!" << std::endl;
+void validatedata(uint64_t *region, int64_t rlen) {
+#pragma omp parallel for
+  for(uint64_t i=1; i< rlen; ++i) {
+    if(region[i] < region[i-1]) {
+      fprintf(stderr, "Worker %d found an error!\n", omp_get_thread_num());
       exit(-1);
     }
   }
+}
+
 int main(int argc, char **argv)
 {
   int uffd;
   long pagesize;
   int64_t totalbytes;
   pthread_t uffd_thread;
-
+  int64_t arraysize;
   // parameter block to uffd 
-  params_t *p = malloc(sizeof(params_t));
+  params_t *p = (params_t *) malloc(sizeof(params_t));
 
   pagesize = get_pagesize();
 
   getoptions(&options, argc, argv);
 
   totalbytes = options.numpages*pagesize;
-  openandmap(options.fn, totalbytes, &p->fd,  &p->base_addr);
+  openandmap(options.fn, totalbytes, p->fd,  p->base_addr);
  
   // start the thread that will handle userfaultfd events
 
@@ -185,25 +185,26 @@ int main(int argc, char **argv)
 
   omp_set_num_threads(options.numthreads);
 
+  uint64_t *arr = (uint64_t *) p->base_addr; 
+
   uint64_t start = getns();
   // init data
-  initdata(p->base_addr, totalbytes);
+  initdata(arr, arraysize);
   fprintf(stdout, "Init took %llu\n", getns() - start);
   
   start = getns();
-  std::sort(p->base_addr, p->base_addr + (total_bytes/sizeof(uint64_t)));
+  std::sort(arr, &arr[arraysize-1]);
   fprintf(stdout, "Sort took %llu\n", getns() - start);
 
   start = getns();
-  validatedata(p->base_addr, totalbytes);
+  validatedata(arr, arraysize);
   fprintf(stdout, "Validate took %llu\n", getns() - start);
   
   stop_uffd_handler = 1;
   pthread_join(uffd_thread, NULL);
   //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
-  fprintf(stdout,"total number of fault:%d, value is %d\n",p->faultnum,value);
 		
-  uffd_finalize(region, p->uffd, pagesize, num_pages);
+  uffd_finalize(p->base_addr, p->uffd, p->pagesize, options.numpages);
 
 }
 

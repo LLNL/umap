@@ -157,7 +157,7 @@ void *uffd_handler(void *arg)
  
 	p->faultnum = p->faultnum + 1;;
 	void * addr = (void *)msg.arg.pagefault.address;
-	//fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage);
+	fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage[startix]);
 
 	void * page_begin = (void *) ((unsigned long long) addr & 0xfffffffffffff000);
 
@@ -176,7 +176,7 @@ void *uffd_handler(void *arg)
 
 	char tmphash[SHA_DIGEST_LENGTH];
 
-	if (startix==(endix+1) % 16) { // buffer full
+	if (startix==(endix+1) % p->bufsize) { // buffer full
 #ifdef USEFILE
 	  SHA1(lastpage[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
@@ -185,9 +185,11 @@ void *uffd_handler(void *arg)
 	    write(p->fd, lastpage[startix], pagesize);
 	  }
  #endif
-	  int ret = madvise(lastpage[startix], pagesize, MADV_DONTNEED);
+	  //int ret = madvise(lastpage[startix], pagesize, MADV_DONTNEED);
+	  int ret = munmap(lastpage[startix], pagesize);
 	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", lastpage, startix, lastpage+startix);
-	  if(ret == -1) { perror("madvise"); assert(0); } 
+	  //if(ret == -1) { perror("madvise"); assert(0); } 
+	  if(ret == -1) { perror("munmap"); assert(0); } 
 	  startix = (startix + 1) % 16;
 	};
 	//	lastpage[endix]= (void *)addr;
