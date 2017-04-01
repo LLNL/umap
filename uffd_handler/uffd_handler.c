@@ -91,14 +91,13 @@ void *uffd_handler(void *arg)
      char sha1hash[SHA_DIGEST_LENGTH];
   } sha1bucket_t;
 
-  //  static void *lastpage[16];
-  static void **lastpage;
+  //  static void *pagebuffer[16];
+  static void **pagebuffer;
   static sha1bucket_t pagehash[16];
   static int startix=0;
-  static int endix=0;
 
   p->faultnum=0;
-  lastpage = (void **) malloc(p->bufsize*sizeof(void*));
+  pagebuffer = (void **) calloc(p->bufsize,sizeof(void*)); // allocate and initialize to zero
 
   //pagehash = (unsigned char *) malloc(p->bufsize*SHA_DIGEST_LENGTH);
   for (;;) {
@@ -157,7 +156,7 @@ void *uffd_handler(void *arg)
  
 	p->faultnum = p->faultnum + 1;;
 	void * addr = (void *)msg.arg.pagefault.address;
-	fprintf(stderr,"page missed,addr:%x lastpage:%x\n", addr, lastpage[startix]);
+	fprintf(stderr,"page missed,addr:%x pagebuffer:%x\n", addr, pagebuffer[startix]);
 
 	void * page_begin = (void *) ((unsigned long long) addr & 0xfffffffffffff000);
 
@@ -176,26 +175,26 @@ void *uffd_handler(void *arg)
 
 	char tmphash[SHA_DIGEST_LENGTH];
 
-	if (startix==(endix+1) % p->bufsize) { // buffer full
+	if (pagebuffer[startix] !=NULL)  { // buffer full
 #ifdef USEFILE
-	  SHA1(lastpage[startix], pagesize, tmphash);
+	  SHA1(pagebuffer[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
-	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", lastpage[startix]);
-	    lseek(p->fd, (unsigned long) (lastpage[startix] - p->base_addr), SEEK_SET);
-	    write(p->fd, lastpage[startix], pagesize);
+	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[startix]);
+	    lseek(p->fd, (unsigned long) (pagebuffer[startix] - p->base_addr), SEEK_SET);
+	    write(p->fd, pagebuffer[startix], pagesize);
 	  }
  #endif
-	  //int ret = madvise(lastpage[startix], pagesize, MADV_DONTNEED);
-	  int ret = munmap(lastpage[startix], pagesize);
-	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", lastpage, startix, lastpage+startix);
+	  //int ret = madvise(pagebuffer[startix], pagesize, MADV_DONTNEED);
+	  int ret = munmap(pagebuffer[startix], pagesize);
+	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", pagebuffer, startix, pagebuffer+startix);
 	  //if(ret == -1) { perror("madvise"); assert(0); } 
 	  if(ret == -1) { perror("munmap"); assert(0); } 
-	  startix = (startix + 1) % 16;
+	  pagebuffer[startix]=NULL;  // in case later on we unmap more than one page, need to set those slots to zero
 	};
-	//	lastpage[endix]= (void *)addr;
-	lastpage[endix]= (void *)page_begin;
-	SHA1((unsigned char *) buf, pagesize, (unsigned char *) &pagehash[endix].sha1hash);
-	endix = (endix +1) %16;
+	//	pagebuffer[startix]= (void *)addr;
+	pagebuffer[startix]= (void *)page_begin;
+	SHA1((unsigned char *) buf, pagesize, (unsigned char *) &pagehash[startix].sha1hash);
+	startix = (startix +1) %16;
 	
 	struct uffdio_copy copy;
 	copy.src = (long long)buf;
