@@ -93,12 +93,12 @@ void *uffd_handler(void *arg)
 
   //  static void *pagebuffer[16];
   static void **pagebuffer;
-  static sha1bucket_t pagehash[16];
+  static sha1bucket_t *pagehash;
   static int startix=0;
 
   p->faultnum=0;
   pagebuffer = (void **) calloc(p->bufsize,sizeof(void*)); // allocate and initialize to zero
-
+  pagehash = (sha1bucket_t *) calloc(p->bufsize, sizeof(sha1bucket_t));
   //pagehash = (unsigned char *) malloc(p->bufsize*SHA_DIGEST_LENGTH);
   for (;;) {
     struct uffd_msg msg;
@@ -156,7 +156,7 @@ void *uffd_handler(void *arg)
  
 	p->faultnum = p->faultnum + 1;;
 	void * addr = (void *)msg.arg.pagefault.address;
-	fprintf(stderr,"page missed,addr:%x pagebuffer:%x\n", addr, pagebuffer[startix]);
+	//fprintf(stderr,"page missed,addr:%x pagebuffer:%x\n", addr, pagebuffer[startix]);
 
 	void * page_begin = (void *) ((unsigned long long) addr & 0xfffffffffffff000);
 
@@ -169,9 +169,6 @@ void *uffd_handler(void *arg)
 #endif
 	
 	//fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
-
-	//releasing prev page here results in race condition with multiple app threads
-	// ifdef'ed code introduces a 16 element delay buffer
 
 	char tmphash[SHA_DIGEST_LENGTH];
 
@@ -194,7 +191,7 @@ void *uffd_handler(void *arg)
 	//	pagebuffer[startix]= (void *)addr;
 	pagebuffer[startix]= (void *)page_begin;
 	SHA1((unsigned char *) buf, pagesize, (unsigned char *) &pagehash[startix].sha1hash);
-	startix = (startix +1) %16;
+	startix = (startix +1) % p->bufsize;
 	
 	struct uffdio_copy copy;
 	copy.src = (long long)buf;
