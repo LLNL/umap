@@ -182,10 +182,10 @@ void *uffd_handler(void *arg)
 	  }
  #endif
 	  //int ret = madvise(pagebuffer[startix], pagesize, MADV_DONTNEED);
-	  int ret = munmap(pagebuffer[startix], pagesize);
+	  int ret = msync(pagebuffer[startix], pagesize, MS_SYNC|MS_INVALIDATE);
 	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", pagebuffer, startix, pagebuffer+startix);
 	  //if(ret == -1) { perror("madvise"); assert(0); } 
-	  if(ret == -1) { perror("munmap"); assert(0); } 
+	  if(ret == -1) { perror("msync"); assert(0); } 
 	  pagebuffer[startix]=NULL;  // in case later on we unmap more than one page, need to set those slots to zero
 	};
 	//	pagebuffer[startix]= (void *)addr;

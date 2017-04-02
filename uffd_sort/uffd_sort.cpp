@@ -186,6 +186,7 @@ int main(int argc, char **argv)
   omp_set_num_threads(options.numthreads);
 
   uint64_t *arr = (uint64_t *) p->base_addr; 
+  arraysize = totalbytes/sizeof(int64_t);
 
   uint64_t start = getns();
   // init data
