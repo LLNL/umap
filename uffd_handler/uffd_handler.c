@@ -91,7 +91,6 @@ void *uffd_handler(void *arg)
      char sha1hash[SHA_DIGEST_LENGTH];
   } sha1bucket_t;
 
-  //  static void *pagebuffer[16];
   static void **pagebuffer;
   static sha1bucket_t *pagehash;
   static int startix=0;
