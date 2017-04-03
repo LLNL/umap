@@ -136,7 +136,8 @@ void initdata(uint64_t *region, int64_t rlen) {
   std::uniform_int_distribution<uint64_t> rnd_int;
 #pragma omp parallel for
   for(int i=0; i< rlen; ++i) {
-    region[i] = rlen - i;// rnd_int(gen);
+    //region[i] = rlen - i;// rnd_int(gen);
+    region[i] = rnd_int(gen);
   }
 }
 
@@ -194,7 +195,7 @@ int main(int argc, char **argv)
   fprintf(stdout, "Init took %llu\n", getns() - start);
   
   start = getns();
-  std::sort(arr, &arr[arraysize-1]);
+  std::sort(arr, &arr[arraysize]);
   fprintf(stdout, "Sort took %llu\n", getns() - start);
 
   start = getns();

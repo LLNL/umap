@@ -224,7 +224,7 @@ int uffd_finalize(void *arg, long num_pages) {//, int uffd, long pagesize, long 
     if (pagebuffer[tmpix] !=NULL)  { //has a valid page
       SHA1(pagebuffer[tmpix], p->pagesize, tmphash);
       if (strncmp((const char *)tmphash, (const char *) &pagehash[tmpix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
-	//fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[tmpix]);
+	fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[tmpix]);
 	lseek(p->fd, (unsigned long) (pagebuffer[tmpix] - p->base_addr), SEEK_SET);
 	write(p->fd, pagebuffer[tmpix], p->pagesize);
       }
@@ -233,7 +233,7 @@ int uffd_finalize(void *arg, long num_pages) {//, int uffd, long pagesize, long 
 #endif
 
   struct uffdio_register uffdio_register;
-  uffdio_register.range.start = (unsigned long)p->pase_addr;
+  uffdio_register.range.start = (unsigned long)p->base_addr;
   uffdio_register.range.len = p->pagesize * num_pages;
 
   if (ioctl(p->uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
