@@ -136,7 +136,7 @@ void initdata(uint64_t *region, int64_t rlen) {
   std::uniform_int_distribution<uint64_t> rnd_int;
 #pragma omp parallel for
   for(int i=0; i< rlen; ++i) {
-    region[i] = rnd_int(gen);
+    region[i] = rlen - i;// rnd_int(gen);
   }
 }
 
