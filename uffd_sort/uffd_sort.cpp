@@ -144,8 +144,8 @@ void validatedata(uint64_t *region, int64_t rlen) {
 #pragma omp parallel for
   for(uint64_t i=1; i< rlen; ++i) {
     if(region[i] < region[i-1]) {
-      fprintf(stderr, "Worker %d found an error!\n", omp_get_thread_num());
-      exit(-1);
+      fprintf(stderr, "Worker %d found an error at index %llu!\n", omp_get_thread_num(), i);
+      //exit(-1);
     }
   }
 }
