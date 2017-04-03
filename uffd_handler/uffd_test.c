@@ -199,7 +199,7 @@ int main(int argc, char **argv)
   //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
   fprintf(stdout,"total number of fault:%d, value is %d\n",p->faultnum,value);
 		
-  uffd_finalize(region, p->uffd, pagesize, num_pages);
+  uffd_finalize(p, num_pages);
 
   for (long i = 0; i < num_batches; i++) {
     fprintf(stdout, "%llu\n", (unsigned long long)latencies[i]);

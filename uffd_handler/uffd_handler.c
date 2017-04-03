@@ -22,6 +22,19 @@
 
 struct uffdio_register uffdio_register;
 
+// data structures related to page buffer
+
+  typedef struct {
+     char sha1hash[SHA_DIGEST_LENGTH];
+  } sha1bucket_t;
+
+  static void **pagebuffer;
+  static sha1bucket_t *pagehash;
+  static int startix=0;
+
+
+// end data structures related to page buffer
+
 long get_pagesize(void)
 {
   long ret = sysconf(_SC_PAGESIZE);
@@ -86,14 +99,6 @@ void *uffd_handler(void *arg)
   params_t *p = (params_t *) arg;
   long pagesize = p->pagesize;
   char buf[pagesize];
-
-  typedef struct {
-     char sha1hash[SHA_DIGEST_LENGTH];
-  } sha1bucket_t;
-
-  static void **pagebuffer;
-  static sha1bucket_t *pagehash;
-  static int startix=0;
 
   p->faultnum=0;
   pagebuffer = (void **) calloc(p->bufsize,sizeof(void*)); // allocate and initialize to zero
@@ -206,12 +211,32 @@ void *uffd_handler(void *arg)
   return NULL;
 }
 
-int uffd_finalize(void *region, int uffd, long pagesize, long num_pages) {
-  struct uffdio_register uffdio_register;
-  uffdio_register.range.start = (unsigned long)region;
-  uffdio_register.range.len = pagesize * num_pages;
+int uffd_finalize(void *arg, long num_pages) {//, int uffd, long pagesize, long num_pages) {
+  params_t *p = (params_t *) arg;
 
-  if (ioctl(uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
+#ifdef USEFILE
+
+  // first write out all modified pages
+
+  char tmphash[SHA_DIGEST_LENGTH];
+  int tmpix;
+  for (tmpix=0; tmpix < p->bufsize; tmpix++) {
+    if (pagebuffer[tmpix] !=NULL)  { //has a valid page
+      SHA1(pagebuffer[tmpix], p->pagesize, tmphash);
+      if (strncmp((const char *)tmphash, (const char *) &pagehash[tmpix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
+	//fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[tmpix]);
+	lseek(p->fd, (unsigned long) (pagebuffer[tmpix] - p->base_addr), SEEK_SET);
+	write(p->fd, pagebuffer[tmpix], p->pagesize);
+      }
+    }
+  } 
+#endif
+
+  struct uffdio_register uffdio_register;
+  uffdio_register.range.start = (unsigned long)p->pase_addr;
+  uffdio_register.range.len = p->pagesize * num_pages;
+
+  if (ioctl(p->uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
     fprintf(stderr, "ioctl unregister failure\n");
     return 1;
   }

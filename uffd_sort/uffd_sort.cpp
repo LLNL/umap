@@ -205,7 +205,7 @@ int main(int argc, char **argv)
   pthread_join(uffd_thread, NULL);
   //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
 		
-  uffd_finalize(p->base_addr, p->uffd, p->pagesize, options.numpages);
+  uffd_finalize(p, options.numpages);
 
 }
 
