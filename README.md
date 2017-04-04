@@ -13,5 +13,5 @@ The uffd_handler directory contains the handler code. A simple test program uffd
 make D=USEFILE
 Options to run the program include the number of openmp threads, total number of pages, the number of pages to buffer, and the file name.
 
-The uffd_sort directory contains the sort benchmark modified to use the uffd_handler. It has the same set of options as uffd_test:
+The uffd_sort directory contains the sort benchmark modified to use the uffd_handler. To make it, type make. It always uses the backing file. It has the same set of runtime options as uffd_test:
 the number of openmp threads, total number of pages, the number of pages to buffer, and the file name. Use the program od to look at the binary file after the program completes.
