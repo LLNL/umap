@@ -12,6 +12,8 @@ endif
 CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt -lssl -lcrypto
 
 LDFLAGS=-lpthread -fopenmp -lrt -lssl -lcrypto
+LDLIBS=-lssl -lcrypto
+
 HEADERS=uffd_handler.h
 SOURCES=uffd_handler.c $(TARGET).c
 
