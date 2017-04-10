@@ -175,17 +175,20 @@ void *uffd_handler(void *arg)
 	//fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
 
 	char tmphash[SHA_DIGEST_LENGTH];
-
+	int ret;
 	if (pagebuffer[startix] !=NULL)  { // buffer full
 #ifdef USEFILE
 	  SHA1(pagebuffer[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
 	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[startix]);
+	    ret = mprotect(pagebuffer[startix], pagesize, PROT_WRITE); // write protect page
+	    fprintf(stderr, "Did mprotect on page %llx at offset %llu\n", pagebuffer[startix], (unsigned long) (pagebuffer[startix] - p->base_addr));
+	    if(ret == -1) { perror("mprotect"); assert(0); }
 	    lseek(p->fd, (unsigned long) (pagebuffer[startix] - p->base_addr), SEEK_SET);
 	    write(p->fd, pagebuffer[startix], pagesize);
 	  }
  #endif
-	  int ret = madvise(pagebuffer[startix], pagesize, MADV_DONTNEED);
+	  ret = madvise(pagebuffer[startix], pagesize, MADV_DONTNEED);
 	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", pagebuffer, startix, pagebuffer+startix);
 	  if(ret == -1) { perror("madvise"); assert(0); } 
 	  pagebuffer[startix]=NULL;  // in case later on we unmap more than one page, need to set those slots to zero
