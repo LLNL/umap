@@ -136,8 +136,8 @@ void initdata(uint64_t *region, int64_t rlen) {
   std::uniform_int_distribution<uint64_t> rnd_int;
 #pragma omp parallel for
   for(int i=0; i< rlen; ++i) {
-    //region[i] = rlen - i;// rnd_int(gen);
-    region[i] = rnd_int(gen);
+    region[i] = (uint64_t) (rlen - i);// rnd_int(gen);
+    //region[i] = rnd_int(gen);
   }
 }
 
@@ -145,7 +145,9 @@ void validatedata(uint64_t *region, int64_t rlen) {
 #pragma omp parallel for
   for(uint64_t i=1; i< rlen; ++i) {
     if(region[i] < region[i-1]) {
-      fprintf(stderr, "Worker %d found an error at index %llu!\n", omp_get_thread_num(), i);
+      fprintf(stderr, "Worker %d found an error at index %llu, %llu is lt %llu!\n", omp_get_thread_num(), i, region[i], region[i-1]);
+      fprintf(stderr, "Context i-3 i-2 i-1 i i+1 i+2 i+3:%llu %llu %llu %llu %llu %llu %llu\n",
+	      region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
       //exit(-1);
     }
   }
@@ -192,15 +194,15 @@ int main(int argc, char **argv)
   uint64_t start = getns();
   // init data
   initdata(arr, arraysize);
-  fprintf(stdout, "Init took %llu\n", getns() - start);
+  fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
   
   start = getns();
   std::sort(arr, &arr[arraysize]);
-  fprintf(stdout, "Sort took %llu\n", getns() - start);
+  fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
   start = getns();
   validatedata(arr, arraysize);
-  fprintf(stdout, "Validate took %llu\n", getns() - start);
+  fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
   
   stop_uffd_handler = 1;
   pthread_join(uffd_thread, NULL);

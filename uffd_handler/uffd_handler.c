@@ -181,11 +181,13 @@ void *uffd_handler(void *arg)
 	  SHA1(pagebuffer[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
 	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[startix]);
-	    ret = mprotect(pagebuffer[startix], pagesize, PROT_WRITE); // write protect page
-	    fprintf(stderr, "Did mprotect on page %llx at offset %llu\n", pagebuffer[startix], (unsigned long) (pagebuffer[startix] - p->base_addr));
-	    if(ret == -1) { perror("mprotect"); assert(0); }
+	    ret = mprotect(pagebuffer[startix], pagesize, PROT_NONE); // write protect page
+	    //fprintf(stderr, "Did mprotect on page %llx at offset %llu\n", pagebuffer[startix], (unsigned long) (pagebuffer[startix] - p->base_addr));
+	    if(ret == -1) { perror("mprotect1"); assert(0); }
 	    lseek(p->fd, (unsigned long) (pagebuffer[startix] - p->base_addr), SEEK_SET);
 	    write(p->fd, pagebuffer[startix], pagesize);
+	    ret = mprotect(pagebuffer[startix], pagesize, PROT_READ|PROT_WRITE); // write protect page
+	    if(ret == -1) { perror("mprotect2"); assert(0); }
 	  }
  #endif
 	  ret = madvise(pagebuffer[startix], pagesize, MADV_DONTNEED);
@@ -227,7 +229,7 @@ int uffd_finalize(void *arg, long num_pages) {//, int uffd, long pagesize, long 
     if (pagebuffer[tmpix] !=NULL)  { //has a valid page
       SHA1(pagebuffer[tmpix], p->pagesize, tmphash);
       if (strncmp((const char *)tmphash, (const char *) &pagehash[tmpix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
-	fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[tmpix]);
+	  //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[tmpix]);
 	lseek(p->fd, (unsigned long) (pagebuffer[tmpix] - p->base_addr), SEEK_SET);
 	write(p->fd, pagebuffer[tmpix], p->pagesize);
       }
