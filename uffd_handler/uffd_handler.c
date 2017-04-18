@@ -10,6 +10,7 @@
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
+#include <asm/unistd.h>
 #include <pthread.h>
 #include <poll.h>
 #include <fcntl.h>
@@ -74,7 +75,7 @@ int uffd_init(void *region, long pagesize, long num_pages) {
   // register the pages in the region for missing callbacks
   uffdio_register.range.start = (unsigned long)region;
   uffdio_register.range.len = pagesize * num_pages;
-  uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
+  uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING| UFFDIO_REGISTER_MODE_WP;
   fprintf(stdout, "uffdio vals: %x, %d, %ld, %d\n", uffdio_register.range.start, uffd, uffdio_register.range.len, uffdio_register.mode);
   if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
     perror("ioctl/uffdio_register");
@@ -154,6 +155,23 @@ void *uffd_handler(void *arg)
       exit(1);
     }
 
+#if 0
+    // code to unprotect page
+
+    struct uffdio_writeprotect wp;
+	    wp.range.start = (uint64_t) pagebuffer[startix];
+	    wp.range.len = pagesize;
+	    wp.mode = 0; 
+	    if (ioctl(p->uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
+	      perror("ioctl(UFFDIO_WRITEPROTECT 0)");
+	      exit(1);
+	    }
+	    
+	    fprintf(stderr, "Undid write protect on page %llx at file offset %llu\n", pagebuffer[startix], (unsigned long) (pagebuffer[startix] - p->base_addr));
+#endif
+
+
+
     // handle the page fault by copying a page worth of bytes
     if (msg.event & UFFD_EVENT_PAGEFAULT)
       {
@@ -164,6 +182,14 @@ void *uffd_handler(void *arg)
 
 	void * page_begin = (void *) ((unsigned long long) addr & 0xfffffffffffff000);
 
+	// new section to deal with write protected pages
+	if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
+	  // if in pagebuffer, unwriteprotect it and continue
+	  // else read it in and the unwriteprotect
+	}
+
+
+
 #ifdef USEFILE
 	lseek(p->fd, (unsigned long) (page_begin - p->base_addr), SEEK_SET);  // reading the same thing
 	//fprintf(stderr,"file offset is %x \n", (unsigned long) (page_begin - p->base_addr) );
@@ -173,7 +199,7 @@ void *uffd_handler(void *arg)
 #endif
 	
 	//fprintf(stderr,"page missed,addr:%llx aligned page:%llx\n", addr, page_begin);
-
+	//fprintf(stderr,"startix is %d\n", startix);
 	char tmphash[SHA_DIGEST_LENGTH];
 	int ret;
 	if (pagebuffer[startix] !=NULL)  { // buffer full
@@ -181,21 +207,36 @@ void *uffd_handler(void *arg)
 	  SHA1(pagebuffer[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
 	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[startix]);
-	    ret = mprotect(pagebuffer[startix], pagesize, PROT_NONE); // write protect page
-	    //fprintf(stderr, "Did mprotect on page %llx at offset %llu\n", pagebuffer[startix], (unsigned long) (pagebuffer[startix] - p->base_addr));
-	    if(ret == -1) { perror("mprotect1"); assert(0); }
+
+	    struct uffdio_writeprotect wp;
+	    wp.range.start = (uint64_t) pagebuffer[startix];
+	    wp.range.len = (uint64_t) pagesize;
+	    wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+	    if (ioctl(p->uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
+	      fprintf(stderr, "errno %d, writeprotect failed at startix %d, virtual addr %llx, file offset %llu\n", 
+		      errno, startix, pagebuffer[startix], (unsigned long) (pagebuffer[startix] - p->base_addr));
+	      perror("ioctl(UFFDIO_WRITEPROTECT)");
+	      exit(1);
+	    }
+	    else {
+	      //fprintf(stderr, "writeprotect succeeded at startix %d, virtual addr %llx\n",startix, pagebuffer[startix]);
+	    }
+
 	    lseek(p->fd, (unsigned long) (pagebuffer[startix] - p->base_addr), SEEK_SET);
-	    write(p->fd, pagebuffer[startix], pagesize);
-	    ret = mprotect(pagebuffer[startix], pagesize, PROT_READ|PROT_WRITE); // write protect page
-	    if(ret == -1) { perror("mprotect2"); assert(0); }
+	    if (write(p->fd, pagebuffer[startix], pagesize)==-1) {
+	      fprintf(stderr, "Error number %d, address is %llx\n", errno, pagebuffer[startix]);
+	      perror("wrte"); assert(0); }
+
 	  }
- #endif
+#endif
 	  ret = madvise(pagebuffer[startix], pagesize, MADV_DONTNEED);
 	  //fprintf(stderr, "base address  %llx, index, %d, effective address %llx\n", pagebuffer, startix, pagebuffer+startix);
 	  if(ret == -1) { perror("madvise"); assert(0); } 
 	  pagebuffer[startix]=NULL;  // in case later on we unmap more than one page, need to set those slots to zero
-	};
-	//	pagebuffer[startix]= (void *)addr;
+
+
+	}
+
 	pagebuffer[startix]= (void *)page_begin;
 	SHA1((unsigned char *) buf, pagesize, (unsigned char *) &pagehash[startix].sha1hash);
 	startix = (startix +1) % p->bufsize;
