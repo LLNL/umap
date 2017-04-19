@@ -124,7 +124,7 @@ int main(int argc, char **argv)
   if (!options.fn)
     options.fn = "/tmp/abc.0";
   fprintf(stdout, "USEFILE enabled %s\n", options.fn);
-  p->fd = open(options.fn, O_RDWR, S_IRUSR|S_IWUSR);// | O_DIRECT);
+  p->fd = open(options.fn, O_RDWR|O_DIRECT, S_IRUSR|S_IWUSR);// | O_DIRECT);
   if (p->fd == -1) {
     perror("file open");
     exit(1);
@@ -151,7 +151,7 @@ int main(int argc, char **argv)
 #pragma omp parallel for reduction(+:value) //private (value)
   for (long i = 0; i < num_pages; i+=batch_size) {
     uint64_t start = getns();
-    for (long j=0;j<batch_size;j++)
+    for (long j=0;j<batch_size&& (i+j<num_pages);j++)
       {
 	//fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
 	//fprintf(stdout, "cur %x, adddress at i:%d, j:%d, %x\n", cur, i, j, &cur[i*1024 + j*1024]);
