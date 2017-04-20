@@ -1,5 +1,4 @@
-Testing features of the userfaultfd API to evaluate as basis for
-dimmap2 
+UMap: User-space DI-MMAP)
 
 # README #
 
