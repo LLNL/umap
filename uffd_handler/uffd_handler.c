@@ -75,7 +75,12 @@ int uffd_init(void *region, long pagesize, long num_pages) {
   // register the pages in the region for missing callbacks
   uffdio_register.range.start = (unsigned long)region;
   uffdio_register.range.len = pagesize * num_pages;
+#ifdef NOWP
+  uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING;
+#else
   uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING| UFFDIO_REGISTER_MODE_WP;
+#endif
+
   fprintf(stdout, "uffdio vals: %x, %d, %ld, %d\n", uffdio_register.range.start, uffd, uffdio_register.range.len, uffdio_register.mode);
   if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
     perror("ioctl/uffdio_register");
@@ -182,12 +187,20 @@ void *uffd_handler(void *arg)
 
 	void * page_begin = (void *) ((unsigned long long) addr & 0xfffffffffffff000);
 
+#ifndef NOWP
 	// new section to deal with write protected pages
+	printf("==> Event is pagefault on %p flags 0x%llx write? 0x%llx wp? 0x%llx\n"
+	       , (void *)msg.arg.pagefault.address
+	       , msg.arg.pagefault.flags
+	       , msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE
+	       , msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP
+	       );
 	if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
+	  fprintf(stderr, "write protect fault seen on page %llx\n", page_begin);
 	  // if in pagebuffer, unwriteprotect it and continue
 	  // else read it in and the unwriteprotect
 	}
-
+#endif
 
 
 #ifdef USEFILE
@@ -207,7 +220,7 @@ void *uffd_handler(void *arg)
 	  SHA1(pagebuffer[startix], pagesize, tmphash);
 	  if (strncmp((const char *)tmphash, (const char *) &pagehash[startix].sha1hash, SHA_DIGEST_LENGTH )) { // hashes don't match)
 	    //fprintf(stderr, "Hashes don't match, writing page at addr %llx\n", pagebuffer[startix]);
-
+#ifndef NOWP
 	    struct uffdio_writeprotect wp;
 	    wp.range.start = (uint64_t) pagebuffer[startix];
 	    wp.range.len = (uint64_t) pagesize;
@@ -219,8 +232,9 @@ void *uffd_handler(void *arg)
 	      exit(1);
 	    }
 	    else {
-	      //fprintf(stderr, "writeprotect succeeded at startix %d, virtual addr %llx\n",startix, pagebuffer[startix]);
+	      fprintf(stderr, "writeprotect succeeded at startix %d, virtual addr %llx\n",startix, pagebuffer[startix]); 
 	    }
+#endif
 
 	    lseek(p->fd, (unsigned long) (pagebuffer[startix] - p->base_addr), SEEK_SET);
 	    if (write(p->fd, pagebuffer[startix], pagesize)==-1) {
