@@ -21,7 +21,8 @@ endif
 
 UFFDLOC = ../uffd_handler
 UFFDLD= -lrt -lssl -lcrypto
-CFLAGS=-std=gnu99 $(DEFS) -g -lpthread # -O3
+#CFLAGS=-std=gnu99 $(DEFS) -g -lpthread # -O3
+CFLAGS=-std=gnu99 $(DEFS) -g -lpthread
 HEADERS=$(UFFDLOC)/uffd_handler.h
 TARGETOBJ=$(TARGET).o uffd_handler.o
 
@@ -29,7 +30,7 @@ all: $(TARGET)
 
 $(TARGET): $(TARGETOBJ) 
 	$(LINK.cpp) $(TARGETOBJ) -DUSEFILE $(LDFLAGS) $(UFFDLD) -o $@
-uffd_handler.o: $(HEADERS)
+uffd_handler.o: $(HEADERS) $(UFFDLOC)/uffd_handler.c
 	$(CC) $(UFFDLOC)/uffd_handler.c $(CFLAGS) -DUSEFILE -c -o $@
 $(TARGET).o: $(TARGET).cpp
 	$(CXX) $< $(CXXFLAGS) -c -o $@

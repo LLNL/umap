@@ -197,7 +197,7 @@ int main(int argc, char **argv)
   fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
   
   start = getns();
-  std::sort(arr, &arr[arraysize]);
+  std::sort(arr, &arr[arraysize-1]);
   fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
   start = getns();
@@ -206,6 +206,7 @@ int main(int argc, char **argv)
   
   stop_uffd_handler = 1;
   pthread_join(uffd_thread, NULL);
+
   //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
 		
   uffd_finalize(p, options.numpages);
