@@ -197,7 +197,7 @@ int main(int argc, char **argv)
   fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
   
   start = getns();
-  std::sort(arr, &arr[arraysize-1]);
+  std::sort(arr, &arr[arraysize]);
   fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
   start = getns();

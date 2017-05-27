@@ -31,5 +31,6 @@ void disable_wp_on_pages(int, uint64_t, int64_t, int64_t);
 int uffd_finalize(void*, long);
 long get_pagesize(void);
 void evict_page(params_t*, pagebuffer_t*);
+void print_uffd_msg_info(struct uffd_msg*);
 
 #endif // UFFD_HANDLER_H

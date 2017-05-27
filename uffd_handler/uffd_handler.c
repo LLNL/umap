@@ -145,6 +145,8 @@ void *uffd_handler(void *arg)
             printf("Unexpected event %x\n", msg.event);
             continue;
         }
+ 
+        print_uffd_msg_info(&msg);
 
         //
         // At this point, we know we have had a page fault.  Lets 
@@ -154,49 +156,66 @@ void *uffd_handler(void *arg)
         void* addr = (void *)msg.arg.pagefault.address;
         void* page_begin = PAGE_BEGIN(addr);
 
-        // We will have one of three faults:
-        // Case 1) User tried to write to page in memory, but protected
-        // Case 2) User tried to write to page not in memory
-        // Case 3) User tried to read from page not in memory
-
-        // Case 1...
-        if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
-            // TODO(MJM) - Need a better container for pagebuffer.  Using
-            // linear search for now...
-            int i;
-            for (i = 0; i < p->bufsize; i++) {
-                if (pagebuffer[i].page == page_begin) {
-                    //printf("Case 1: Marking page %p dirty\n", page_begin);
-                    pagebuffer[i].dirty = true;
-                    break;
-                }
+        //
+        // Check to see if the faulting page is alread in memory (needed
+        // to detect other potentially stale event messages from other threads
+        // in accessing/faulting on this page).
+        //
+        // TODO(MJM) - Need a better container for pagebuffer.  Using
+        // linear search for now...  I think a std::map<page, bufferindex>
+        // will work better.
+        //
+        bool page_in_memory = false;
+        int bufidx;
+        for (bufidx = 0; bufidx < p->bufsize; bufidx++) {
+            if (pagebuffer[bufidx].page == page_begin) {
+                page_in_memory = true;
+                break;
             }
-            assert(i < p->bufsize);
-            assert((msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)==0);
+        }
 
-            disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
+        if (page_in_memory) {
+            if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+                pagebuffer[bufidx].dirty = true;
+                disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
+            }
+
+            struct uffdio_range wake;
+            wake.start = (uint64_t)page_begin;
+            wake.len = pagesize; 
+
+            if (ioctl(p->uffd, UFFDIO_WAKE, &wake) == -1) {
+                perror("ioctl(UFFDIO_WAKE)");
+                exit(1);
+            }
             continue;
         }
 
-        // Case 2 and 3...
-        lseek(p->fd, (off_t)(page_begin - p->base_addr), SEEK_SET);
-        read(p->fd, buf, pagesize);
+        //
+        // We received some sort of fault for page that is not in memory
+        //
+        if (lseek(p->fd, (off_t)(page_begin - p->base_addr), SEEK_SET) == (off_t)-1) {
+            perror("lseek(Read) failed");
+            exit(1);
+        }
+
+        if (read(p->fd, buf, pagesize) == -1) {
+            perror("read failed");
+            exit(1);
+        }
 
         if (pagebuffer[startix].page != NULL)
             evict_page(p, &pagebuffer[startix]);
 
         pagebuffer[startix].page = (void *)page_begin;
 
-        // Case 2...
-        if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
+        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
             disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
             pagebuffer[startix].dirty = true;
-            //printf("Case 2: Marking page %p dirty\n", page_begin);
         }
         else {
             enable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
             pagebuffer[startix].dirty = false;
-            //printf("Case 3: Marking page %p false\n", page_begin);
         }
 
         startix = (startix +1) % p->bufsize;
@@ -207,7 +226,7 @@ void *uffd_handler(void *arg)
         copy.len = pagesize; 
         copy.mode = 0;
         if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
-            perror("ioctl/copy");
+            perror("ioctl(UFFDIO_COPY)");
             exit(1);
         }
     }
@@ -216,32 +235,35 @@ void *uffd_handler(void *arg)
 
 void evict_page(params_t* p, pagebuffer_t* pb)
 {
-    int ret;
-
     enable_wp_on_pages(p->uffd, (uint64_t)pb->page, p->pagesize, 1);
 
     if (pb->dirty) {
-        //printf("evict_page: %p (page DIRTY)\n", pb->page);
-        lseek(p->fd, (uint64_t)(pb->page - p->base_addr), SEEK_SET);
+        printf("EVICT %016llX Dirty\n", pb->page);
+        if (lseek(p->fd, (uint64_t)(pb->page - p->base_addr), SEEK_SET) == -1) {
+            perror("lseek(Write) failed");
+            assert(0);
+        }
 
         if (write(p->fd, pb->page, p->pagesize)==-1) {
-            fprintf(stderr, "Error number %d, address is %llx\n", 
-                    errno, pb->page);
-            perror("wrte"); assert(0);
+            perror("write failed");
+            assert(0);
         }
     }
+    else {
+        printf("EVICT %016llX Clean\n", pb->page);
+    }
 
-    ret = madvise(pb->page, p->pagesize, MADV_DONTNEED);
-    if(ret == -1) {
+    if (madvise(pb->page, p->pagesize, MADV_DONTNEED) == -1) {
         perror("madvise");
         assert(0);
     } 
 
     pb->page = NULL;
-    pb->dirty = false;
 }
 
-void enable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
+void enable_wp_on_pages(
+        int uffd, uint64_t start, int64_t size, int64_t pages
+)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
@@ -254,7 +276,9 @@ void enable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
     }
 }
 
-void disable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
+void disable_wp_on_pages(
+        int uffd, uint64_t start, int64_t size, int64_t pages
+)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
@@ -262,7 +286,7 @@ void disable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
     wp.mode = 0;
 
     if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
-        perror("ioctl(UFFDIO_WRITEPROTECT Enable)");
+        perror("ioctl(UFFDIO_WRITEPROTECT Disable)");
         exit(1);
     }
 }
@@ -299,3 +323,27 @@ long get_pagesize(void)
     assert(ret > 0);
     return ret;
 }
+
+void print_uffd_msg_info(struct uffd_msg* msg)
+{
+    switch (msg->event) {
+        case UFFD_EVENT_PAGEFAULT:  printf("FAULT  "); break;
+        case UFFD_EVENT_FORK:       printf("FORK   "); break;
+        case UFFD_EVENT_REMAP:      printf("REMAP  "); break;
+        case UFFD_EVENT_REMOVE:     printf("REMOVE "); break;
+        case UFFD_EVENT_UNMAP:      printf("UNMAP  "); break;
+        default:                    printf("?????? "); break;
+    }
+
+    printf("%016llX ", msg->arg.pagefault.address);
+
+    if (msg->arg.pagefault.flags == 0)
+        printf("READ\n");
+    else if (msg->arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WRITE)
+        printf("WRITE\n");
+    else if (msg->arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP)
+        printf("WP\n");
+    else 
+        printf("WP and WRITE %016llX\n", msg->arg.pagefault.flags);
+}
+
