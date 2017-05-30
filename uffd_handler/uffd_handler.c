@@ -22,15 +22,20 @@
 #include "uffd_handler.h"
 
 // data structures related to page buffer
-
-#define PAGE_BEGIN(a)   (void *)((uint64_t)a & 0xfffffffffffff000ull);
-
-static pagebuffer_t *pagebuffer;
-static bool *pagedirty;
+static pagebuffer_t* pagebuffer;
+static bool* pagedirty;
 static int startix=0;
+
+#ifdef ENABLE_FAULT_TRACE_BUFFER
+static page_activity_trace_t* trace_buf;
+static int trace_bufsize = 1000;
+static int trace_idx = 0;
+static int trace_seq = 1;
+#endif // ENABLE_FAULT_TRACE_BUFFER
+
 // end data structures related to page buffer
 
-int uffd_init(void *region, long pagesize, long num_pages)
+int uffd_init(void* region, long pagesize, long num_pages)
 {
     // open the userfault fd
     int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
@@ -56,13 +61,13 @@ int uffd_init(void *region, long pagesize, long num_pages)
 
     struct uffdio_register uffdio_register;
     // register the pages in the region for missing callbacks
-    uffdio_register.range.start = (unsigned long)region;
+    uffdio_register.range.start = (uint64_t)region;
     uffdio_register.range.len = pagesize * num_pages;
     uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING | 
                                         UFFDIO_REGISTER_MODE_WP;
-    fprintf(stdout, "uffdio vals: %x, %d, %ld, %d\n", 
-            uffdio_register.range.start, uffd, uffdio_register.range.len, 
-            uffdio_register.mode);
+    fprintf(stdout, "uffdio region=%p - %p\n", 
+            region, 
+            (void*)(uffdio_register.range.start+uffdio_register.range.len));
 
     if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
         perror("ioctl/uffdio_register");
@@ -78,11 +83,9 @@ int uffd_init(void *region, long pagesize, long num_pages)
     }
 
     fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
-    // start the thread that will handle userfaultfd events
     return uffd;
 }
 
-// handler thread
 void *uffd_handler(void *arg)
 {
     params_t *p = (params_t *) arg;
@@ -91,6 +94,9 @@ void *uffd_handler(void *arg)
 
     p->faultnum=0;
     pagebuffer = (pagebuffer_t *)calloc(p->bufsize, sizeof(pagebuffer_t));
+#ifdef ENABLE_FAULT_TRACE_BUFFER
+    trace_buf = (page_activity_trace_t *)calloc(trace_bufsize, sizeof(*trace_buf));
+#endif // ENABLE_FAULT_TRACE_BUFFER
 
     for (;;) {
         struct uffd_msg msg;
@@ -146,24 +152,33 @@ void *uffd_handler(void *arg)
             continue;
         }
  
-        print_uffd_msg_info(&msg);
+        //
+        // At this point, we know we have had a page fault.  Let's handle it.
+        //
+#define PAGE_BEGIN(a)   (void*)((uint64_t)a & ~(pagesize-1));
 
-        //
-        // At this point, we know we have had a page fault.  Lets 
-        // handle it.
-        //
         p->faultnum = p->faultnum + 1;;
-        void* addr = (void *)msg.arg.pagefault.address;
-        void* page_begin = PAGE_BEGIN(addr);
+        void* fault_addr = (void*)msg.arg.pagefault.address;
+        void* page_begin = PAGE_BEGIN(fault_addr);
+
+#ifdef ENABLE_FAULT_TRACE_BUFFER
+        if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
+            TRACE(page_begin, ft_wp, et_NA);
+        }
+        else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
+            TRACE(page_begin, ft_write, et_NA);
+        }
+        else {
+            TRACE(page_begin, ft_read, et_NA);
+        }
+#endif // ENABLE_FAULT_TRACE_BUFFER
 
         //
-        // Check to see if the faulting page is alread in memory (needed
-        // to detect other potentially stale event messages from other threads
-        // in accessing/faulting on this page).
+        // Check to see if the faulting page is already in memory. This can
+        // happen if more than one thread causes a fault for the same page.
         //
-        // TODO(MJM) - Need a better container for pagebuffer.  Using
-        // linear search for now...  I think a std::map<page, bufferindex>
-        // will work better.
+        // TODO(MJM) - Implement better container to get rid of linear
+        // search.
         //
         bool page_in_memory = false;
         int bufidx;
@@ -175,7 +190,8 @@ void *uffd_handler(void *arg)
         }
 
         if (page_in_memory) {
-            if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+            if (msg.arg.pagefault.flags & 
+                    (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
                 pagebuffer[bufidx].dirty = true;
                 disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
             }
@@ -192,9 +208,9 @@ void *uffd_handler(void *arg)
         }
 
         //
-        // We received some sort of fault for page that is not in memory
+        // Page not in memory, read it in and evict someone
         //
-        if (lseek(p->fd, (off_t)(page_begin - p->base_addr), SEEK_SET) == (off_t)-1) {
+        if (lseek(p->fd, (off_t)((uint64_t)page_begin - (uint64_t)p->base_addr), SEEK_SET) == (off_t)-1) {
             perror("lseek(Read) failed");
             exit(1);
         }
@@ -204,30 +220,42 @@ void *uffd_handler(void *arg)
             exit(1);
         }
 
-        if (pagebuffer[startix].page != NULL)
+        if (pagebuffer[startix].page)
             evict_page(p, &pagebuffer[startix]);
 
-        pagebuffer[startix].page = (void *)page_begin;
+        pagebuffer[startix].page = page_begin;
 
-        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+        if (msg.arg.pagefault.flags & 
+                (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
             disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
             pagebuffer[startix].dirty = true;
         }
         else {
-            enable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
             pagebuffer[startix].dirty = false;
         }
-
         startix = (startix +1) % p->bufsize;
 
         struct uffdio_copy copy;
         copy.src = (uint64_t)buf;
         copy.dst = (uint64_t)page_begin;
         copy.len = pagesize; 
-        copy.mode = 0;
-        if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
-            perror("ioctl(UFFDIO_COPY)");
-            exit(1);
+        if (msg.arg.pagefault.flags & 
+                (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+            copy.mode = 0;
+            if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
+                perror("ioctl(UFFDIO_COPY wake)");
+                exit(1);
+            }
+        }
+        else {
+            copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
+            if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
+                perror("ioctl(UFFDIO_COPY nowake)");
+                exit(1);
+            }
+
+            // Enable_wp will wake up thread
+            enable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
         }
     }
     return NULL;
@@ -235,39 +263,47 @@ void *uffd_handler(void *arg)
 
 void evict_page(params_t* p, pagebuffer_t* pb)
 {
+    //
+    // The implementation of UFFDIO_WRITEPROTET always wakes up thread
+    // sleeping on this page if UFFDIO_WRITEPROTECT_MODE_WP is set.
+    //
+    // Further, UFFDIO_WRITEPROTECT_MODE_DONTWAKE is NOT allowed
+    // for UFFDIO_WRITEPROTECT calls if UFFDIO_WRITEPROCT_MODE_WP is
+    // set.  In other words, the only time you can disabling WAKE is
+    // when you are disabling write protect.
+    //
     enable_wp_on_pages(p->uffd, (uint64_t)pb->page, p->pagesize, 1);
 
     if (pb->dirty) {
-        printf("EVICT %016llX Dirty\n", pb->page);
-        if (lseek(p->fd, (uint64_t)(pb->page - p->base_addr), SEEK_SET) == -1) {
+        TRACE(pb->page, ft_NA, et_dirty);
+        if (lseek(p->fd, ((uint64_t)pb->page - (uint64_t)p->base_addr), SEEK_SET) == -1) {
             perror("lseek(Write) failed");
             assert(0);
         }
 
-        if (write(p->fd, pb->page, p->pagesize)==-1) {
+        if (write(p->fd, (void*)(pb->page), p->pagesize)==-1) {
             perror("write failed");
             assert(0);
         }
     }
     else {
-        printf("EVICT %016llX Clean\n", pb->page);
+        TRACE(pb->page, ft_NA, et_clean);
     }
 
-    if (madvise(pb->page, p->pagesize, MADV_DONTNEED) == -1) {
+    if (madvise((void*)(pb->page), p->pagesize, MADV_DONTNEED) == -1) {
         perror("madvise");
         assert(0);
     } 
 
-    pb->page = NULL;
+    pb->page = 0ull;
 }
 
-void enable_wp_on_pages(
-        int uffd, uint64_t start, int64_t size, int64_t pages
-)
+void enable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
     wp.range.len = size * pages;
+
     wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
     if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
@@ -276,14 +312,12 @@ void enable_wp_on_pages(
     }
 }
 
-void disable_wp_on_pages(
-        int uffd, uint64_t start, int64_t size, int64_t pages
-)
+void disable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
     wp.range.len = size * pages;
-    wp.mode = 0;
+    wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
 
     if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ioctl(UFFDIO_WRITEPROTECT Disable)");
@@ -299,11 +333,11 @@ int uffd_finalize(void *arg, long num_pages)
 
     int tmpix;
     for (tmpix=0; tmpix < p->bufsize; tmpix++)
-        if (pagebuffer[tmpix].page != NULL)
+        if (pagebuffer[tmpix].page)
             evict_page(p, &pagebuffer[tmpix]);
 
     struct uffdio_register uffdio_register;
-    uffdio_register.range.start = (unsigned long)p->base_addr;
+    uffdio_register.range.start = (uint64_t)p->base_addr;
     uffdio_register.range.len = p->pagesize * num_pages;
 
     if (ioctl(p->uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
@@ -324,26 +358,14 @@ long get_pagesize(void)
     return ret;
 }
 
-void print_uffd_msg_info(struct uffd_msg* msg)
+#ifdef ENABLE_FAULT_TRACE_BUFFER
+void pa_trace(uint64_t page, enum fault_types ftype, enum evict_types etype)
 {
-    switch (msg->event) {
-        case UFFD_EVENT_PAGEFAULT:  printf("FAULT  "); break;
-        case UFFD_EVENT_FORK:       printf("FORK   "); break;
-        case UFFD_EVENT_REMAP:      printf("REMAP  "); break;
-        case UFFD_EVENT_REMOVE:     printf("REMOVE "); break;
-        case UFFD_EVENT_UNMAP:      printf("UNMAP  "); break;
-        default:                    printf("?????? "); break;
-    }
+    trace_buf[trace_idx].trace_seq = trace_seq++;
+    trace_buf[trace_idx].page = (void*)page;
+    trace_buf[trace_idx].ftype = ftype;
+    trace_buf[trace_idx].etype = etype;
 
-    printf("%016llX ", msg->arg.pagefault.address);
-
-    if (msg->arg.pagefault.flags == 0)
-        printf("READ\n");
-    else if (msg->arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WRITE)
-        printf("WRITE\n");
-    else if (msg->arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP)
-        printf("WP\n");
-    else 
-        printf("WP and WRITE %016llX\n", msg->arg.pagefault.flags);
+    trace_idx = (trace_idx +1) % trace_bufsize;
 }
-
+#endif // ENABLE_FAULT_TRACE_BUFFER

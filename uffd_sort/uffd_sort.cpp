@@ -131,6 +131,7 @@ void openandmap(const char *filename, int64_t numbytes, int &fd, void *&region) 
 }
 
 void initdata(uint64_t *region, int64_t rlen) {
+  fprintf(stdout, "initdata: %p, %d\n", region, rlen);
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<uint64_t> rnd_int;
@@ -143,14 +144,32 @@ void initdata(uint64_t *region, int64_t rlen) {
 
 void validatedata(uint64_t *region, int64_t rlen) {
 #pragma omp parallel for
-  for(uint64_t i=1; i< rlen; ++i) {
-    if(region[i] < region[i-1]) {
-      fprintf(stderr, "Worker %d found an error at index %llu, %llu is lt %llu!\n", omp_get_thread_num(), i, region[i], region[i-1]);
-      fprintf(stderr, "Context i-3 i-2 i-1 i i+1 i+2 i+3:%llu %llu %llu %llu %llu %llu %llu\n",
-	      region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
-      //exit(-1);
+    for(uint64_t i=1; i< rlen; ++i) {
+        if(region[i] < region[i-1]) {
+            fprintf(stderr, "Worker %d found an error at index %llu, %llu is lt %llu!\n", 
+                            omp_get_thread_num(), i, region[i], region[i-1]);
+
+            if (i < 3) {
+                fprintf(stderr, "Context ");
+                for (int j=0; j < 7; j++) {
+                    fprintf(stderr, "%llu ", region[j]);
+                }
+                fprintf(stderr, "\n");
+            }
+            else if (i > (rlen-4)) {
+                fprintf(stderr, "Context ");
+                for (int j=rlen-8; j < rlen; j++) {
+                    fprintf(stderr, "%llu ", region[j]);
+                }
+                fprintf(stderr, "\n");
+            }
+            else {
+                fprintf(stderr, 
+                    "Context i-3 i-2 i-1 i i+1 i+2 i+3:%llu %llu %llu %llu %llu %llu %llu\n",
+                    region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
+            }
+        }
     }
-  }
 }
 
 int main(int argc, char **argv)
@@ -195,13 +214,13 @@ int main(int argc, char **argv)
   // init data
   initdata(arr, arraysize);
   fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
-  
+
   start = getns();
   std::sort(arr, &arr[arraysize]);
   fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
   start = getns();
-  validatedata(arr, arraysize);
+  //validatedata(arr, arraysize);
   fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
   
   stop_uffd_handler = 1;
@@ -212,5 +231,3 @@ int main(int argc, char **argv)
   uffd_finalize(p, options.numpages);
 
 }
-
-  

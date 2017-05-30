@@ -1,11 +1,23 @@
+#include <linux/userfaultfd.h>
+#include <sys/types.h>
+#include <stdlib.h>
 #include <stdbool.h>
 
 #ifndef UFFD_HANDLER_H
 #define UFFD_HANDLER_H
 
+// Uncomment the following line to enable tracing (to circular buffer in mem)
+#define ENABLE_FAULT_TRACE_BUFFER 1
+
+#ifdef ENABLE_FAULT_TRACE_BUFFER
+#define TRACE(_pb_, _ft_, _et_) pa_trace((uint64_t)_pb_, _ft_, _et_)
+#else
+#define TRACE(_pb_, _ft_, _et_) ;
+#endif // ENABLE_FAULT_TRACE_BUFFER
+
 typedef struct params {
   int uffd;
-  void *base_addr;
+  void* base_addr;
   long pagesize;
   int bufsize;
   int faultnum;
@@ -13,10 +25,30 @@ typedef struct params {
 } params_t;
 
 typedef struct pagebuffer {
-    void *page;
+    void* page;
     bool dirty;
 } pagebuffer_t;
 
+enum fault_types {
+    ft_NA=-1,
+    ft_read=0,
+    ft_write=1,
+    ft_wp=2
+};
+
+enum evict_types {
+    et_NA=-1,
+    et_none=0,
+    et_clean=1,
+    et_dirty=2
+};
+
+typedef struct {
+    int trace_seq;
+    void* page;
+    enum fault_types ftype;
+    enum evict_types etype;
+} page_activity_trace_t;
 
 #ifdef __cplusplus
 extern "C" volatile int stop_uffd_handler;
@@ -24,13 +56,16 @@ extern "C" volatile int stop_uffd_handler;
 extern volatile int stop_uffd_handler;
 #endif
 
+#ifdef ENABLE_FAULT_TRACE_BUFFER
+void pa_trace(uint64_t, enum fault_types, enum evict_types);
+#endif // ENABLE_FAULT_TRACE_BUFFER
+
 int uffd_init(void*, long, long);
 void *uffd_handler(void*);
 void enable_wp_on_pages(int, uint64_t, int64_t, int64_t);
 void disable_wp_on_pages(int, uint64_t, int64_t, int64_t);
 int uffd_finalize(void*, long);
 long get_pagesize(void);
-void evict_page(params_t*, pagebuffer_t*);
-void print_uffd_msg_info(struct uffd_msg*);
+void evict_page(params_t*, pagebuffer_t *);
 
 #endif // UFFD_HANDLER_H

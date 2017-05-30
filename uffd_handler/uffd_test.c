@@ -120,7 +120,6 @@ int main(int argc, char **argv)
   p->faultnum = 0;
   p->base_addr = region;
   fprintf(stdout, "%d pages, %d threads\n", num_pages, options.numthreads);
-#ifdef USEFILE
   if (!options.fn)
     options.fn = "/tmp/abc.0";
   fprintf(stdout, "USEFILE enabled %s\n", options.fn);
@@ -129,7 +128,6 @@ int main(int argc, char **argv)
     perror("file open");
     exit(1);
   }
-#endif
   
   pthread_create(&uffd_thread, NULL, uffd_handler, p);
   //printf("total number of fault:%d\n",faultnum);
