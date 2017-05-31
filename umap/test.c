@@ -21,7 +21,7 @@
 #include <omp.h>
 #endif
 
-#include "uffd_handler.h"
+#include "umap.h"
 
 volatile int stop_uffd_handler;
 

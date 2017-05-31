@@ -1,7 +1,7 @@
 CXX=g++
 CC=gcc
 
-TARGET=uffd_sort
+TARGET=umapsort
 
 DEFS=-D_GNU_SOURCE
 
@@ -19,20 +19,20 @@ ifneq ($(OS), Darwin)
 LDFLAGS+= -lrt
 endif
 
-UFFDLOC = ../uffd_handler
+UFFDLOC = ../../umap
 UFFDLD= -lrt -lssl -lcrypto
 #CFLAGS=-std=gnu99 $(DEFS) -g -lpthread # -O3
 CFLAGS=-std=gnu99 $(DEFS) -g -lpthread
-HEADERS=$(UFFDLOC)/uffd_handler.h
-TARGETOBJ=$(TARGET).o uffd_handler.o
+HEADERS=$(UFFDLOC)/umap.h
+TARGETOBJ=$(TARGET).o umap.o
 
 all: $(TARGET)
 
 $(TARGET): $(TARGETOBJ) 
 	$(LINK.cpp) $(TARGETOBJ) -DUSEFILE $(LDFLAGS) $(UFFDLD) -o $@
-uffd_handler.o: $(HEADERS) $(UFFDLOC)/uffd_handler.c
-	$(CC) $(UFFDLOC)/uffd_handler.c $(CFLAGS) -DUSEFILE -c -o $@
+umap.o: $(HEADERS) $(UFFDLOC)/umap.c
+	$(CC) $(UFFDLOC)/umap.c $(CFLAGS) -DUSEFILE -c -o $@
 $(TARGET).o: $(TARGET).cpp
 	$(CXX) $< $(CXXFLAGS) -c -o $@
 clean:
-	rm -f $(TARGET) $(TARGET).o uffd_handler.o
+	rm -f $(TARGET) $(TARGET).o umap.o

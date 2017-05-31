@@ -37,7 +37,7 @@
 #endif
 
 extern "C" {
-#include "../uffd_handler/uffd_handler.h"
+#include "../../umap/umap.h"
 
 volatile int stop_uffd_handler;
 }

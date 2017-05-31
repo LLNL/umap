@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <openssl/sha.h>
-#include "uffd_handler.h"
+#include "umap.h"
 
 // data structures related to page buffer
 static pagebuffer_t* pagebuffer;

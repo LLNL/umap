@@ -1,6 +1,6 @@
 CC=gcc
 
-TARGET=uffd_test
+TARGET=umaptest
 
 DEFS=-D_GNU_SOURCE
 
@@ -14,8 +14,8 @@ CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt -lssl -lcrypto
 LDFLAGS=-lpthread -fopenmp -lrt -lssl -lcrypto
 LDLIBS=-lssl -lcrypto
 
-HEADERS=uffd_handler.h
-SOURCES=uffd_handler.c $(TARGET).c
+HEADERS=umap.h
+SOURCES=umap.c test.c
 
 OBJS=$(SOURCES:.c=.o)
 
