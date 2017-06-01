@@ -106,9 +106,10 @@ void openandmap(const char *filename, int64_t numbytes, int &fd, void *&region) 
   if( access( filename, W_OK ) != -1 ) {
     remove(filename);
    }
+  //int open_options = O_RDWR | O_CREAT | O_DIRECT;
   int open_options = O_RDWR | O_CREAT;
   #ifdef O_LARGEFILE
-    open_options != O_LARGEFILE;
+    open_options |= O_LARGEFILE;
   #endif
 
   fd = open(filename, open_options, S_IRUSR|S_IWUSR);

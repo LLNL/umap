@@ -22,6 +22,7 @@
 #include "umap.h"
 
 // data structures related to page buffer
+static char* tmppagebuf;
 static pagebuffer_t* pagebuffer;
 static bool* pagedirty;
 static int startix=0;
@@ -74,7 +75,7 @@ int uffd_init(void* region, long pagesize, long num_pages)
         exit(1);
     }
 
-    enable_wp_on_pages(uffd, (uint64_t)region, pagesize, num_pages);
+    enable_wp_on_pages_and_wake(uffd, (uint64_t)region, pagesize, num_pages);
 
     if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != 
                                                 UFFD_API_RANGE_IOCTLS) {
@@ -90,10 +91,11 @@ void *uffd_handler(void *arg)
 {
     params_t *p = (params_t *) arg;
     long pagesize = p->pagesize;
-    char buf[pagesize];
 
     p->faultnum=0;
-    pagebuffer = (pagebuffer_t *)calloc(p->bufsize, sizeof(pagebuffer_t));
+    posix_memalign((void**)&tmppagebuf, (size_t)512, pagesize);
+
+    pagebuffer = (pagebuffer_t*)calloc(p->bufsize, sizeof(pagebuffer_t));
 #ifdef ENABLE_FAULT_TRACE_BUFFER
     trace_buf = (page_activity_trace_t *)calloc(trace_bufsize, sizeof(*trace_buf));
 #endif // ENABLE_FAULT_TRACE_BUFFER
@@ -210,13 +212,11 @@ void *uffd_handler(void *arg)
         //
         // Page not in memory, read it in and evict someone
         //
-        if (lseek(p->fd, (off_t)((uint64_t)page_begin - (uint64_t)p->base_addr), SEEK_SET) == (off_t)-1) {
-            perror("lseek(Read) failed");
-            exit(1);
-        }
+        ssize_t pread_ret = pread(p->fd, tmppagebuf, pagesize,
+                       (off_t)((uint64_t)page_begin - (uint64_t)p->base_addr));
 
-        if (read(p->fd, buf, pagesize) == -1) {
-            perror("read failed");
+        if (pread_ret == -1) {
+            perror("pread failed");
             exit(1);
         }
 
@@ -236,7 +236,7 @@ void *uffd_handler(void *arg)
         startix = (startix +1) % p->bufsize;
 
         struct uffdio_copy copy;
-        copy.src = (uint64_t)buf;
+        copy.src = (uint64_t)tmppagebuf;
         copy.dst = (uint64_t)page_begin;
         copy.len = pagesize; 
         if (msg.arg.pagefault.flags & 
@@ -254,8 +254,8 @@ void *uffd_handler(void *arg)
                 exit(1);
             }
 
-            // Enable_wp will wake up thread
-            enable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
+            enable_wp_on_pages_and_wake(p->uffd, (uint64_t)page_begin, 
+                                        pagesize, 1);
         }
     }
     return NULL;
@@ -263,26 +263,30 @@ void *uffd_handler(void *arg)
 
 void evict_page(params_t* p, pagebuffer_t* pb)
 {
-    //
-    // The implementation of UFFDIO_WRITEPROTET always wakes up thread
-    // sleeping on this page if UFFDIO_WRITEPROTECT_MODE_WP is set.
-    //
-    // Further, UFFDIO_WRITEPROTECT_MODE_DONTWAKE is NOT allowed
-    // for UFFDIO_WRITEPROTECT calls if UFFDIO_WRITEPROCT_MODE_WP is
-    // set.  In other words, the only time you can disabling WAKE is
-    // when you are disabling write protect.
-    //
-    enable_wp_on_pages(p->uffd, (uint64_t)pb->page, p->pagesize, 1);
-
     if (pb->dirty) {
-        TRACE(pb->page, ft_NA, et_dirty);
-        if (lseek(p->fd, ((uint64_t)pb->page - (uint64_t)p->base_addr), SEEK_SET) == -1) {
-            perror("lseek(Write) failed");
-            assert(0);
-        }
+        // Prevent further writes.  No need to do this if not dirty because
+        // WP is already on.
+        //
+        // Preventing further writes is problematic because the kernel
+        // module will wake up any threads that might be waiting for a fault
+        // to be handled in this page.
+        //
+        // It is possible to work around this by making sure that all faults
+        // and WP exceptions for this page have been handled prior to evicting
+        // the page.
+        //
+        enable_wp_on_pages_and_wake(p->uffd,(uint64_t)pb->page,p->pagesize,1);
 
-        if (write(p->fd, (void*)(pb->page), p->pagesize)==-1) {
-            perror("write failed");
+        ssize_t rval;
+
+        TRACE(pb->page, ft_NA, et_dirty);
+
+
+        rval = pwrite(p->fd, (void*)(pb->page), p->pagesize, 
+                        (off_t)((uint64_t)pb->page - (uint64_t)p->base_addr));
+
+        if (rval == -1) {
+            perror("pwrite failed");
             assert(0);
         }
     }
@@ -298,7 +302,17 @@ void evict_page(params_t* p, pagebuffer_t* pb)
     pb->page = 0ull;
 }
 
-void enable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
+//
+// Enabling WP always wakes up any sleeping thread that may have been faulted
+// in the specified range.
+//
+// For reasons I don't understand, the kernel module interface for 
+// UFFDIO_WRITEPROTECT does not allow for the caller to submit
+// UFFDIO_WRITEPROTECT_MODE_DONTWAKE when enabling WP with
+// UFFDIO_WRITEPROTECT_MODE_WP.  UFFDIO_WRITEPROTECT_MODE_DONTWAKE is only 
+// allowed when disabling WP.
+//
+void enable_wp_on_pages_and_wake(int uffd, uint64_t start, int64_t size, int64_t pages)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
@@ -312,6 +326,10 @@ void enable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
     }
 }
 
+//
+// We intentionally do not wake up faulting thread when disabling WP.  This
+// is to handle the write-fault case when the page needs to be copied in.
+//
 void disable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
 {
     struct uffdio_writeprotect wp;

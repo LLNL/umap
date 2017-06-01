@@ -66,7 +66,7 @@ extern "C" {
 void pa_trace(uint64_t, enum fault_types, enum evict_types);
 #endif // ENABLE_FAULT_TRACE_BUFFER
 
-void enable_wp_on_pages(int, uint64_t, int64_t, int64_t);
+void enable_wp_on_pages_and_wake(int, uint64_t, int64_t, int64_t);
 void disable_wp_on_pages(int, uint64_t, int64_t, int64_t);
 void evict_page(params_t*, pagebuffer_t *);
 
