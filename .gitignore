@@ -1,3 +1,4 @@
 *.o
 uffd_sort
 uffd_test
+umaptest

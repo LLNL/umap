@@ -1,3 +1,4 @@
+GXX=gcc
 CC=gcc
 
 TARGET=umaptest
@@ -9,17 +10,19 @@ ifdef D
   DEFS += $(patsubst %,-D%,$(subst $(SEP), ,$(D)))
 endif
 
-CFLAGS=-std=gnu99 $(DEFS) -O3 -g -lpthread -fopenmp -lrt -lssl -lcrypto
-
-LDFLAGS=-lpthread -fopenmp -lrt -lssl -lcrypto
-LDLIBS=-lssl -lcrypto
+CFLAGS=   $(DEFS) -std=gnu99 -g -lpthread -fopenmp # -O3
+CXXFLAGS= $(DEFS) -std=c++11 -g -lpthread -fopenmp # -O3
+LDFLAGS=-lpthread -fopenmp
 
 HEADERS=umap.h
-SOURCES=umap.c test.c
+SOURCES=umap.cpp test.c
 
-OBJS=$(SOURCES:.c=.o)
+OBJS=umap.o test.o
+
+all: $(TARGET)
 
 $(TARGET): $(OBJS)
+	$(LINK.cpp) $(OBJS) $(LDFLAGS) -o $@
 
 $(OBJS): $(SOURCES) $(HEADERS) Makefile
 

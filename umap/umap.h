@@ -51,21 +51,23 @@ typedef struct {
 } page_activity_trace_t;
 
 #ifdef __cplusplus
-extern "C" volatile int stop_uffd_handler;
-#else
-extern volatile int stop_uffd_handler;
+extern "C" {
+#endif
+    extern volatile int stop_uffd_handler;
+    long get_pagesize(void);
+    int uffd_init(void*, long, long);
+    void *uffd_handler(void*);
+    int uffd_finalize(void*, long);
+#ifdef __cplusplus
+}
 #endif
 
 #ifdef ENABLE_FAULT_TRACE_BUFFER
 void pa_trace(uint64_t, enum fault_types, enum evict_types);
 #endif // ENABLE_FAULT_TRACE_BUFFER
 
-int uffd_init(void*, long, long);
-void *uffd_handler(void*);
 void enable_wp_on_pages(int, uint64_t, int64_t, int64_t);
 void disable_wp_on_pages(int, uint64_t, int64_t, int64_t);
-int uffd_finalize(void*, long);
-long get_pagesize(void);
 void evict_page(params_t*, pagebuffer_t *);
 
 #endif // UFFD_HANDLER_H
