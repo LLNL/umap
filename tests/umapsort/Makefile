@@ -30,8 +30,8 @@ all: $(TARGET)
 
 $(TARGET): $(TARGETOBJ) 
 	$(LINK.cpp) $(TARGETOBJ) -DUSEFILE $(LDFLAGS) $(UFFDLD) -o $@
-umap.o: $(HEADERS) $(UFFDLOC)/umap.c
-	$(CC) $(UFFDLOC)/umap.c $(CFLAGS) -DUSEFILE -c -o $@
+umap.o: $(HEADERS) $(UFFDLOC)/umap.cpp
+	$(CXX) $(UFFDLOC)/umap.cpp $(CXXFLAGS) -DUSEFILE -c -o $@
 $(TARGET).o: $(TARGET).cpp
 	$(CXX) $< $(CXXFLAGS) -c -o $@
 clean:
