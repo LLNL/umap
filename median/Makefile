@@ -34,4 +34,4 @@ uffd_handler.o: $(HEADERS)
 $(TARGET).o: $(TARGET).cpp
 	$(CXX) $< $(CXXFLAGS) -c -o $@
 clean:
-	rm -f $(TARGET) $(TARGET).o uffd_handler.o
+	rm -f $(TARGET) $(TARGET).o uffd_handler.o test.txt
