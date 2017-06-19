@@ -82,7 +82,6 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
 
 int main(int argc, char **argv)
 {
-  int uffd;
   long pagesize;
   long num_pages;
   void *region;
@@ -119,7 +118,7 @@ int main(int argc, char **argv)
   p->bufsize = options.bufsize;
   p->faultnum = 0;
   p->base_addr = region;
-  fprintf(stdout, "%d pages, %d threads\n", num_pages, options.numthreads);
+  fprintf(stdout, "%ld pages, %d threads\n", num_pages, options.numthreads);
   if (!options.fn)
     options.fn = "/tmp/abc.0";
   fprintf(stdout, "USEFILE enabled %s\n", options.fn);

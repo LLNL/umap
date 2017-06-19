@@ -24,7 +24,6 @@
 // data structures related to page buffer
 static char* tmppagebuf;
 static pagebuffer_t* pagebuffer;
-static bool* pagedirty;
 static int startix=0;
 
 #ifdef ENABLE_FAULT_TRACE_BUFFER

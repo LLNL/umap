@@ -37,7 +37,7 @@
 #endif
 
 extern "C" {
-#include "../../umap/umap.h"
+#include "umap.h"
 
 volatile int stop_uffd_handler;
 }
@@ -132,7 +132,7 @@ void openandmap(const char *filename, int64_t numbytes, int &fd, void *&region) 
 }
 
 void initdata(uint64_t *region, int64_t rlen) {
-  fprintf(stdout, "initdata: %p, %d\n", region, rlen);
+  fprintf(stdout, "initdata: %p, %ld\n", region, rlen);
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<uint64_t> rnd_int;
@@ -143,30 +143,30 @@ void initdata(uint64_t *region, int64_t rlen) {
   }
 }
 
-void validatedata(uint64_t *region, int64_t rlen) {
+void validatedata(uint64_t *region, uint64_t rlen) {
 #pragma omp parallel for
     for(uint64_t i=1; i< rlen; ++i) {
         if(region[i] < region[i-1]) {
-            fprintf(stderr, "Worker %d found an error at index %llu, %llu is lt %llu!\n", 
+            fprintf(stderr, "Worker %d found an error at index %lu, %lu is lt %lu!\n", 
                             omp_get_thread_num(), i, region[i], region[i-1]);
 
             if (i < 3) {
                 fprintf(stderr, "Context ");
                 for (int j=0; j < 7; j++) {
-                    fprintf(stderr, "%llu ", region[j]);
+                    fprintf(stderr, "%lu ", region[j]);
                 }
                 fprintf(stderr, "\n");
             }
             else if (i > (rlen-4)) {
                 fprintf(stderr, "Context ");
-                for (int j=rlen-8; j < rlen; j++) {
-                    fprintf(stderr, "%llu ", region[j]);
+                for (uint64_t j=rlen-8; j < rlen; j++) {
+                    fprintf(stderr, "%lu ", region[j]);
                 }
                 fprintf(stderr, "\n");
             }
             else {
                 fprintf(stderr, 
-                    "Context i-3 i-2 i-1 i i+1 i+2 i+3:%llu %llu %llu %llu %llu %llu %llu\n",
+                    "Context i-3 i-2 i-1 i i+1 i+2 i+3:%lu %lu %lu %lu %lu %lu %lu\n",
                     region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
             }
         }
@@ -175,11 +175,10 @@ void validatedata(uint64_t *region, int64_t rlen) {
 
 int main(int argc, char **argv)
 {
-  int uffd;
   long pagesize;
   int64_t totalbytes;
   pthread_t uffd_thread;
-  int64_t arraysize;
+  uint64_t arraysize;
   // parameter block to uffd 
   params_t *p = (params_t *) malloc(sizeof(params_t));
 
@@ -221,7 +220,7 @@ int main(int argc, char **argv)
   fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
   start = getns();
-  //validatedata(arr, arraysize);
+  validatedata(arr, arraysize);
   fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
   
   stop_uffd_handler = 1;
