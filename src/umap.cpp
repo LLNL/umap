@@ -22,6 +22,7 @@
 #include "umap.h"
 
 // data structures related to page buffer
+static volatile int stop_uffd_handler = 0;
 static char* tmppagebuf;
 static pagebuffer_t* pagebuffer;
 static int startix=0;
@@ -37,6 +38,7 @@ static int trace_seq = 1;
 
 int uffd_init(void* region, long pagesize, long num_pages)
 {
+    stop_uffd_handler = 0;
     // open the userfault fd
     int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
     if (uffd <  0) {
@@ -373,6 +375,11 @@ long get_pagesize(void)
     }
     assert(ret > 0);
     return ret;
+}
+
+void stop_umap_handler()
+{
+  stop_uffd_handler = 1;
 }
 
 #ifdef ENABLE_FAULT_TRACE_BUFFER

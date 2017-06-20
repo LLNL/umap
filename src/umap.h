@@ -53,7 +53,7 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif
-    extern volatile int stop_uffd_handler;
+    void stop_umap_handler(void);
     long get_pagesize(void);
     int uffd_init(void*, long, long);
     void *uffd_handler(void*);
