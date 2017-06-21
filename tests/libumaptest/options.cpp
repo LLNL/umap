@@ -1,6 +1,6 @@
 #include <iostream>     // cout/cerr
 #include <unistd.h>     // getopt()
-#include <getopt.h>
+#include <getopt.h>     // duh...
 #include "umaptest.h"
 
 char const* FILENAME = "/tmp/abc";
@@ -14,7 +14,7 @@ static void usage(char* pname)
 {
   cerr
   << "Usage: " << pname << " [--initonly] [--noinit] [--directio]"
-  <<                       " [--UseMmap] [-p #] [-t #] [-b #] [-f name]\n\n"
+  <<                       " [--usemmap] [-p #] [-t #] [-b #] [-f name]\n\n"
   << " --help                 - This message\n"
   << " --initonly             - Initialize file, then stop\n"
   << " --noinit               - Use previously initialized file\n"
@@ -23,7 +23,7 @@ static void usage(char* pname)
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -b page buffer size    - default: " << BUFFERSIZE << endl
-  << " -f [file name]         - backing file name.  Must exist for NoInit\n";
+  << " -f [file name]         - backing file name.  Must exist and be correct size for noinit\n";
   exit(1);
 }
 
@@ -78,5 +78,13 @@ void umt_getoptions(umt_optstruct_t& testops, int argc, char *argv[])
       R0:
         usage(pname);
     }
+  }
+
+  if (optind < argc) {
+    cerr << "Unknown Arguments: ";
+    while (optind < argc)
+      cerr << "\"" << argv[optind++] << "\" ";
+    cerr << endl;
+    usage(pname);
   }
 }
