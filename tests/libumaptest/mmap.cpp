@@ -58,12 +58,16 @@ void umt_openandmap(
   }
 
   int prot = PROT_READ|PROT_WRITE;
-  int flags = MAP_PRIVATE;
-  int my_fd = fd;
+  int flags;
+  int my_fd;
 
   if ( !testops.usemmap ) {
-    flags |= MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE;
+    flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE;
     my_fd = -1;
+  }
+  else {
+    my_fd = fd;
+    flags = MAP_SHARED;
   }
 
   // allocate a memory region to be managed by userfaultfd
