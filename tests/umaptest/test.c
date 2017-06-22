@@ -21,7 +21,7 @@
 #include <omp.h>
 #endif
 
-#include "uffd_handler.h"
+#include "umap.h"
 
 volatile int stop_uffd_handler;
 
@@ -82,7 +82,6 @@ void getoptions(optstruct_t *options, int argc, char *argv[]) {
 
 int main(int argc, char **argv)
 {
-  int uffd;
   long pagesize;
   long num_pages;
   void *region;
@@ -119,17 +118,17 @@ int main(int argc, char **argv)
   p->bufsize = options.bufsize;
   p->faultnum = 0;
   p->base_addr = region;
-  fprintf(stdout, "%d pages, %d threads\n", num_pages, options.numthreads);
-#ifdef USEFILE
+  fprintf(stdout, "%ld pages, %d threads\n", num_pages, options.numthreads);
   if (!options.fn)
     options.fn = "/tmp/abc.0";
   fprintf(stdout, "USEFILE enabled %s\n", options.fn);
-  p->fd = open(options.fn, O_RDWR|O_DIRECT, S_IRUSR|S_IWUSR);// | O_DIRECT);
+  // TODO (mjm) - Why doesn't O_DIRECT work?!?
+  //p->fd = open(options.fn, O_RDWR|O_DIRECT, S_IRUSR|S_IWUSR);// | O_DIRECT);
+  p->fd = open(options.fn, O_RDWR, S_IRUSR|S_IWUSR);// | O_DIRECT);
   if (p->fd == -1) {
     perror("file open");
     exit(1);
   }
-#endif
   
   pthread_create(&uffd_thread, NULL, uffd_handler, p);
   //printf("total number of fault:%d\n",faultnum);
