@@ -1,0 +1,153 @@
+
+#include <random>
+#include <algorithm>
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <stdint.h>
+#include <string.h>
+#include <assert.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>    // optind
+#include <errno.h>
+
+
+#define NUMPAGES 10000000
+#define NUMTHREADS 2
+#define BUFFERSIZE 16
+
+#include "umap.h"
+#include "umaptest.h"
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+static inline uint64_t getns(void)
+{
+  struct timespec ts;
+  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  assert(ret == 0);
+  return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
+}
+
+void initdata(uint64_t *region, int64_t rlen) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<uint64_t> rnd_int;
+#pragma omp parallel for
+  for(int i=0; i< rlen; ++i) {
+    region[i] = (uint64_t) (rlen - i);// rnd_int(gen);
+    //region[i] = rnd_int(gen)>>1;//divide all values by 2 because of overflow in torben
+    //printf("%llu\n", (long long)region[i]);
+  }
+}
+uint64_t torben(uint64_t *m, int n)
+{
+    int         i, less, greater, equal;
+    uint64_t  min, max, guess, maxltguess, mingtguess;
+
+    min = max = m[0] ;
+    for (i=1 ; i<n ; i++) {
+        if (m[i]<min) min=m[i];
+        if (m[i]>max) max=m[i];
+        if (m[i]>n) fprintf(stdout,"m:%llu\n",m[i]);
+    }
+    //fprintf(stdout,"Max:%llu\nMin:%llu\n",max,min);
+
+    while (1) {
+        guess = (min+max)/2;
+        less = 0; greater = 0; equal = 0;
+        maxltguess = min ;
+        mingtguess = max ;
+#pragma omp parallel for reduction(+:less,greater,equal),reduction(max:maxltguess),reduction(min:mingtguess)
+        for (i=0; i<n; i++) {
+            if (m[i]<guess) {
+                less++;
+                if (m[i]>maxltguess) maxltguess = m[i] ;
+            } else if (m[i]>guess) {
+                greater++;
+                if (m[i]<mingtguess) mingtguess = m[i] ;
+            } else equal++;
+        }
+
+        if (less <= (n+1)/2 && greater <= (n+1)/2) break ;
+        else if (less>greater) max = maxltguess ;
+        else min = mingtguess;
+        //fprintf(stdout,"guess: %llu less:%d greater:%d\n",guess,less,greater);
+    }
+    if (less >= (n+1)/2) return maxltguess;
+    else if (less+equal >= (n+1)/2) return guess;
+    else return mingtguess;
+}
+int main(int argc, char **argv)
+{
+  umt_optstruct_t options;
+  int uffd;
+  long pagesize;
+  int64_t totalbytes;
+  pthread_t uffd_thread;
+  int64_t arraysize;
+  uint64_t median;
+  int fd;
+  void *base_addr;
+  // parameter block to uffd 
+  params_t *p = (params_t *) malloc(sizeof(params_t));
+
+  pagesize = get_pagesize();
+
+  umt_getoptions(options, argc, argv);
+
+  totalbytes = options.numpages*pagesize;
+  umt_openandmap(options, totalbytes, p->fd,p->base_addr);
+
+  if ( ! options.usemmap ) 
+  {
+    fprintf(stdout, "Using UserfaultHandler Buffer\n");
+    p->pagesize = pagesize;  
+    p->bufsize = options.bufsize;
+    p->faultnum = 0;
+    p->uffd = uffd_init(p->base_addr, pagesize, options.numpages);
+
+    pthread_create(&uffd_thread, NULL, uffd_handler, p);
+    sleep(1);
+  }
+  else 
+  {
+    fprintf(stdout, "Using vanilla mmap()\n");
+  }
+
+  fprintf(stdout, "%d pages, %d threads\n", options.numpages, options.numthreads);
+
+  omp_set_num_threads(options.numthreads);
+
+  uint64_t *arr = (uint64_t *) p->base_addr;
+  arraysize = totalbytes/sizeof(int64_t);
+  fprintf(stdout,"Array size: %lld\n",arraysize);
+
+  uint64_t start = getns();
+  // init data
+  initdata(arr, arraysize);
+  fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
+
+  start = getns();
+  median=torben(arr,arraysize);
+  fprintf(stdout, "Median is %llu, Find median took %f us\n",median,(double)(getns() - start)/1000000.0);
+
+  if ( ! options.usemmap ) 
+  {
+    stop_umap_handler();
+    pthread_join(uffd_thread, NULL);
+    uffd_finalize(p, options.numpages);
+  }
+
+  return 0;
+}
+
