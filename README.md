@@ -1,5 +1,4 @@
-UMAP v0.0.1 (alpha)
-============
+# UMAP v0.0.1 (alpha)
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
@@ -16,31 +15,30 @@ including a hello world program for userfaultfd based upon code from the
 The sortbenchmark directory is the original sort benchmark, modified to use
 threads rather than forking processes.
 
-Quick Start
------------
+## Quick Start
+
 *Building umap* is trivial. In the root directory of the repo
 
-```
+```bash
 mkdir build
 cd build
 cmake -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
 make install
 ```
 
-umap() Interface
------------
+## umap() Interface
+
 The interface is currently a work in progress (see [umap.h](src/umap.h)).
 
-Contact/Legal
------------
+## Contact/Legal
 
-The license is [LGPL](LGPL).
+The license is [LGPL](/LICENSE).
 
 Primary contact/Lead developer
 
-May Gokhal (gokhale2@llnl.gov)
+- Maya Gokhale (gokhale2@llnl.gov)
 
 Other developers
 
-Marty McFadden  (mcfadden8@llnl.gov)
-Xiao Liu  (liu61@llnl.gov)
+- Marty McFadden  (mcfadden8@llnl.gov)
+- Xiao Liu  (liu61@llnl.gov)
