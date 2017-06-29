@@ -1,10 +1,14 @@
+#ifndef UFFD_HANDLER_H
+#define UFFD_HANDLER_H
+
 #include <linux/userfaultfd.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
-#ifndef UFFD_HANDLER_H
-#define UFFD_HANDLER_H
+const int UMAP_VERSION_MAJOR = 0;
+const int UMAP_VERSION_MINOR = 0;
+const int UMAP_VERSION_PATCH = 1;
 
 // Uncomment the following line to enable tracing (to circular buffer in mem)
 #define ENABLE_FAULT_TRACE_BUFFER 1
