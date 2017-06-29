@@ -10,7 +10,7 @@ The src directory in the top level contains the source code for the library.
 
 The tests directory contains various tests written to test the library
 including a hello world program for userfaultfd based upon code from the
-[userfaultfd-hello-world project](noahdesu.github.io/2016/10/10/userfaultfd-hello-world.html.).
+[userfaultfd-hello-world project](noahdesu.github.io/2016/10/10/userfaultfd-hello-world.html).
 
 The sortbenchmark directory is the original sort benchmark, modified to use
 threads rather than forking processes.
