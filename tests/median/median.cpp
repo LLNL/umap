@@ -104,14 +104,11 @@ uint64_t torben(uint64_t *m, int n)
 int main(int argc, char **argv)
 {
   umt_optstruct_t options;
-  int uffd;
   long pagesize;
   int64_t totalbytes;
   pthread_t uffd_thread;
   int64_t arraysize;
   uint64_t median;
-  int fd;
-  void *base_addr;
   // parameter block to uffd 
   params_t *p = (params_t *) malloc(sizeof(params_t));
 
