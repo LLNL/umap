@@ -32,7 +32,7 @@ The interface is currently a work in progress (see [umap.h](src/umap.h)).
 
 ## Contact/Legal
 
-The license is [LGPL](/LGPL).
+The license is [LGPL](/LICENSE).
 
 Primary contact/Lead developer
 
