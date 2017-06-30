@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     
   // start the thread that will handle userfaultfd events
 
-  stop_uffd_handler = 0;
+  //stop_uffd_handler = 0;
 
   params_t *p = malloc(sizeof(params_t));
   p->uffd = uffd_init(region, pagesize, num_pages);
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
   /*         //cur += pagesize; */
   /*     } */
   //-------------------------------------------------------------------
-  stop_uffd_handler = 1;
+  stop_umap_handler();
   pthread_join(uffd_thread, NULL);
   //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
   fprintf(stdout,"total number of fault:%d, value is %d\n",p->faultnum,value);
