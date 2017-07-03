@@ -30,9 +30,12 @@ make install
 
 The interface is currently a work in progress (see [umap.h](src/umap.h)).
 
-## Contact/Legal
+## License
 
-The license is [LGPL](/LICENSE).
+- The license is [LGPL](/LICENSE).
+- [thirdparty_licenses.md](/thirdparty_licenses.md)
+
+## Contact
 
 Primary contact/Lead developer
 
