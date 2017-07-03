@@ -2,5 +2,5 @@
 ====================
 
 ## C and C++ Tests
-- *qfits*: ftp://ftp.eso.org/pub/qfits/ (GPU License)
+- *qfits*: ftp://ftp.eso.org/pub/qfits/ (GPL License)
 
