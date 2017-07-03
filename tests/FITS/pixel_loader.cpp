@@ -41,7 +41,6 @@
 #include <stdint.h>
 #include <pthread.h>
 
-
 #define NUMPAGES 10000
 #define NUMTHREADS 1
 #define BUFFERSIZE 100
@@ -98,7 +97,7 @@ static void copypix(char * buf,char * buf2, int p1, int psize)
     else
     {
         a2=(uint32_t *)buf;
-        printf("%u\n",*a2);
+        printf("%lu\n",*a2);
     }
     //uint16_t *b=&buf2[p1];
 
@@ -131,9 +130,20 @@ static int fits_flip(const char * filename)
     int64_t arraysize;
     int value=0;
     params_t *p = (params_t *) malloc(sizeof(params_t));
-    pagesize = get_pagesize();
+    struct stat        fileinfo ;
 
-    umt_openandmap(options, totalbytes, p->fd,p->base_addr);
+    if (stat(filename, &fileinfo)!=0) {
+        return -1 ;
+    }
+    if (fileinfo.st_size<1) {
+        printf("cannot stat file\n");
+        return -1 ;
+    }
+    pagesize = get_pagesize();
+    
+    //totalbytes = options.numpages*pagesize;
+    //printf("size:%d\n",fileinfo.st_size);
+    umt_openandmap(options, fileinfo.st_size, p->fd,p->base_addr);
 
     //uint64_t*   array = (uint64_t*)  p->base_addr; // feed it the mmaped region
     //uint64_t    array_length = num_pages * 512;   // in number of 8-byte integers.
@@ -168,20 +178,11 @@ static int fits_flip(const char * filename)
     char        *    buf2;
     char        *    fbuf2;
     int                psize;
-    struct stat        fileinfo ;
     struct stat        fileinfo2;
     int                fd ;
     int fdnew;
 
     printf("processing %s\n",filename);
-
-    if (stat(filename, &fileinfo)!=0) {
-        return -1 ;
-    }
-    if (fileinfo.st_size<1) {
-        printf("cannot stat file\n");
-        return -1 ;
-    }
 
     /* Retrieve image attributes */
     if (qfits_is_fits(filename)!=1) {
@@ -209,7 +210,7 @@ static int fits_flip(const char * filename)
     bpp = atoi(sval);
 
     psize = bpp/8 ;
-    printf("psize: %d uint32: %d\n",psize,sizeof(uint32_t));
+    //printf("psize: %d uint32: %d\n",psize,sizeof(uint32_t));
     if (psize<0) psize=-psize ;
 
     /* Retrieve start of first data section */
@@ -219,6 +220,7 @@ static int fits_flip(const char * filename)
     }
 
     printf("psize:%d\n",psize);
+    printf("dstart:%d\n",dstart);
     //Map the input file in read/write mode (input file is modified)
     /* if ((fd=open(filename, O_RDWR))==-1) { */
     /*     perror("open"); */
@@ -237,14 +239,15 @@ static int fits_flip(const char * filename)
     /*     return -1 ; */
     /* } */
 
-    options.fn = filename;
+    //options.fn = filename;
     //fprintf(stdout, "USEFILE enabled %s\n", options.fn);
-    p->fd = open(options.fn, O_RDWR, S_IRUSR|S_IWUSR);// | O_DIRECT);
-    if (p->fd == -1) {
-        perror("file open");
-        exit(1);
-    }
+    // p->fd = open(options.fn, O_RDWR, S_IRUSR|S_IWUSR);// | O_DIRECT);
+    // if (p->fd == -1) {
+    //     perror("file open");
+    //     exit(1);
+    // }
 
+    //printf("file opened!\n");
     // if ((fdnew=open("new.fits", O_RDWR))==-1)
     // {
     //     perror("open");
@@ -269,7 +272,7 @@ static int fits_flip(const char * filename)
     
     // buf2=fbuf2+dstart2;
     buf2=NULL;
-    pthread_create(&uffd_thread, NULL, uffd_handler, p);
+    //pthread_create(&uffd_thread, NULL, uffd_handler, p);
 
     sleep(1);
 
@@ -278,7 +281,7 @@ static int fits_flip(const char * filename)
     //printf("%p\n");
 
     /* Double loop */
-    printf("lx ly:%d %d\n",lx,ly);
+    //printf("lx ly:%d %d\n",lx,ly);
     /* for (i=0;i<fileinfo.st_size;i++) */
     /* { */
     /*     if (fbuf2[i]!=fbuf[i]) printf("here:%d\n",i); */
@@ -291,7 +294,7 @@ static int fits_flip(const char * filename)
             //swap_pix(buf,buf2, i*psize, (lx-i-1)*psize, psize);
             copypix(buf,buf2,i,psize);
         }
-         //printf("%d\n",j);
+        printf("j:%d\n",j);
         buf  += lx * psize;
         //buf2 += lx * psize;
     }
@@ -301,7 +304,7 @@ static int fits_flip(const char * filename)
         stop_umap_handler();
 	pthread_join(uffd_thread, NULL);
 	uffd_finalize(p, options.numpages);
-	munmap(fbuf, pagesize*num_pages);
+	munmap(p->base_addr, fileinfo.st_size);
     }
 
     // if (munmap(fbuf2, fileinfo2.st_size)!=0) {
