@@ -1,135 +1,237 @@
 /*
-This file is part of UMAP.  For copyright information see the COPYRIGHT
-file in the top level directory, or at
-https://github.com/LLNL/umap/blob/master/COPYRIGHT
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU Lesser General Public License (as published by the Free
-Software Foundation) version 2.1 dated February 1999.  This program is
-distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the terms and conditions of the GNU Lesser General Public License
-for more details.  You should have received a copy of the GNU Lesser General
-Public License along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-*/
+ * This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at
+ * https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or 
+ * modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) 
+ * version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY 
+ * WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms 
+ * and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the 
+ * GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 
+ * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif // _GNU_SOURCE
 
-// handler of userfaultfd
-
-#include <linux/userfaultfd.h>
-#include <sys/syscall.h>
+#include <iostream>
+#include <cstdint>
+#include <vector>
+#include <thread>
+#include <map>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <stdint.h>
-#include <string.h>
+#include <fcntl.h>              // open/close
+#include <unistd.h>             // sysconf()
+#include <sys/syscall.h>        // syscall()
+#include <sys/mman.h>           // mmap()
+#include <poll.h>               // poll()
 #include <assert.h>
-#include <unistd.h>
-#include <asm/unistd.h>
-#include <pthread.h>
-#include <poll.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <stdbool.h>
-#include <openssl/sha.h>
-#include "umap.h"
+#include <linux/userfaultfd.h>
+#include <utmpx.h>              // sched_getcpu()
+#include "umap.h"               // API to library
 
-// data structures related to page buffer
-static volatile int stop_uffd_handler = 0;
-static char* tmppagebuf;
-static pagebuffer_t* pagebuffer;
-static int startix=0;
+using namespace std;
 
-#ifdef ENABLE_FAULT_TRACE_BUFFER
-static page_activity_trace_t* trace_buf;
-static int trace_bufsize = 1000;
-static int trace_idx = 0;
-static int trace_seq = 1;
-#endif // ENABLE_FAULT_TRACE_BUFFER
+const int UMAP_VERSION_MAJOR = 0;
+const int UMAP_VERSION_MINOR = 0;
+const int UMAP_VERSION_PATCH = 1;
+const int UMAP_DEFAULT_PBSIZE = 16;
+static int umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
 
-// end data structures related to page buffer
+class umap_page;
+class _umap {
+    public:
+        _umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd);
 
-int uffd_init(void* region, long pagesize, long num_pages)
+        inline void stop_faultlistener( void ) noexcept {
+            time_to_stop = true;
+            listener->join();
+        }
+
+        inline int get_page_index(void* _p) {
+            auto it = page_index.find(_p);
+            return (it == page_index.end()) ? -1 : it->second;
+        }
+
+        inline void add_page_index(int idx, void* page) {
+            page_index[page] = idx;
+        }
+
+        void delete_page_index(void* page) {
+            int num_erased;
+            num_erased = page_index.erase(page);
+            assert(num_erased == 1);
+        }
+
+        void enable_wp_on_pages_and_wake(uint64_t, int64_t);
+        void disable_wp_on_pages(uint64_t, int64_t);
+        void* uffd_handler(void);
+        int uffd_finalize(void);
+              
+    private:
+        void* segment_address;
+        size_t segment_length;
+        int backingfile_fd;
+        int page_buffer_size;
+        bool time_to_stop;
+        uint64_t fault_count;
+        int userfault_fd;
+        int next_page_alloc_index;
+        long page_size;
+        thread *listener;
+        vector<umap_page> pages_in_memory;
+        char* tmppagebuf;
+
+        map<void*, int> page_index;
+
+        void evict_page(umap_page& page);
+        void remove_page_index(void* _p) { page_index.erase(_p); }
+};
+
+class umap_page {
+    public:
+        umap_page(): page{nullptr}, dirty{false} {};
+        bool page_is_dirty() { return dirty; }
+        void mark_page_dirty() { dirty = true; }
+        void mark_page_clean() { dirty = false; }
+        void* get_page(void) { return page; }
+        void set_page(void* _p) { page = _p; }
+    private:
+        void* page;
+        bool dirty;
+};
+
+static map<void*, _umap*> active_umaps;
+
+void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-    stop_uffd_handler = 0;
-    // open the userfault fd
-    int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
-    if (uffd <  0) {
-        perror("userfaultfd syscall not available in this kernel");
-        exit(1);
+    if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
+        cerr << "umap: Invalid flags: " << hex << flags << endl;
+        return UMAP_FAILED;
     }
 
-    // enable for api version and check features
-    struct uffdio_api uffdio_api;
-    uffdio_api.api = UFFD_API;
-    uffdio_api.features = 0;
-    if (ioctl(uffd, UFFDIO_API, &uffdio_api) == -1) {
-        perror("ioctl/uffdio_api");
-        exit(1);
+    flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
+
+    void* region = mmap(addr, length, prot, flags, -1, offset);
+    if (region == MAP_FAILED) {
+        perror("mmap failed: ");
+        return UMAP_FAILED;
+    }
+
+    try {
+        _umap *p_umap = new _umap{region, length, fd};
+        active_umaps[region] = p_umap;
+    }
+    catch(...) {
+        return UMAP_FAILED;
+    }
+
+    return region;
+}
+
+int uunmap(void*  addr, size_t length)
+{
+    auto it = active_umaps.find(addr);
+
+    if (it != active_umaps.end()) {
+        it->second->uffd_finalize();
+        delete it->second;
+        active_umaps.erase(it);
+    }
+    return 0;
+}
+
+int umap_cfg_get_bufsize( void )
+{
+    return umap_page_bufsize;
+}
+
+void umap_cfg_set_bufsize( int page_bufsize )
+{
+    umap_page_bufsize = page_bufsize;
+}
+
+_umap::_umap(  void* _mmap_addr, size_t _mmap_length, int _mmap_fd)
+    :   segment_address{_mmap_addr}, segment_length{_mmap_length},
+        backingfile_fd{_mmap_fd}, 
+        time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
+{
+    page_buffer_size = umap_page_bufsize;
+    if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
+        perror("sysconf(_SC_PAGESIZE)");
+        throw -1;
+    }
+
+    if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
+        perror("userfaultfd syscall not available in this kernel");
+        throw -1;
+    }
+
+    struct uffdio_api uffdio_api = {        // enable for api version and check features
+        .api = UFFD_API,
+        .features = 0
+    };
+
+    if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
+        perror("ioctl(UFFDIO_API)");
+        throw -1;
     }
 
     if (uffdio_api.api != UFFD_API) {
-        fprintf(stderr, "unsupported userfaultfd api\n");
-        exit(1);
+        cerr << __FUNCTION__ << ": unsupported userfaultfd api\n";
+        throw -1;
     }
-    fprintf(stdout, "Feature bitmap %llx\n", uffdio_api.features);
 
-    struct uffdio_register uffdio_register;
-    // register the pages in the region for missing callbacks
-    uffdio_register.range.start = (uint64_t)region;
-    uffdio_register.range.len = pagesize * num_pages;
-    uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING | 
-                                        UFFDIO_REGISTER_MODE_WP;
-    fprintf(stdout, "uffdio region=%p - %p\n", 
-            region, 
-            (void*)(uffdio_register.range.start+uffdio_register.range.len));
+    struct uffdio_register uffdio_register = {
+        .range = {
+            .start = (uint64_t)segment_address,
+            .len = segment_length
+        },
+        .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
+    };
 
-    if (ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) == -1) {
+    if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
         perror("ioctl/uffdio_register");
-        exit(1);
+        close(userfault_fd);
+        throw -1;
     }
 
-    enable_wp_on_pages_and_wake(uffd, (uint64_t)region, pagesize, num_pages);
+    enable_wp_on_pages_and_wake((uint64_t)segment_address, segment_length / page_size);
 
-    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != 
-                                                UFFD_API_RANGE_IOCTLS) {
-        fprintf(stderr, "unexpected userfaultfd ioctl set\n");
-        exit(1);
+    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS) {
+        cerr << "unexpected userfaultfd ioctl set\n";
+        close(userfault_fd);
+        throw -1;
     }
 
-    fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
-    return uffd;
+    posix_memalign((void**)&tmppagebuf, (size_t)512, page_size);
+    if (tmppagebuf == nullptr) {
+        cerr << "Unable to allocate 512 bytes for temporary buffer\n";
+        close(userfault_fd);
+        throw -1;
+    }
+
+    umap_page ump;
+    pages_in_memory.resize(page_buffer_size, ump);
+
+    listener = new thread{&_umap::uffd_handler, this};      // Start our userfaultfd listener
 }
 
-void *uffd_handler(void *arg)
+void* _umap::uffd_handler(void)
 {
-    params_t *p = (params_t *) arg;
-    long pagesize = p->pagesize;
-
-    p->faultnum=0;
-    posix_memalign((void**)&tmppagebuf, (size_t)512, pagesize);
-
-    pagebuffer = (pagebuffer_t*)calloc(p->bufsize, sizeof(pagebuffer_t));
-#ifdef ENABLE_FAULT_TRACE_BUFFER
-    trace_buf = (page_activity_trace_t *)calloc(trace_bufsize, sizeof(*trace_buf));
-#endif // ENABLE_FAULT_TRACE_BUFFER
-
+    //cout << __FUNCTION__ << " on CPU " << sched_getcpu() << " Started\n";
     for (;;) {
         struct uffd_msg msg;
 
         struct pollfd pollfd[1];
-        pollfd[0].fd = p->uffd;
+        pollfd[0].fd = userfault_fd;
         pollfd[0].events = POLLIN;
 
         // wait for a userfaultfd event to occur
         int pollres = poll(pollfd, 1, 2000);
 
-        if (stop_uffd_handler) {
-            fprintf(stdout, "%s: Stop seen, exit\n", __FUNCTION__);
+        if (time_to_stop)
             return NULL;
-        }
 
         switch (pollres) {
         case -1:
@@ -140,19 +242,19 @@ void *uffd_handler(void *arg)
         case 1:
             break;
         default:
-            fprintf(stderr, "unexpected poll result\n");
+            cerr << __FUNCTION__ << " unexpected uffdio poll result\n";
             exit(1);
         }
 
         if (pollfd[0].revents & POLLERR) {
-            fprintf(stderr, "pollerr\n");
+            cerr << __FUNCTION__ << " POLLERR\n";
             exit(1);
         }
 
         if (!pollfd[0].revents & POLLIN)
             continue;
 
-        int readres = read(p->uffd, &msg, sizeof(msg));
+        int readres = read(userfault_fd, &msg, sizeof(msg));
         if (readres == -1) {
             if (errno == EAGAIN)
                 continue;
@@ -161,64 +263,41 @@ void *uffd_handler(void *arg)
         }
 
         if (readres != sizeof(msg)) {
-            fprintf(stderr, "invalid msg size\n");
+            cerr << __FUNCTION__ << "invalid msg size\n";
             exit(1);
         }
 
         if (msg.event != UFFD_EVENT_PAGEFAULT) {
-            printf("Unexpected event %x\n", msg.event);
+            cerr << __FUNCTION__ << " Unexpected event " << hex << msg.event << endl;
             continue;
         }
  
         //
         // At this point, we know we have had a page fault.  Let's handle it.
         //
-#define PAGE_BEGIN(a)   (void*)((uint64_t)a & ~(pagesize-1));
+#define PAGE_BEGIN(a)   (void*)((uint64_t)a & ~(page_size-1));
 
-        p->faultnum = p->faultnum + 1;;
+        fault_count++;
         void* fault_addr = (void*)msg.arg.pagefault.address;
         void* page_begin = PAGE_BEGIN(fault_addr);
-
-#ifdef ENABLE_FAULT_TRACE_BUFFER
-        if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
-            TRACE(page_begin, ft_wp, et_NA);
-        }
-        else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
-            TRACE(page_begin, ft_write, et_NA);
-        }
-        else {
-            TRACE(page_begin, ft_read, et_NA);
-        }
-#endif // ENABLE_FAULT_TRACE_BUFFER
 
         //
         // Check to see if the faulting page is already in memory. This can
         // happen if more than one thread causes a fault for the same page.
         //
-        // TODO(MJM) - Implement better container to get rid of linear
-        // search.
-        //
-        bool page_in_memory = false;
-        int bufidx;
-        for (bufidx = 0; bufidx < p->bufsize; bufidx++) {
-            if (pagebuffer[bufidx].page == page_begin) {
-                page_in_memory = true;
-                break;
-            }
-        }
+        int bufidx = get_page_index(page_begin);
 
-        if (page_in_memory) {
-            if (msg.arg.pagefault.flags & 
-                    (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-                pagebuffer[bufidx].dirty = true;
-                disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
+        if (bufidx >= 0) {
+            if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+                pages_in_memory[bufidx].mark_page_dirty();
+                disable_wp_on_pages((uint64_t)page_begin, 1);
             }
 
             struct uffdio_range wake;
             wake.start = (uint64_t)page_begin;
-            wake.len = pagesize; 
+            wake.len = page_size; 
 
-            if (ioctl(p->uffd, UFFDIO_WAKE, &wake) == -1) {
+            if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
                 perror("ioctl(UFFDIO_WAKE)");
                 exit(1);
             }
@@ -228,58 +307,59 @@ void *uffd_handler(void *arg)
         //
         // Page not in memory, read it in and evict someone
         //
-        ssize_t pread_ret = pread(p->fd, tmppagebuf, pagesize,
-                       (off_t)((uint64_t)page_begin - (uint64_t)p->base_addr));
+        ssize_t pread_ret = pread(backingfile_fd, tmppagebuf, page_size,
+                       (off_t)((uint64_t)page_begin - (uint64_t)segment_address));
 
         if (pread_ret == -1) {
             perror("pread failed");
             exit(1);
         }
 
-        if (pagebuffer[startix].page)
-            evict_page(p, &pagebuffer[startix]);
+        if (pages_in_memory[next_page_alloc_index].get_page()) {
+            delete_page_index(pages_in_memory[next_page_alloc_index].get_page());
+            evict_page(pages_in_memory[next_page_alloc_index]);
+        }
 
-        pagebuffer[startix].page = page_begin;
+        pages_in_memory[next_page_alloc_index].set_page(page_begin);
+        add_page_index(next_page_alloc_index, page_begin);
 
-        if (msg.arg.pagefault.flags & 
-                (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-            disable_wp_on_pages(p->uffd, (uint64_t)page_begin, pagesize, 1);
-            pagebuffer[startix].dirty = true;
+        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+            disable_wp_on_pages((uint64_t)page_begin, 1);
+            pages_in_memory[next_page_alloc_index].mark_page_dirty();
         }
         else {
-            pagebuffer[startix].dirty = false;
+            pages_in_memory[next_page_alloc_index].mark_page_clean();
         }
-        startix = (startix +1) % p->bufsize;
+
+        next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
 
         struct uffdio_copy copy;
         copy.src = (uint64_t)tmppagebuf;
         copy.dst = (uint64_t)page_begin;
-        copy.len = pagesize; 
-        if (msg.arg.pagefault.flags & 
-                (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+        copy.len = page_size;
+
+        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
             copy.mode = 0;
-            if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
+            if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
                 perror("ioctl(UFFDIO_COPY wake)");
                 exit(1);
             }
         }
         else {
             copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
-            if (ioctl(p->uffd, UFFDIO_COPY, &copy) == -1) {
+            if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
                 perror("ioctl(UFFDIO_COPY nowake)");
                 exit(1);
             }
-
-            enable_wp_on_pages_and_wake(p->uffd, (uint64_t)page_begin, 
-                                        pagesize, 1);
+            enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
         }
     }
     return NULL;
 }
 
-void evict_page(params_t* p, pagebuffer_t* pb)
+void _umap::evict_page(umap_page& pb)
 {
-    if (pb->dirty) {
+    if (pb.page_is_dirty()) {
         // Prevent further writes.  No need to do this if not dirty because
         // WP is already on.
         //
@@ -291,31 +371,25 @@ void evict_page(params_t* p, pagebuffer_t* pb)
         // and WP exceptions for this page have been handled prior to evicting
         // the page.
         //
-        enable_wp_on_pages_and_wake(p->uffd,(uint64_t)pb->page,p->pagesize,1);
+        enable_wp_on_pages_and_wake((uint64_t)pb.get_page(), 1);
 
         ssize_t rval;
 
-        TRACE(pb->page, ft_NA, et_dirty);
-
-
-        rval = pwrite(p->fd, (void*)(pb->page), p->pagesize, 
-                        (off_t)((uint64_t)pb->page - (uint64_t)p->base_addr));
+        rval = pwrite(backingfile_fd, (void*)(pb.get_page()), page_size, 
+                        (off_t)((uint64_t)pb.get_page() - (uint64_t)segment_address));
 
         if (rval == -1) {
             perror("pwrite failed");
             assert(0);
         }
     }
-    else {
-        TRACE(pb->page, ft_NA, et_clean);
-    }
 
-    if (madvise((void*)(pb->page), p->pagesize, MADV_DONTNEED) == -1) {
+    if (madvise((void*)(pb.get_page()), page_size, MADV_DONTNEED) == -1) {
         perror("madvise");
         assert(0);
     } 
 
-    pb->page = 0ull;
+    pb.set_page(nullptr);
 }
 
 //
@@ -328,15 +402,14 @@ void evict_page(params_t* p, pagebuffer_t* pb)
 // UFFDIO_WRITEPROTECT_MODE_WP.  UFFDIO_WRITEPROTECT_MODE_DONTWAKE is only 
 // allowed when disabling WP.
 //
-void enable_wp_on_pages_and_wake(int uffd, uint64_t start, int64_t size, int64_t pages)
+void _umap::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
-    wp.range.len = size * pages;
-
+    wp.range.len = num_pages * page_size;
     wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
+    if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ioctl(UFFDIO_WRITEPROTECT Enable)");
         exit(1);
     }
@@ -346,65 +419,49 @@ void enable_wp_on_pages_and_wake(int uffd, uint64_t start, int64_t size, int64_t
 // We intentionally do not wake up faulting thread when disabling WP.  This
 // is to handle the write-fault case when the page needs to be copied in.
 //
-void disable_wp_on_pages(int uffd, uint64_t start, int64_t size, int64_t pages)
+void _umap::disable_wp_on_pages(uint64_t start, int64_t num_pages)
 {
     struct uffdio_writeprotect wp;
     wp.range.start = start;
-    wp.range.len = size * pages;
+    wp.range.len = page_size * num_pages;
     wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wp) == -1) {
+    if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ioctl(UFFDIO_WRITEPROTECT Disable)");
         exit(1);
     }
 }
 
-int uffd_finalize(void *arg, long num_pages)
+int _umap::uffd_finalize()
 {
-    params_t *p = (params_t *) arg;
+    for (auto it : pages_in_memory) {
+        if (it.get_page()) {
+            delete_page_index(it.get_page());
+            evict_page(it);
+        }
+    }
 
-    // first write out all modified pages
-
-    int tmpix;
-    for (tmpix=0; tmpix < p->bufsize; tmpix++)
-        if (pagebuffer[tmpix].page)
-            evict_page(p, &pagebuffer[tmpix]);
+    stop_faultlistener();
 
     struct uffdio_register uffdio_register;
-    uffdio_register.range.start = (uint64_t)p->base_addr;
-    uffdio_register.range.len = p->pagesize * num_pages;
+    uffdio_register.range.start = (uint64_t)segment_address;
+    uffdio_register.range.len = segment_length;
 
-    if (ioctl(p->uffd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
-        fprintf(stderr, "ioctl unregister failure\n");
+    if (ioctl(userfault_fd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
+        perror("UFFDIO_UNREGISTER");
         return 1;
     }
     return 0;
 }
 
-long get_pagesize(void)
+void __attribute ((constructor)) init_umap_lib( void )
 {
-    long ret = sysconf(_SC_PAGESIZE);
-    if (ret == -1) {
-        perror("sysconf/pagesize");
-        exit(1);
+}
+
+void __attribute ((destructor)) fine_umap_lib( void )
+{
+    for (auto it : active_umaps) {
+        it.second->uffd_finalize();
+        delete it.second;
     }
-    assert(ret > 0);
-    return ret;
 }
-
-void stop_umap_handler()
-{
-  stop_uffd_handler = 1;
-}
-
-#ifdef ENABLE_FAULT_TRACE_BUFFER
-void pa_trace(uint64_t page, enum fault_types ftype, enum evict_types etype)
-{
-    trace_buf[trace_idx].trace_seq = trace_seq++;
-    trace_buf[trace_idx].page = (void*)page;
-    trace_buf[trace_idx].ftype = ftype;
-    trace_buf[trace_idx].etype = etype;
-
-    trace_idx = (trace_idx +1) % trace_bufsize;
-}
-#endif // ENABLE_FAULT_TRACE_BUFFER

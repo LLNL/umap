@@ -21,35 +21,33 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include "umap.h"
 #include "umaptest.h"
 
 using namespace std;
 
-void umt_openandmap(
-    const umt_optstruct_t& testops,
-    uint64_t numbytes, 
-    int &fd,
-    void*& region)
+int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** region)
 {
+  int fd;
   int open_options = O_RDWR;
 
-  if (testops.iodirect) 
+  if (testops->iodirect) 
     open_options |= O_DIRECT;
 
-  if ( !testops.noinit )
+  if ( !testops->noinit )
     open_options |= O_CREAT;
 
 #ifdef O_LARGEFILE
     open_options |= O_LARGEFILE;
 #endif
 
-  fd = open(testops.fn, open_options, S_IRUSR|S_IWUSR);
+  fd = open(testops->fn, open_options, S_IRUSR|S_IWUSR);
   if(fd == -1) {
     perror("open");
     exit(-1);
   }
 
-  if (testops.noinit) {
+  if (testops->noinit) {
     // If we are not initializing file, make sure that it is big enough
     struct stat sbuf;
 
@@ -59,7 +57,7 @@ void umt_openandmap(
     }
 
     if ((uint64_t)sbuf.st_size < numbytes) {
-      cerr << testops.fn 
+      cerr << testops->fn 
         << " file is not large enough.  "  << sbuf.st_size 
         << " < size requested " << numbytes << endl;
       exit(-1);
@@ -72,24 +70,44 @@ void umt_openandmap(
   }
 
   int prot = PROT_READ|PROT_WRITE;
-  int flags;
-  int my_fd;
 
-  if ( !testops.usemmap ) {
-    flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE;
-    my_fd = -1;
+  if ( testops->usemmap ) {
+    int flags = MAP_SHARED;
+
+    *region = mmap(NULL, numbytes, prot, flags, fd, 0);
+    if (*region == MAP_FAILED) {
+      perror("mmap");
+      exit(-1);
+    }
   }
   else {
-    my_fd = fd;
-    flags = MAP_SHARED;
+    int flags = UMAP_PRIVATE;
+
+    *region = umap(NULL, numbytes, prot, flags, fd, 0);
+    if (*region == UMAP_FAILED) {
+      perror("umap");
+      exit(-1);
+    }
   }
 
-  // allocate a memory region to be managed by userfaultfd
-  region = mmap(NULL, numbytes, prot, flags, my_fd, 0);
+  return fd;
+}
 
-  if (region == MAP_FAILED) {
-    perror("mmap");
-    exit(-1);
+void umt_closeandunmap(const umt_optstruct_t* testops, uint64_t numbytes, void* region, int fd)
+{
+  if ( testops->usemmap ) {
+    if (munmap(region, numbytes) < 0) {
+      perror("munmap");
+      exit(-1);
+    }
   }
+  else {
+    if (uunmap(region, numbytes) < 0) {
+      perror("uunmap");
+      exit(-1);
+    }
+  }
+
+  close(fd);
 }
 

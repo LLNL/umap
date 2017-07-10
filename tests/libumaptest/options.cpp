@@ -41,22 +41,22 @@ static void usage(char* pname)
   exit(1);
 }
 
-void umt_getoptions(umt_optstruct_t& testops, int argc, char *argv[])
+void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
 {
   int c;
   char *pname = argv[0];
 
-  testops = (umt_optstruct_t) { .initonly = 0, .noinit = 0, .iodirect = 0, 
+  *testops = (umt_optstruct_t) { .initonly = 0, .noinit = 0, .iodirect = 0, 
                                 .usemmap = 0, .numpages = NUMPAGES, 
                                 .numthreads = NUMTHREADS, 
                                 .bufsize = BUFFERSIZE, .fn = FILENAME};
   while (1) {
     int option_index = 0;
     static struct option long_options[] = {
-      {"initonly",  no_argument,  &testops.initonly, 1 },
-      {"noinit",    no_argument,  &testops.noinit,   1 },
-      {"directio",  no_argument,  &testops.iodirect, 1 },
-      {"usemmap",   no_argument,  &testops.usemmap,  1 },
+      {"initonly",  no_argument,  &testops->initonly, 1 },
+      {"noinit",    no_argument,  &testops->noinit,   1 },
+      {"directio",  no_argument,  &testops->iodirect, 1 },
+      {"usemmap",   no_argument,  &testops->usemmap,  1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }
     };
@@ -74,19 +74,19 @@ void umt_getoptions(umt_optstruct_t& testops, int argc, char *argv[])
         break;
 
       case 'p':
-        if ((testops.numpages = strtoull(optarg, nullptr, 0)) > 0)
+        if ((testops->numpages = strtoull(optarg, nullptr, 0)) > 0)
           break;
         goto R0;
       case 't':
-        if ((testops.numthreads = strtoull(optarg, nullptr, 0)) > 0)
+        if ((testops->numthreads = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
       case 'b':
-        if ((testops.bufsize = strtoull(optarg, nullptr, 0)) > 0)
+        if ((testops->bufsize = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
       case 'f':
-        testops.fn = optarg;
+        testops->fn = optarg;
         break;
       default:
       R0:
@@ -102,3 +102,14 @@ void umt_getoptions(umt_optstruct_t& testops, int argc, char *argv[])
     usage(pname);
   }
 }
+
+long umt_getpagesize(void)
+{
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size == -1) {
+        perror("sysconf/page_size");
+        exit(1);
+    }
+    return page_size;
+}
+

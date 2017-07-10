@@ -38,9 +38,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "umap.h"
 #include "umaptest.h"
 
-//volatile int stop_uffd_handler;
-
-
 #define NUMPAGES 10000000
 #define NUMTHREADS 2
 #define BUFFERSIZE 16
@@ -128,7 +125,7 @@ void displaycube(uint64_t *cube,int a,int b,int c)
       for (i=0;i<a;i++)
         {
 	  for (j=0;j<b;j++)
-	    printf("%d ",cube[k*a*b+i*b+j]);
+	    printf("%lu ",cube[k*a*b+i*b+j]);
 	  printf("\n");
         }
       printf("**************\n");
@@ -139,42 +136,25 @@ int main(int argc, char **argv)
   umt_optstruct_t options;
   long pagesize;
   int64_t totalbytes;
-  pthread_t uffd_thread;
   int64_t arraysize;
   uint64_t median;
+  void* base_addr;
   int fd;
-  // parameter block to uffd
-  params_t *p = (params_t *) malloc(sizeof(params_t));
 
-  pagesize = get_pagesize();
+  pagesize = umt_getpagesize();
 
-  umt_getoptions(options, argc, argv);
+  umt_getoptions(&options, argc, argv);
 
   totalbytes = options.numpages*pagesize;
-  umt_openandmap(options, totalbytes, p->fd,p->base_addr);
+  fd = umt_openandmap(&options, totalbytes, &base_addr);
 
-  if ( ! options.usemmap ) 
-  {
-    fprintf(stdout, "Using UserfaultHandler Buffer\n");
-    p->pagesize = pagesize;  
-    p->bufsize = options.bufsize;
-    p->faultnum = 0;
-    p->uffd = uffd_init(p->base_addr, pagesize, options.numpages);
-
-    pthread_create(&uffd_thread, NULL, uffd_handler, p);
-    sleep(1);
-  }
-  else 
-  {
-    fprintf(stdout, "Using vanilla mmap()\n");
-  }
-  fprintf(stdout, "%d pages, %d threads\n", options.numpages, options.numthreads);
+  fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
   omp_set_num_threads(options.numthreads);
 
-  uint64_t *arr = (uint64_t *) p->base_addr;
+  uint64_t *arr = (uint64_t *) base_addr;
   arraysize = totalbytes/sizeof(int64_t);
-  fprintf(stdout,"Array size: %lld\n",arraysize);
+  fprintf(stdout, "Array size: %ld\n", arraysize);
 
   uint64_t start = getns();
   size_a=10;
@@ -183,7 +163,6 @@ int main(int argc, char **argv)
   // init data
   initdata(arr, size_a*size_b*size_c);
   cube=arr;
-
   displaycube(cube,size_a,size_b,size_c);
   fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
 
@@ -200,12 +179,7 @@ int main(int argc, char **argv)
     }
   free(cube_median);
 
-  if ( ! options.usemmap ) 
-  {
-    stop_umap_handler();
-    pthread_join(uffd_thread, NULL);
-    uffd_finalize(p, options.numpages);
-  }
+  umt_closeandunmap(&options, totalbytes, base_addr, fd);
 
   return 0;
 }

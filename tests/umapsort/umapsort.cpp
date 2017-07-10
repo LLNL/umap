@@ -32,10 +32,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdint.h>
 #include <unistd.h>    // optind
 #include <errno.h>
-
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include <utmpx.h>
+#include <parallel/algorithm>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -99,41 +97,22 @@ int main(int argc, char **argv)
   umt_optstruct_t options;
   long pagesize;
   int64_t totalbytes;
-  pthread_t uffd_thread;
   uint64_t arraysize;
-  // parameter block to uffd 
-  params_t *p = (params_t *) malloc(sizeof(params_t));
+  void* base_addr;
+  int fd;
 
-  pagesize = get_pagesize();
+  pagesize = umt_getpagesize();
 
-  umt_getoptions(options, argc, argv);
+  umt_getoptions(&options, argc, argv);
 
   totalbytes = options.numpages*pagesize;
-  umt_openandmap(options, totalbytes, p->fd,  p->base_addr);
+  fd = umt_openandmap(&options, totalbytes, &base_addr);
  
-  if ( ! options.usemmap ) {
-    fprintf(stdout, "Using UserfaultHandler Buffer\n");
-
-    // start the thread that will handle userfaultfd events
-    p->pagesize = pagesize;  
-
-    p->bufsize = options.bufsize;
-
-    p->faultnum = 0;
-    p->uffd = uffd_init(p->base_addr, pagesize, options.numpages);
-
-    pthread_create(&uffd_thread, NULL, uffd_handler, p);
-    sleep(1);
-  }
-  else {
-    fprintf(stdout, "Using vanilla mmap()\n");
-  }
-
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
   omp_set_num_threads(options.numthreads);
 
-  uint64_t *arr = (uint64_t *) p->base_addr; 
+  uint64_t *arr = (uint64_t *) base_addr; 
   arraysize = totalbytes/sizeof(int64_t);
 
   uint64_t start = getns();
@@ -145,7 +124,7 @@ int main(int argc, char **argv)
 
   if ( !options.initonly ) {
     start = getns();
-    std::sort(arr, &arr[arraysize]);
+    __gnu_parallel::sort(arr, &arr[arraysize]);
     fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
     start = getns();
@@ -153,11 +132,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  if ( ! options.usemmap ) {
-    stop_umap_handler();
-    pthread_join(uffd_thread, NULL);
-    uffd_finalize(p, options.numpages);
-  }
+  umt_closeandunmap(&options, totalbytes, base_addr, fd);
 
   return 0;
 }

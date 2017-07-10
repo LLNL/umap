@@ -14,7 +14,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #ifndef _UMAPTEST_H
 #define _UMAPTEST_H
-#include <cstdint>
+#include <stdint.h>
 
 typedef struct {
   int initonly;
@@ -28,8 +28,14 @@ typedef struct {
   char const* fn;
 } umt_optstruct_t;
 
+#ifdef __cplusplus
 extern "C" {
-  void umt_getoptions(umt_optstruct_t&, int, char *argv[]);
-  void umt_openandmap(const umt_optstruct_t&, uint64_t, int&, void*&);
+#endif
+  void umt_getoptions(umt_optstruct_t*, int, char *argv[]);
+  int umt_openandmap(const umt_optstruct_t*, uint64_t, void**);
+  void umt_closeandunmap(const umt_optstruct_t*, uint64_t, void*, int);
+  long umt_getpagesize(void);
+#ifdef __cplusplus
 }
+#endif
 #endif // _UMAPTEST_H

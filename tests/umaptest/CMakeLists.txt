@@ -8,6 +8,7 @@ if(OPENMP_FOUND)
     add_executable(umaptest test.c)
 
     target_link_libraries(umaptest libumap_static)
+    target_link_libraries(umaptest libumaptest_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

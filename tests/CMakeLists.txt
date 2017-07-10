@@ -1,7 +1,6 @@
 add_subdirectory(libumaptest)
-
-add_subdirectory(umaptest)
 add_subdirectory(umapsort)
-add_subdirectory(readload)
-
+add_subdirectory(umaptest)
 add_subdirectory(median)
+add_subdirectory(readload)
+add_subdirectory(uffd_test)
