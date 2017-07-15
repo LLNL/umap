@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <string>
 
 #define NUMPAGES 10000
 #define NUMTHREADS 1
@@ -47,6 +48,10 @@
 
 #include "umap.h"
 #include "umaptest.h"
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 extern "C"
 {
@@ -57,45 +62,92 @@ umt_optstruct_t options;
 
 static void copypix(char * buf,char * buf2, int p1, int psize)
 {
-    uint16_t *a1;
-    uint32_t *a2;
+    uint16_t a1,b1;
+    uint32_t a2,b2;
     if (psize==2) 
     {
-        a1=(uint16_t *)buf;
-        printf("%u\n",*a1);
+      a1=*(uint16_t *)(buf+p1);
+      //b1=*(uint16_t *)(buf2+p1);
+      printf("%u\n",a1);
+      //if (a1!=b1) printf("%u %u\n",a1,b1);
     }
     else
     {
-        a2=(uint32_t *)buf;
-        printf("%u\n",*a2);
+      a2=*(uint32_t *)(buf+p1);
+      //b2=*(uint32_t *)(buf2+p1);
+      printf("%lu\n",a2);
+      //if (a2!=b2) printf("%lu %lu\n",a2,b2);
     }
 }
-/*
- * Main processing function. It expects one only file name
- * and will flip pixels on the input frame.
- */
-static int fits_flip(const char * filename)
+
+uint64_t torben(uint32_t *m, int n,int step)
+{
+  int         i,j, less, greater, equal;
+  uint64_t  min, max, guess, maxltguess, mingtguess;
+
+  min = max = m[0] ;
+  j=step;
+  for (i=1 ; i<n ; i++) {
+    if (m[j]<min) min=m[j];
+    if (m[j]>max) max=m[j];
+    j+=step;
+    //fprintf(stdout,"m:%llu\n",m[i]);
+  }
+  //fprintf(stdout,"Max:%llu\nMin:%llu\n",max,min);
+
+  while (1) {
+    guess = (min+max)/2;
+    less = 0; greater = 0; equal = 0;
+    maxltguess = min ;
+    mingtguess = max ;
+#pragma omp parallel for reduction(+:less,greater,equal),reduction(max:maxltguess),reduction(min:mingtguess)
+    for (j=0; j<n*step;j+=step)
+      {
+	if (m[j]<guess) {
+	  less+=step;
+	  if (m[j]>maxltguess) maxltguess = m[j] ;
+	} else if (m[j]>guess) {
+	  greater+=step;
+	  if (m[j]<mingtguess) mingtguess = m[j] ;
+	} else equal+=step;
+      }
+
+    if (less <= step*(n+1)/2 && greater <= step*(n+1)/2) break ;
+    else if (less>greater) max = maxltguess ;
+    else min = mingtguess;
+    //fprintf(stdout,"guess: %llu less:%d greater:%d\n",guess,less,greater);
+  }
+  if (less >= step*(n+1)/2) return maxltguess;
+  else if (less+equal >= step*(n+1)/2) return guess;
+  else return mingtguess;
+}
+void displaycube(uint64_t *cube,int a,int b,int c)
+{
+  int i,j,k;
+  for (k=0;k<c;k++)
+    {
+      for (i=0;i<a;i++)
+        {
+	  for (j=0;j<b;j++)
+	    printf("%llu",cube[k*a*b+i*b+j]);
+	  printf("\n");
+        }
+      printf("**************\n");
+    }
+}
+static int test_openfiles(const char *fn)
 {
     long pagesize;
     int64_t totalbytes;
-    int fd;
     void *base_addr;
-    struct stat        fileinfo ;
+    off_t frame;
+    char filename[100];
+    int *fd_list;
 
     pagesize = umt_getpagesize();
-    if (stat(filename, &fileinfo)!=0) {
-        return -1 ;
-    }
-    if (fileinfo.st_size<1) {
-        printf("cannot stat file\n");
-        return -1 ;
-    }
-    pagesize = umt_getpagesize();
-    
-    //totalbytes = options.numpages*pagesize;
-    //printf("size:%d\n",fileinfo.st_size);
-    fd=umt_openandmap(&options, options.numpages*pagesize, &base_addr);
-
+    strcpy(filename,fn);
+    strcat(filename,"1");
+    strcat(filename,".fits");
 
     char        *    sval ;
     int                dstart;
@@ -103,11 +155,8 @@ static int fits_flip(const char * filename)
     int                bpp ;
     int                i, j ;
     char        *    buf ;
-    char        *    buf2 ;
-    char        *    fbuf ;
     int                psize;
-
-    printf("processing %s\n",filename);
+    int segsize;
 
     /* Retrieve image attributes */
     if (qfits_is_fits(filename)!=1) {
@@ -139,91 +188,37 @@ static int fits_flip(const char * filename)
     if (psize<0) psize=-psize ;
 
     /* Retrieve start of first data section */
-    if (qfits_get_datinfo(filename, 0, &dstart, NULL)!=0) {
+    if (qfits_get_datinfo(filename, 0, &dstart,&segsize)!=0) {
         printf("reading header information\n");
         return -1 ;
     }
 
     printf("psize:%d\n",psize);
     printf("dstart:%d\n",dstart);
-    //Map the input file in read/write mode (input file is modified)
-    /* if ((fd=open(filename, O_RDWR))==-1) { */
-    /*     perror("open"); */
-    /*     printf("reading file\n"); */
-    /*     return -1 ; */
-    /* } */
-    /* fbuf = (char*)mmap(0, */
-    /*                     fileinfo.st_size, */
-    /*                     PROT_READ | PROT_WRITE, */
-    /*                     MAP_SHARED, */
-    /*                     fd , */
-    /*                     0); */
-    /* if (fbuf==(char*)-1) { */
-    /*     perror("mmap"); */
-    /*     printf("mapping file\n"); */
-    /*     return -1 ; */
-    /* } */
+    frame=(off_t)lx*ly*psize;
+    fd_list = umt_openandmap_fits(&options, options.numpages*pagesize,&base_addr,(off_t)dstart,frame);
 
-    //options.fn = filename;
-    //fprintf(stdout, "USEFILE enabled %s\n", options.fn);
-    // p->fd = open(options.fn, O_RDWR, S_IRUSR|S_IWUSR);// | O_DIRECT);
-    // if (p->fd == -1) {
-    //     perror("file open");
-    //     exit(1);
-    // }
+    buf=(char *)base_addr;
+    omp_set_num_threads(options.numthreads);
+    printf("region start:%p\n",base_addr);
 
-    //printf("file opened!\n");
-    // if ((fdnew=open("new.fits", O_RDWR))==-1)
-    // {
-    //     perror("open");
-    //     printf("reading file\n");
-    //     return -1 ;
-    // }
+    printf("lx ly:%d %d\n",lx,ly);
 
-    // if (stat("new.fits", &fileinfo2)!=0) {
-    //     return -1 ;
-    // }
-    // fbuf2 = (char*)mmap(0,
-    //                    fileinfo2.st_size,
-    //                    PROT_READ | PROT_WRITE,
-    //                    MAP_SHARED,
-    //                    fdnew,
-    //                    0);
-    // if (fbuf2==(char*)-1) {
-    //     perror("mmap");
-    //     printf("mapping file\n");
-    //     return -1 ;
-    // }
-    
-    // buf2=fbuf2+dstart2;
-    buf2=NULL;
-    //pthread_create(&uffd_thread, NULL, uffd_handler, p);
-
-    sleep(1);
-
-    fbuf=(char *)base_addr;
-    buf = fbuf + dstart ;
-    //printf("%p\n");
-
-    /* Double loop */
-    //printf("lx ly:%d %d\n",lx,ly);
-    /* for (i=0;i<fileinfo.st_size;i++) */
-    /* { */
-    /*     if (fbuf2[i]!=fbuf[i]) printf("here:%d\n",i); */
-    /*     //printf("%c",fbuf[i]); */
-    /*     //printf("%d\n",i); */
-    /* } */
-    for (j=0 ; j<ly ; j++) {
-        for (i=0 ; i<lx ; i++) {
-            /* Swap bytes */
-            //swap_pix(buf,buf2, i*psize, (lx-i-1)*psize, psize);
-            copypix(buf,buf2,i,psize);
-        }
-        printf("j:%d\n",j);
-        buf  += lx * psize;
-        //buf2 += lx * psize;
+    //median calculation
+    uint64_t *cube_median=(uint64_t *)malloc(sizeof(uint64_t)*lx*ly);
+    uint32_t *cube=(uint32_t *)base_addr; 
+    for (i=0 ; i<ly ; i++)
+    {
+        for (j=0 ; j<lx ; j++)
+	{
+	  //copypix(buf+4*lx*ly*psize,buf+lx*ly*psize,j,psize);
+	    cube_median[i*lx+j]=torben(cube+i*ly+j,options.fnum,lx*ly);
+	}
+	buf+=lx*psize;
     }
-    umt_closeandunmap(&options,options.numpages*pagesize,&base_addr,fd);
+    
+    displaycube(cube_median,ly,lx,1);
+    umt_closeandunmap_fits(&options, totalbytes, base_addr, fd_list);
     return 0 ;
 }
 
@@ -232,11 +227,11 @@ static int fits_flip(const char * filename)
  -----------------------------------------------------------------------------*/
 int main(int argc, char * argv[])
 {
-    int i ;
     int err ;
     umt_getoptions(&options, argc, argv);
     err=0;
-    err += fits_flip(options.fn);
+    test_openfiles(options.fn);
+    //err += fits();
     if (err>0)
     {
         fprintf(stderr, "%s: %d error(s) occurred\n", argv[0], err);

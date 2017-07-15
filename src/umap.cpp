@@ -42,6 +42,7 @@ class umap_page;
 class _umap {
     public:
         _umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd);
+        _umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd, int* fd_list, off_t data_offset ,off_t frame);
 
         inline void stop_faultlistener( void ) noexcept {
             time_to_stop = true;
@@ -66,6 +67,7 @@ class _umap {
         void enable_wp_on_pages_and_wake(uint64_t, int64_t);
         void disable_wp_on_pages(uint64_t, int64_t);
         void* uffd_handler(void);
+        void* uffd_fits_handler(void);
         int uffd_finalize(void);
               
     private:
@@ -81,6 +83,11 @@ class _umap {
         thread *listener;
         vector<umap_page> pages_in_memory;
         char* tmppagebuf;
+  //--------for multi-file fits support---------
+        int number_file;
+        int* fd_list;
+        off_t fits_offset;
+        off_t frame_size;
 
         map<void*, int> page_index;
 
@@ -120,6 +127,32 @@ void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 
     try {
         _umap *p_umap = new _umap{region, length, fd};
+        active_umaps[region] = p_umap;
+    }
+    catch(...) {
+        return UMAP_FAILED;
+    }
+
+    return region;
+}
+//--------------------------for multi-file support----------------------
+void* umap_fits(void* addr, size_t length, int prot, int flags, int fd_num,int* fd_list,off_t offset, off_t frame)
+{
+    if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
+        cerr << "umap: Invalid flags: " << hex << flags << endl;
+        return UMAP_FAILED;
+    }
+
+    flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
+
+    void* region = mmap(addr, length, prot, flags, -1, 0);
+    if (region == MAP_FAILED) {
+        perror("mmap failed: ");
+        return UMAP_FAILED;
+    }
+
+    try {
+      _umap *p_umap = new _umap{region, length, fd_num,fd_list,offset,frame};
         active_umaps[region] = p_umap;
     }
     catch(...) {
@@ -215,6 +248,73 @@ _umap::_umap(  void* _mmap_addr, size_t _mmap_length, int _mmap_fd)
     pages_in_memory.resize(page_buffer_size, ump);
 
     listener = new thread{&_umap::uffd_handler, this};      // Start our userfaultfd listener
+}
+
+//--------------------------for multi-file support----------------------
+_umap::_umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd,int* file_list, off_t data_offset, off_t frame)
+    :   segment_address{_mmap_addr}, segment_length{_mmap_length},
+  backingfile_fd{-1},number_file{_mmap_fd},fits_offset{data_offset},fd_list{file_list},frame_size{frame},
+        time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
+{
+    page_buffer_size = umap_page_bufsize;
+    if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
+        perror("sysconf(_SC_PAGESIZE)");
+        throw -1;
+    }
+
+    if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
+        perror("userfaultfd syscall not available in this kernel");
+        throw -1;
+    }
+
+    struct uffdio_api uffdio_api = {        // enable for api version and check features
+        .api = UFFD_API,
+        .features = 0
+    };
+
+    if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
+        perror("ioctl(UFFDIO_API)");
+        throw -1;
+    }
+
+    if (uffdio_api.api != UFFD_API) {
+        cerr << __FUNCTION__ << ": unsupported userfaultfd api\n";
+        throw -1;
+    }
+
+    struct uffdio_register uffdio_register = {
+        .range = {
+            .start = (uint64_t)segment_address,
+            .len = segment_length
+        },
+        .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
+    };
+
+    if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
+        perror("ioctl/uffdio_register");
+        close(userfault_fd);
+        throw -1;
+    }
+
+    enable_wp_on_pages_and_wake((uint64_t)segment_address, segment_length / page_size);
+
+    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS) {
+        cerr << "unexpected userfaultfd ioctl set\n";
+        close(userfault_fd);
+        throw -1;
+    }
+
+    posix_memalign((void**)&tmppagebuf, (size_t)512, page_size);
+    if (tmppagebuf == nullptr) {
+        cerr << "Unable to allocate 512 bytes for temporary buffer\n";
+        close(userfault_fd);
+        throw -1;
+    }
+
+    umap_page ump;
+    pages_in_memory.resize(page_buffer_size, ump);
+
+    listener = new thread{&_umap::uffd_fits_handler, this};      // Start our userfaultfd listener
 }
 
 void* _umap::uffd_handler(void)
@@ -356,10 +456,162 @@ void* _umap::uffd_handler(void)
     }
     return NULL;
 }
+//-----------------------for multi-file support--------------------
+void* _umap::uffd_fits_handler(void)
+{
+    //struct stat fileinfo;
+    //fstat(fd_list[0],&fileinfo);
+    //cout << __FUNCTION__ << " on CPU " << sched_getcpu() << " Started\n";
+    for (;;) {
+        struct uffd_msg msg;
+
+        struct pollfd pollfd[1];
+        pollfd[0].fd = userfault_fd;
+        pollfd[0].events = POLLIN;
+
+        // wait for a userfaultfd event to occur
+        int pollres = poll(pollfd, 1, 2000);
+
+        if (time_to_stop)
+            return NULL;
+
+        switch (pollres) {
+        case -1:
+            perror("poll/userfaultfd");
+            continue;
+        case 0:
+            continue;
+        case 1:
+            break;
+        default:
+            cerr << __FUNCTION__ << " unexpected uffdio poll result\n";
+            exit(1);
+        }
+
+        if (pollfd[0].revents & POLLERR) {
+            cerr << __FUNCTION__ << " POLLERR\n";
+            exit(1);
+        }
+
+        if (!pollfd[0].revents & POLLIN)
+            continue;
+
+        int readres = read(userfault_fd, &msg, sizeof(msg));
+        if (readres == -1) {
+            if (errno == EAGAIN)
+                continue;
+            perror("read/userfaultfd");
+            exit(1);
+        }
+
+        if (readres != sizeof(msg)) {
+            cerr << __FUNCTION__ << "invalid msg size\n";
+            exit(1);
+        }
+
+        if (msg.event != UFFD_EVENT_PAGEFAULT) {
+            cerr << __FUNCTION__ << " Unexpected event " << hex << msg.event << endl;
+            continue;
+        }
+ 
+        //
+        // At this point, we know we have had a page fault.  Let's handle it.
+        //
+#define PAGE_BEGIN(a)   (void*)((uint64_t)a & ~(page_size-1));
+
+        fault_count++;
+        void* fault_addr = (void*)msg.arg.pagefault.address;
+        void* page_begin = PAGE_BEGIN(fault_addr);
+
+        //
+        // Check to see if the faulting page is already in memory. This can
+        // happen if more than one thread causes a fault for the same page.
+        //
+        int bufidx = get_page_index(page_begin);
+
+        if (bufidx >= 0) {
+            if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+                pages_in_memory[bufidx].mark_page_dirty();
+                disable_wp_on_pages((uint64_t)page_begin, 1);
+            }
+
+            struct uffdio_range wake;
+            wake.start = (uint64_t)page_begin;
+            wake.len = page_size; 
+
+            if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
+                perror("ioctl(UFFDIO_WAKE)");
+                exit(1);
+            }
+            continue;
+        }
+
+        //
+        // Page not in memory, read it in and evict someone
+        //
+	int file_id=0;
+	off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
+        //find the file id and offset number                                              
+        while (offset>=frame_size)
+	{
+            file_id++;
+            offset-=frame_size;
+	}
+
+        ssize_t pread_ret = pread(fd_list[file_id], tmppagebuf, page_size,
+                       offset+fits_offset);
+
+        if (pread_ret == -1) {
+            perror("pread failed");
+            exit(1);
+        }
+
+        if (pages_in_memory[next_page_alloc_index].get_page()) {
+            delete_page_index(pages_in_memory[next_page_alloc_index].get_page());
+            evict_page(pages_in_memory[next_page_alloc_index]);
+        }
+
+        pages_in_memory[next_page_alloc_index].set_page(page_begin);
+        add_page_index(next_page_alloc_index, page_begin);
+
+        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+            disable_wp_on_pages((uint64_t)page_begin, 1);
+            pages_in_memory[next_page_alloc_index].mark_page_dirty();
+        }
+        else {
+            pages_in_memory[next_page_alloc_index].mark_page_clean();
+        }
+
+        next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
+
+        struct uffdio_copy copy;
+        copy.src = (uint64_t)tmppagebuf;
+        copy.dst = (uint64_t)page_begin;
+        copy.len = page_size;
+
+        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+            copy.mode = 0;
+            if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+                perror("ioctl(UFFDIO_COPY wake)");
+                exit(1);
+            }
+        }
+        else {
+            copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
+            if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+                perror("ioctl(UFFDIO_COPY nowake)");
+                exit(1);
+            }
+            enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
+        }
+    }
+    return NULL;
+}
+
 
 void _umap::evict_page(umap_page& pb)
 {
-    if (pb.page_is_dirty()) {
+    if (pb.page_is_dirty()&&(backingfile_fd!=-1)) { //--------if multi-file, no pwrite needed
         // Prevent further writes.  No need to do this if not dirty because
         // WP is already on.
         //
