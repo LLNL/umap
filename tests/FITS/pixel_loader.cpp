@@ -54,39 +54,9 @@ extern "C"
 }
 
 umt_optstruct_t options;
-/*-----------------------------------------------------------------------------
-                            Private functions
- -----------------------------------------------------------------------------*/
 
-/*
- * Swap pixels between position p1 and p2, regardless of the pixel
- * type and endian-ness of the local host.
- */
-
-static void swap_pix(char * buf,char * buf2, int p1, int p2, int psize)
-{
-    int     i ;
-    char c ;
-    //uint16_t *a=&buf[p1];
-    //uint16_t *b=&buf[p2];
-
-    //printf("%u %u\n",*a,*b);
-    //if ((la)&&(la!=*a)) printf("Here!");
-    //la=*a;
-    //lb=*b;
-    //printf("");
-    for (i=0 ; i<psize ; i++)
-    {
-        //buf2[p1+i] = buf[p1+i] ;
-        //buf2[p2+i] = buf[p2+i] ;
-        //buf2[p2+i] = 0;
-        //buf2[p1+i] = 0;
-    }
-}
 static void copypix(char * buf,char * buf2, int p1, int psize)
 {
-    int  i ;
-    char c ;
     uint16_t *a1;
     uint32_t *a2;
     if (psize==2) 
@@ -97,25 +67,8 @@ static void copypix(char * buf,char * buf2, int p1, int psize)
     else
     {
         a2=(uint32_t *)buf;
-        printf("%lu\n",*a2);
+        printf("%u\n",*a2);
     }
-    //uint16_t *b=&buf2[p1];
-
-    //printf("%u %u\n",*a,*b);
-    //if (*b!=*a) printf("Here!");
-    //*b=*a;
-    //if ((la)&&(la!=*a)) printf("Here!");
-    //la=*a;
-    //lb=*b;
-    //printf("");
-    // for (i=0 ; i<psize ; i++)
-    // {
-    //     //c=buf[p1+1];
-    //     buf2[p1+i] = buf[p1+i] ;
-    //     //buf2[p2+i] = buf[p2+i] ;
-    //     //buf2[p2+i] = 0;
-    //     //buf2[p1+i] = 0;
-    // }
 }
 /*
  * Main processing function. It expects one only file name
@@ -123,15 +76,13 @@ static void copypix(char * buf,char * buf2, int p1, int psize)
  */
 static int fits_flip(const char * filename)
 {
-    long num_pages;
     long pagesize;
     int64_t totalbytes;
-    pthread_t uffd_thread;
-    int64_t arraysize;
-    int value=0;
-    params_t *p = (params_t *) malloc(sizeof(params_t));
+    int fd;
+    void *base_addr;
     struct stat        fileinfo ;
 
+    pagesize = umt_getpagesize();
     if (stat(filename, &fileinfo)!=0) {
         return -1 ;
     }
@@ -139,48 +90,22 @@ static int fits_flip(const char * filename)
         printf("cannot stat file\n");
         return -1 ;
     }
-    pagesize = get_pagesize();
+    pagesize = umt_getpagesize();
     
     //totalbytes = options.numpages*pagesize;
     //printf("size:%d\n",fileinfo.st_size);
-    umt_openandmap(options, fileinfo.st_size, p->fd,p->base_addr);
-
-    //uint64_t*   array = (uint64_t*)  p->base_addr; // feed it the mmaped region
-    //uint64_t    array_length = num_pages * 512;   // in number of 8-byte integers.
-    //uint64_t    experiment_count = 100000;   // Size of experiment, number of accesses
-    //uint64_t    batch_size = 1000;  // Set a batch size MUST BE MULTIPLE OF experiment_count
-
-    if ( ! options.usemmap ) 
-    {
-	fprintf(stdout, "Using UserfaultHandler Buffer\n");
-	p->pagesize = pagesize;  
-	p->bufsize = options.bufsize;
-	p->faultnum = 0;
-	p->uffd = uffd_init(p->base_addr, pagesize, options.numpages);
-
-	pthread_create(&uffd_thread, NULL, uffd_handler, p);
-	sleep(1);
-    }
-    else 
-    {
-	fprintf(stdout, "Using vanilla mmap()\n");
-    }
+    fd=umt_openandmap(&options, options.numpages*pagesize, &base_addr);
 
 
     char        *    sval ;
     int                dstart;
-    int                dstart2;
     int                lx, ly ;
     int                bpp ;
     int                i, j ;
     char        *    buf ;
+    char        *    buf2 ;
     char        *    fbuf ;
-    char        *    buf2;
-    char        *    fbuf2;
     int                psize;
-    struct stat        fileinfo2;
-    int                fd ;
-    int fdnew;
 
     printf("processing %s\n",filename);
 
@@ -276,7 +201,7 @@ static int fits_flip(const char * filename)
 
     sleep(1);
 
-    fbuf=(char *)p->base_addr;
+    fbuf=(char *)base_addr;
     buf = fbuf + dstart ;
     //printf("%p\n");
 
@@ -298,23 +223,7 @@ static int fits_flip(const char * filename)
         buf  += lx * psize;
         //buf2 += lx * psize;
     }
-
-    if ( ! options.usemmap ) 
-    {
-        stop_umap_handler();
-	pthread_join(uffd_thread, NULL);
-	uffd_finalize(p, options.numpages);
-	munmap(p->base_addr, fileinfo.st_size);
-    }
-
-    // if (munmap(fbuf2, fileinfo2.st_size)!=0) {
-    //     printf("unmapping file\n");
-    //     return -1 ;
-    // }
-    /* if (munmap(fbuf, fileinfo.st_size)!=0) { */
-    /*     printf("unmapping file\n"); */
-    /*     return -1 ; */
-    /* } */
+    umt_closeandunmap(&options,options.numpages*pagesize,&base_addr,fd);
     return 0 ;
 }
 
@@ -325,7 +234,7 @@ int main(int argc, char * argv[])
 {
     int i ;
     int err ;
-    umt_getoptions(options, argc, argv);
+    umt_getoptions(&options, argc, argv);
     err=0;
     err += fits_flip(options.fn);
     if (err>0)
