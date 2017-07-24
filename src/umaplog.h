@@ -18,7 +18,7 @@ extern bool umap_logging;
     do {\
         if (umap_logging) {\
             umaplog_lock();\
-            fprintf(stderr, "[%s:%u] - " format, __FUNCTION__, __LINE__, ## __VA_ARGS__);\
+            fprintf(stderr, format, ## __VA_ARGS__);\
             umaplog_unlock();\
         }\
     } while (0)

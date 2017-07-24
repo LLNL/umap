@@ -377,7 +377,15 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             exit(1);
         }
 
-        umaplog("PF(READ)     (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+#ifdef DEBUG
+        uint64_t x, y;
+        x = *(uint64_t*)page_begin;
+        umaplog("PF(READ)1    (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, x);
+        sleep(1);
+        y = *(uint64_t*)page_begin;
+        umaplog("PF(READ)2    (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, y);
+        sleep(600);
+#endif // DEBUG
 
         enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
 
