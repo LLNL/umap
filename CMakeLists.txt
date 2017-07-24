@@ -7,7 +7,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 set (FLAGS_ALL "-Wall")
-set (FLAGS_DEBUG_ALL "-g -O0")
+set (FLAGS_DEBUG_ALL "-g -O0 -DDEBUG")
 set (FLAGS_RELEASE_ALL "-O3")
 
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 ${FLAGS_ALL}")

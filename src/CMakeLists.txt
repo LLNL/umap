@@ -1,7 +1,7 @@
 project(umap_libraries)
 
-add_library(libumap SHARED umap.cpp)
-add_library(libumap_static STATIC umap.cpp)
+add_library(libumap SHARED umap.cpp umaplog.cpp)
+add_library(libumap_static STATIC umap.cpp umaplog.cpp)
 set_target_properties(libumap_static PROPERTIES OUTPUT_NAME libumap)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

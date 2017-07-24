@@ -64,9 +64,20 @@ int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** reg
     }
   }
 
-  if(posix_fallocate(fd,0, numbytes) != 0) {
-    perror("posix_fallocate");
-    exit(-1);
+  try {
+      int x;
+    if((x = posix_fallocate(fd,0, numbytes) != 0)) {
+      perror("??posix_fallocate");
+
+      cerr << "posix_fallocate(" << fd << ", 0, " << numbytes << ") returned " << x << endl;
+      exit(-1);
+    }
+  } catch(const std::exception& e) {
+      cerr << "posix_fallocate: " << e.what() << endl;
+      exit(-1);
+  } catch(...) {
+      cerr << "posix_fallocate failed to instantiate _umap object\n";
+      exit(-1);
   }
 
   int prot = PROT_READ|PROT_WRITE;
