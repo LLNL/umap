@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <vector>
 #include <thread>
-#include <mutex>
 #include <map>
 #include <sys/types.h>
 #include <sys/stat.h>
