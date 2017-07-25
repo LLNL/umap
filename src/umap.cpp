@@ -20,6 +20,7 @@
 #include <linux/userfaultfd.h>
 #include <utmpx.h>              // sched_getcpu()
 #include <signal.h>
+#include <cstring>
 #include "umap.h"               // API to library
 #include "umaplog.h"            // umap_log()
 
@@ -285,11 +286,11 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
 #ifdef DEBUG
             if ((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE))
-                umaplog("PF(WP+WRITE) (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
+                umapdbg("PF(WP+WRITE) (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
             else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP)
-                umaplog("PF(WP)       (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
+                umapdbg("PF(WP)       (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
             else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
-                umaplog("PF(WRITE)    (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
+                umapdbg("PF(WRITE)    (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
 #endif // DEBUG
 
             //
@@ -304,7 +305,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         }
 #ifdef DEBUG
         else {
-            umaplog("PF(READ)     (In Memory Already) @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+            umapdbg("PF(READ)     (In Memory Already) @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
         }
 #endif // DEBUG
 
@@ -350,11 +351,11 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
 
 #ifdef DEBUG
         if ((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE))
-            umaplog("PF(WP+WRITE) (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+            umapdbg("PF(WP+WRITE) (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
         else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP)
-            umaplog("PF(WP)       (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+            umapdbg("PF(WP)       (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
         else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
-            umaplog("PF(WRITE)    (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+            umapdbg("PF(WRITE)    (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
 #endif // DEBUG
 
         disable_wp_on_pages((uint64_t)page_begin, 1);
@@ -377,9 +378,19 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             exit(1);
         }
 
-        umaplog("PF(READ)     (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+        umapdbg("PF(READ)     (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
 
         enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
+
+        //
+        // There is a very small window between UFFDIO_COPY_MODE and enable_wp_on_pages_and_wake where
+        // a write may occur before we re-enable WP (the UFFDIO_COPY appears to clear any previously 
+        // set WP settings.
+        //
+        if (memcmp(tmppagebuf, page_begin, page_size)) {
+            pages_in_memory[next_page_alloc_index].mark_page_dirty();
+            umapdbg("PF(READ) %p changed after UFFDIO_COPY\n", page_begin);
+        }
 
         struct uffdio_range wake;
         wake.start = (uint64_t)page_begin;
@@ -408,7 +419,7 @@ void _umap::evict_page(umap_page& pb)
         //
         enable_wp_on_pages_and_wake((uint64_t)page, 1);
 
-        umaplog("EVICT(DIRTY)  @(%p)=%lu\n", page, *page);
+        umapdbg("EVICT(DIRTY)  @(%p)=%lu\n", page, *page);
 
         if (pwrite(backingfile_fd, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)segment_address)) == -1) {
             perror("pwrite failed");
@@ -417,7 +428,7 @@ void _umap::evict_page(umap_page& pb)
     }
 #ifdef DEBUG
     else {
-        umaplog("EVICT(CLEAN)  @(%p)=%lu\n", page, *page);
+        umapdbg("EVICT(CLEAN)  @(%p)=%lu\n", page, *page);
     }
 #endif // DEBUG
 
@@ -443,7 +454,7 @@ void _umap::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
     wp.range.len = num_pages * page_size;
     wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-    umaplog("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
+    umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
 
     if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ioctl(UFFDIO_WRITEPROTECT Enable)");
@@ -461,7 +472,7 @@ void _umap::disable_wp_on_pages(uint64_t start, int64_t num_pages)
     wp.range.len = page_size * num_pages;
     wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
 
-    umaplog("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
+    umapdbg("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
 
     if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ioctl(UFFDIO_WRITEPROTECT Disable)");
@@ -507,14 +518,14 @@ void sighandler(int signum, siginfo_t *info, void* buf)
             num_bus_errs++;
 #ifdef DEBUG
             if (it.second->get_page_index(page_begin) >= 0)
-                umaplog("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE BUFFER!\n", info->si_addr, page_begin); 
+                umapdbg("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE BUFFER!\n", info->si_addr, page_begin); 
             else
-                umaplog("SIGBUS %p (page=%p) Not currently in umap page buffer\n", info->si_addr, page_begin); 
+                umapdbg("SIGBUS %p (page=%p) Not currently in umap page buffer\n", info->si_addr, page_begin); 
 #endif // DEBUG
             return;
         }
     }
-    umaplog("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin); 
+    umapdbg("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin); 
 }
 
 void __attribute ((constructor)) init_umap_lib( void )

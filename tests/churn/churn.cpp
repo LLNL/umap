@@ -93,6 +93,9 @@ public:
 
         for (uint64_t p = 0; p < options.num_load_pages; ++p) {
             for (uint64_t t = 0; t < options.num_load_reader_threads; ++t)
+                load_readers.push_back(new thread{&pageiotest::load_read2, this, p, t});
+
+            for (uint64_t t = 0; t < options.num_load_reader_threads; ++t)
                 load_readers.push_back(new thread{&pageiotest::load_read, this, p, t});
 
             for (uint64_t t = 0; t < options.num_load_writer_threads && t < 1; ++t)
@@ -112,6 +115,8 @@ public:
 
     void stop( void ) {
         time_to_stop = true;
+        for (auto i : load_readers2)
+            i->join();
         for (auto i : load_readers)
             i->join();
         for (auto i : load_writers)
@@ -131,6 +136,7 @@ private:
     void* read_load_pages;
     void* write_load_pages;
     vector<thread*> load_readers;
+    vector<thread*> load_readers2;
     vector<thread*> load_writers;
 
     void* churn_pages;
@@ -199,6 +205,19 @@ private:
         }
     }
 
+    // Have a reader going nuts on the write page for fun. No data validation since the writer is changing it from underneath us.
+    void load_read2(uint64_t pageno, int tnum) {
+        uint64_t* p = (uint64_t*)((uint64_t)write_load_pages+(pagesize*pageno));
+        tnum = tnum + tnum * pageno;
+        mt19937 gen(tnum);
+        uniform_int_distribution<uint64_t> rnd_int(0, ((pagesize/sizeof(*p))-1));
+
+        while ( !time_to_stop ) {
+            uint64_t idx = rnd_int(gen);
+            g_count += p[idx];
+        }
+    }
+
     void load_write(uint64_t pageno) {
         uint64_t cnt = 0;
         uint64_t* p = (uint64_t*)((uint64_t)write_load_pages+(pagesize*pageno));
@@ -211,7 +230,6 @@ private:
 
 #pragma omp parallel for
             for (int i = 0; i < num_entries; ++i) {
-                g_count += p[i];         // Read first
                 p[i] = cnt_base + i;
             }
 
