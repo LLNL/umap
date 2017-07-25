@@ -377,15 +377,24 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             exit(1);
         }
 
+        umaplog("PF(READ)     (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+
+//#define DEBUG_WP_TEST
+#ifdef DEBUG_WP_TEST
 #ifdef DEBUG
         uint64_t x, y;
         x = *(uint64_t*)page_begin;
-        umaplog("PF(READ)1    (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, x);
         sleep(1);
         y = *(uint64_t*)page_begin;
-        umaplog("PF(READ)2    (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, y);
-        sleep(600);
+        if (x != y) {
+            for (int i = 0; i < 20; ++i) {
+                y = *(uint64_t*)page_begin;
+                cout << "PF(POST-COPY) - Data is changing in page! " << page_begin << " " << x << " != " << y << endl;
+                sleep(2);
+            }
+        }
 #endif // DEBUG
+#endif // DEBUG_WP_TEST
 
         enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
 
