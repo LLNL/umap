@@ -384,19 +384,18 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
 #ifdef DEBUG
         uint64_t x, y;
         x = *(uint64_t*)page_begin;
-        sleep(1);
-        y = *(uint64_t*)page_begin;
-        if (x != y) {
-            for (int i = 0; i < 20; ++i) {
-                y = *(uint64_t*)page_begin;
+        for (int i = 0; i < 5; ++i) {
+            sleep(1);
+            y = *(uint64_t*)page_begin;
+            if (x != y) {
                 cout << "PF(POST-COPY) - Data is changing in page! " << page_begin << " " << x << " != " << y << endl;
-                sleep(2);
+                x = y;
             }
         }
 #endif // DEBUG
-#endif // DEBUG_WP_TEST
-
+#else
         enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
+#endif // DEBUG_WP_TEST
 
         struct uffdio_range wake;
         wake.start = (uint64_t)page_begin;
