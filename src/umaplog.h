@@ -14,17 +14,25 @@ extern void umaplog_lock(void);
 extern void umaplog_unlock(void);
 extern bool umap_logging;
 
-#define umaplog(format, ...)\
+#define umapdbg(format, ...)\
     do {\
         if (umap_logging) {\
             umaplog_lock();\
-            fprintf(stderr, format, ## __VA_ARGS__);\
+            fprintf(stdout, format, ## __VA_ARGS__);\
             umaplog_unlock();\
         }\
     } while (0)
+
+#define umaperr(format, ...)\
+    do {\
+        umaplog_lock();\
+        fprintf(stderr, format, ## __VA_ARGS__);\
+        umaplog_unlock();\
+    } while (0)
 #define umaplog_init __umaplog_init
 #else
-#define umaplog(format, ...)
+#define umaperr(format, ...)
+#define umapdbg(format, ...)
 #define umaplog_init()
 #endif
 #endif
