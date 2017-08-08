@@ -13,6 +13,7 @@ char const* FILENAME = "/tmp/abc";
 const uint64_t NUMPAGES = 10000000;
 const uint64_t NUMTHREADS = 2;
 const uint64_t BUFFERSIZE = 16;
+const int SINGLEFILE = -1;
 
 using namespace std;
 
@@ -29,6 +30,7 @@ static void usage(char* pname)
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -b page buffer size    - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -n number of files     - default: " << -1 << endl
   << " -f [file name]         - backing file name.  Must exist and be correct size for noinit\n";
   exit(1);
 }
@@ -46,6 +48,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
   testops->fn = FILENAME;
+  testops->fnum = SINGLEFILE;
 
   while (1) {
     int option_index = 0;
@@ -58,7 +61,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:n:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -80,6 +83,10 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
         else goto R0;
       case 'b':
         if ((testops->bufsize = strtoull(optarg, nullptr, 0)) > 0)
+          break;
+        else goto R0;
+      case 'n':
+        if ((testops->fnum = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
       case 'f':
