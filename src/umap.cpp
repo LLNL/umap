@@ -659,7 +659,7 @@ void _umap::evict_page(umap_page& pb)
 {
     uint64_t* page = (uint64_t*)pb.get_page();
 
-    if (pb.page_is_dirty()&&(backingfile_fd!=-1)) {//--------if multi-file, no pwrite needed
+    if (pb.page_is_dirty()) {
         // Prevent further writes.  No need to do this if not dirty because WP is already on.
         //
         // Preventing further writes is problematic because the kernel module will wake up any threads that might be waiting for a fault
