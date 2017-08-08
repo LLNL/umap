@@ -16,7 +16,7 @@ if(OPENMP_FOUND)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
-    install(TARGETS median
+    install(TARGETS median median_cube
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )

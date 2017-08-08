@@ -72,7 +72,7 @@ uint64_t torben(uint64_t *m, int n)
     for (i=1 ; i<n ; i++) {
         if (m[i]<min) min=m[i];
         if (m[i]>max) max=m[i];
-        if (m[i]>n) fprintf(stdout,"m:%llu\n",m[i]);
+        //if (m[i]>n) fprintf(stdout,"m:%llu\n",m[i]);
     }
     //fprintf(stdout,"Max:%llu\nMin:%llu\n",max,min);
 
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
 
   uint64_t *arr = (uint64_t *) base_addr;
   arraysize = totalbytes/sizeof(int64_t);
-  fprintf(stdout,"Array size: %lld\n",arraysize);
+  fprintf(stdout,"Array size: %ld\n",arraysize);
 
   uint64_t start = getns();
   // init data
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 
   start = getns();
   median=torben(arr,arraysize);
-  fprintf(stdout, "Median is %llu, Find median took %f us\n",median,(double)(getns() - start)/1000000.0);
+  fprintf(stdout, "Median is %lu, Find median took %f us\n",median,(double)(getns() - start)/1000000.0);
 
   umt_closeandunmap(&options, totalbytes, base_addr, fd);
   return 0;

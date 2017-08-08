@@ -169,12 +169,12 @@ int main(int argc, char **argv)
   start = getns();
   getall_median();
   //median=torben(arr,arraysize);
-  fprintf(stdout, "Median is %llu, Find median took %f us\n",median,(double)(getns() - start)/1000000.0);
+  fprintf(stdout, "Median is %lu, Find median took %f us\n",median,(double)(getns() - start)/1000000.0);
   int i,j;
   for (i=0;i<size_a;i++)
     {
       for (j=0;j<size_b;j++)
-	printf("%d ",cube_median[i*size_a+j]);
+	printf("%ld ",cube_median[i*size_a+j]);
       printf("\n");
     }
   free(cube_median);
