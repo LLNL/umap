@@ -115,8 +115,7 @@ static map<void*, _umap*> active_umaps;
 
 void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-    void* region = umap_mf(addr, length, prot, flags, fd, NULL, offset,0);
-    return region;
+    return umap_mf(addr, length, prot, flags, fd, NULL, offset,0);
 }
 //--------------------------for multi-file support----------------------
 void* umap_mf(void* addr, size_t length, int prot, int flags, int fd_num,int* fd_list,off_t offset, off_t frame)
@@ -138,7 +137,6 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int fd_num,int* fd
     _umap *p_umap;
     try {
         p_umap = new _umap{region, length, fd_num,fd_list,offset,frame};
-        active_umaps[region] = p_umap;
     } catch(const std::exception& e) {
         cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
         return UMAP_FAILED;
