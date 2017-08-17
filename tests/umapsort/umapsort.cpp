@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 
   if ( !options.initonly ) {
     start = getns();
-    __gnu_parallel::sort(arr, &arr[arraysize]);
+    __gnu_parallel::sort(arr, &arr[arraysize],__gnu_parallel::quicksort_tag());
     fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
 
     start = getns();
