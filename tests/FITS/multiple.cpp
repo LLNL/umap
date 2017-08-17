@@ -197,7 +197,6 @@ static int test_openfiles(const char *fn)
     strcat(filename,"1");
     strcat(filename,".fits");
 
-    puts(filename);
     char        *    sval ;
     int                dstart;
     int                lx, ly ;
@@ -243,7 +242,7 @@ static int test_openfiles(const char *fn)
     //printf("psize:%d\n",psize);
     //printf("dstart:%d\n",dstart);
     frame=(off_t)lx*ly*psize;
-    printf("psize:%d lx:%d ly:%d\n",frame,lx,ly);
+    //printf("psize:%d lx:%d ly:%d\n",frame,lx,ly);
     totalbytes=options.numpages*pagesize;
     fd_list = umt_openandmap_fits(&options,totalbytes,&base_addr,(off_t)dstart,frame);
 

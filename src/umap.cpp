@@ -36,7 +36,6 @@ static long page_size;
 class umap_page;
 class _umap {
     public:
-        _umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd);
         _umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd, int* fd_list, off_t data_offset ,off_t frame);
 
         void uffd_finalize(void);
@@ -116,35 +115,10 @@ static map<void*, _umap*> active_umaps;
 
 void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-    if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
-        cerr << "umap: Invalid flags: " << hex << flags << endl;
-        return UMAP_FAILED;
-    }
-
-    flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
-
-    void* region = mmap(addr, length, prot, flags, -1, offset);
-    if (region == MAP_FAILED) {
-        perror("mmap failed: ");
-        return UMAP_FAILED;
-    }
-
-    _umap *p_umap;
-    try {
-        p_umap = new _umap{region, length, fd};
-    } catch(const std::exception& e) {
-        cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
-        return UMAP_FAILED;
-    } catch(...) {
-        cerr << "umap failed to instantiate _umap object\n";
-        return UMAP_FAILED;
-    }
-
-    active_umaps[region] = p_umap;
-    return region;
+    return umap_mf(addr, length, prot, flags, fd, NULL, offset,0);
 }
 //--------------------------for multi-file support----------------------
-void* umap_fits(void* addr, size_t length, int prot, int flags, int fd_num,int* fd_list,off_t offset, off_t frame)
+void* umap_mf(void* addr, size_t length, int prot, int flags, int fd_num,int* fd_list,off_t offset, off_t frame)
 {
     if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
         cerr << "umap: Invalid flags: " << hex << flags << endl;
@@ -153,7 +127,8 @@ void* umap_fits(void* addr, size_t length, int prot, int flags, int fd_num,int* 
 
     flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
 
-    void* region = mmap(addr, length, prot, flags, -1, 0);
+    void* region = (fd_list == NULL)? mmap(addr, length, prot, flags, -1, offset):mmap(addr, length, prot, flags, -1, 0);
+ 
     if (region == MAP_FAILED) {
         perror("mmap failed: ");
         return UMAP_FAILED;
@@ -162,7 +137,6 @@ void* umap_fits(void* addr, size_t length, int prot, int flags, int fd_num,int* 
     _umap *p_umap;
     try {
         p_umap = new _umap{region, length, fd_num,fd_list,offset,frame};
-        active_umaps[region] = p_umap;
     } catch(const std::exception& e) {
         cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
         return UMAP_FAILED;
@@ -197,66 +171,14 @@ void umap_cfg_set_bufsize( int page_bufsize )
     umap_page_bufsize = page_bufsize;
 }
 
-_umap::_umap(  void* _mmap_addr, size_t _mmap_length, int _mmap_fd)
-    :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-        backingfile_fd{_mmap_fd}, 
-        time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
-{
-    page_buffer_size = umap_page_bufsize;
-    if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
-        perror("userfaultfd syscall not available in this kernel");
-        throw -1;
-    }
-
-    struct uffdio_api uffdio_api = { .api = UFFD_API, .features = 0 };
-
-    if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
-        perror("ioctl(UFFDIO_API)");
-        throw -1;
-    }
-
-    if (uffdio_api.api != UFFD_API) {
-        cerr << __FUNCTION__ << ": unsupported userfaultfd api\n";
-        throw -1;
-    }
-
-    struct uffdio_register uffdio_register = {
-        .range = { .start = (uint64_t)segment_address, .len = segment_length },
-        .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
-    };
-
-    if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
-        perror("ioctl/uffdio_register");
-        close(userfault_fd);
-        throw -1;
-    }
-
-    enable_wp_on_pages_and_wake((uint64_t)segment_address, segment_length / page_size);
-
-    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS) {
-        cerr << "unexpected userfaultfd ioctl set\n";
-        close(userfault_fd);
-        throw -1;
-    }
-
-    posix_memalign((void**)&tmppagebuf, (size_t)512, page_size);
-    if (tmppagebuf == nullptr) {
-        cerr << "Unable to allocate 512 bytes for temporary buffer\n";
-        close(userfault_fd);
-        throw -1;
-    }
-
-    umap_page ump;
-    pages_in_memory.resize(page_buffer_size, ump);
-
-    listener = new thread{&_umap::uffd_handler, this};      // Start our userfaultfd listener
-}
 //--------------------------for multi-file support----------------------
 _umap::_umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd,int* file_list, off_t data_offset, off_t frame)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-  backingfile_fd{-1},number_file{_mmap_fd},fits_offset{data_offset},fd_list{file_list},frame_size{frame},
+	backingfile_fd{_mmap_fd},number_file{_mmap_fd},fits_offset{data_offset},fd_list{file_list},frame_size{frame},
         time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
 {
+  //backingfile_fd = (!frame_size)? _mmap_fd : -1;
+
     page_buffer_size = umap_page_bufsize;
     // if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
     //     perror("sysconf(_SC_PAGESIZE)");
@@ -309,7 +231,7 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd,int* file_list,
     umap_page ump;
     pages_in_memory.resize(page_buffer_size, ump);
 
-    listener = new thread{&_umap::uffd_fits_handler, this};      // Start our userfaultfd listener
+    listener = (!frame_size)?new thread{&_umap::uffd_handler,this}:new thread{&_umap::uffd_fits_handler, this};      // Start our userfaultfd listener
 }
 
 void _umap::uffd_handler(void)

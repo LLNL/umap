@@ -27,7 +27,7 @@ void* umap( void*  addr,    /* See mmap(2) */
             int    fd,      /* See mmap(2) */
             off_t  offset   /* See mmap(2) */
         );
-void* umap_fits( void*  addr,    /* See mmap(2) */
+void* umap_mf( void*  addr,    /* See mmap(2) */
             size_t length,  /* See mmap(2) */
             int    prot,    /* See mmap(2) */
             int    flags,   /* See below, see mmap(2) for general notes */

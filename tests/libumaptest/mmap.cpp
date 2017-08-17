@@ -157,7 +157,7 @@ int* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, void
 	strcat(filename,".fits");
 
 	fdlist[i] = open(filename, open_options, S_IRUSR|S_IWUSR);
-	printf("processing %s, %d\n",filename,fdlist[i]);
+	//printf("processing %s, %d\n",filename,fdlist[i]);
 
 	if(fdlist[i] == -1) 
 	{
@@ -190,7 +190,7 @@ int* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, void
     int prot = PROT_READ|PROT_WRITE;
     int flags = UMAP_PRIVATE;
 
-    *region = umap_fits(NULL, numbytes, prot, flags, testops->fnum, fdlist, offset, frame);
+    *region = umap_mf(NULL, numbytes, prot, flags, testops->fnum, fdlist, offset, frame);
     if (*region == UMAP_FAILED) {
       perror("umap");
       exit(-1);
@@ -252,7 +252,7 @@ int* umt_openandmap_fits2(const umt_optstruct_t* testops, uint64_t numbytes, voi
 	strcat(filename,".fits");
 
 	fdlist[i] = open(filename, open_options, S_IRUSR|S_IWUSR);
-	printf("processing %s, %d\n",filename,fdlist[i]);
+	//printf("processing %s, %d\n",filename,fdlist[i]);
 
 	if(fdlist[i] == -1) 
 	{
