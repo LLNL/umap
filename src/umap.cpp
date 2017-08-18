@@ -199,8 +199,7 @@ void umap_cfg_set_bufsize( int page_bufsize )
 
 _umap::_umap(  void* _mmap_addr, size_t _mmap_length, int _mmap_fd)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-        backingfile_fd{_mmap_fd}, 
-        time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
+        backingfile_fd{_mmap_fd}, time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
 {
     page_buffer_size = umap_page_bufsize;
     if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
@@ -254,8 +253,8 @@ _umap::_umap(  void* _mmap_addr, size_t _mmap_length, int _mmap_fd)
 //--------------------------for multi-file support----------------------
 _umap::_umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd,int* file_list, off_t data_offset, off_t frame)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-  backingfile_fd{-1},number_file{_mmap_fd},fits_offset{data_offset},fd_list{file_list},frame_size{frame},
-        time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
+        backingfile_fd{_mmap_fd}, time_to_stop{false}, fault_count{0}, next_page_alloc_index{0},
+        number_file{_mmap_fd}, fd_list{file_list}, fits_offset{data_offset}
 {
     page_buffer_size = umap_page_bufsize;
     // if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
