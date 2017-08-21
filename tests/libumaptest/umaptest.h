@@ -36,10 +36,10 @@ extern "C" {
   int umt_openandmap(const umt_optstruct_t*, uint64_t, void**);
   void umt_closeandunmap(const umt_optstruct_t*, uint64_t, void*, int);
   long umt_getpagesize(void);
-  int* umt_openandmap_fits(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
-  void umt_closeandunmap_fits(const umt_optstruct_t*, uint64_t, void*,int*);
-  int* umt_openandmap_fits2(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
-  void umt_closeandunmap_fits2(const umt_optstruct_t*, uint64_t, void**,int*);
+  void* umt_openandmap_fits(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_fits(const umt_optstruct_t*, uint64_t, void*,void*);
+  void* umt_openandmap_fits2(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_fits2(const umt_optstruct_t*, uint64_t, void**,void*);
 #ifdef __cplusplus
 }
 #endif
