@@ -136,24 +136,25 @@ double torben(float **m, int n,int pos)
   if (greater >= half) max = mingtguess;
   else if (greater+equal >= half) max = guess;
   else max = maxltguess;
-  return (min+max)/2;
+  return (min+max)/(double)2;
 }
-void displaycube(double *cube,int a,int b,int c)
+void displaycube(double *cube,struct patch *list,int n)
 {
-  int i,j,k;
-  for (k=0;k<c;k++)
-    {
-      for (i=0;i<a;i++)
-        {
-	  for (j=0;j<b;j++)
-	    if (!fequal(cube[k*a*b+i*b+j],0))
-	    printf("%6.5lf ",cube[k*a*b+i*b+j]);
-	  //printf("\n");
-        }
-        printf("**************\n");
-    }
+     int i,j,k;
+     uint64_t lx=list[0].ex;
+     uint64_t ly=list[0].ey;
+     for (k=1;k<=n;k++)
+     {
+	 for (i=list[k].sy; i<list[k].ey; i++) // bounding box
+	 {
+	     for (j=list[k].sx; j<list[k].ex; j++)
+	     {
+		 printf("%6.5lf\n",cube[i*lx+j]);		 
+		 //printf("\n");
+	     }
+	 }
+     }
 }
-
 
 void median_calc(int n,struct patch *list,double *cube_median,float **d)
 {
@@ -163,9 +164,9 @@ void median_calc(int n,struct patch *list,double *cube_median,float **d)
     uint64_t ly=list[0].ey;
     for (k=1;k<=n;k++)
     {
-        #pragma omp parallel for
         for (i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
+	    #pragma omp parallel for
             for (j=list[k].sx; j<list[k].ex; j++)
 	    {
  	        cube_median[i*lx+j]=torben((float **)d,options.fnum,i*lx+j);
@@ -176,7 +177,6 @@ void median_calc(int n,struct patch *list,double *cube_median,float **d)
 
 static int process(const char * filename)
 {
-    int value=0;
     char *nfilename;
     int *fdlist;
     char num[5];
@@ -299,7 +299,7 @@ static int process(const char * filename)
     double start = gets();
     median_calc(nlist,list,cube_median,d);
     fprintf(stdout, "Median Calculation %f s\n", (double)(gets() - start));
-    //displaycube(cube_median,lx,ly,1);
+    //displaycube(cube_median,list,nlist);
     free(cube_median);
     free(list);
     for (i=0;i<options.fnum;i++)
@@ -318,7 +318,6 @@ static int process(const char * filename)
  -----------------------------------------------------------------------------*/
 int main(int argc, char * argv[])
 {
-    int i ;
     int err ;
     umt_getoptions(&options, argc, argv);
     err=0;

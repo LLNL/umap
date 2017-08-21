@@ -36,7 +36,7 @@ static long page_size;
 class umap_page;
 class _umap {
     public:
-        _umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd, int* fd_list, off_t data_offset ,off_t frame);
+        _umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file, umap_backing_file* backing_files);
 
         void uffd_finalize(void);
 
@@ -57,6 +57,8 @@ class _umap {
         void* segment_address;
         size_t segment_length;
         int backingfile_fd;
+        int num_bk_files;
+        umap_backing_file* bk_files;
         int page_buffer_size;
         bool time_to_stop;
         uint64_t fault_count;
@@ -115,10 +117,13 @@ static map<void*, _umap*> active_umaps;
 
 void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-    return umap_mf(addr, length, prot, flags, fd, NULL, offset,0);
+    struct stat file;
+    fstat(fd,&file);
+    umap_backing_file* p=new umap_backing_file{fd,file.st_size,offset};
+    return umap_mf(addr, length, prot, flags, 1, p);
 }
 //--------------------------for multi-file support----------------------
-void* umap_mf(void* addr, size_t length, int prot, int flags, int fd_num,int* fd_list,off_t offset, off_t frame)
+void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_file,umap_backing_file* backing_files)
 {
     if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
         cerr << "umap: Invalid flags: " << hex << flags << endl;
@@ -127,7 +132,7 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int fd_num,int* fd
 
     flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
 
-    void* region = (fd_list == NULL)? mmap(addr, length, prot, flags, -1, offset):mmap(addr, length, prot, flags, -1, 0);
+    void* region = mmap(addr, length, prot, flags, -1, 0);
  
     if (region == MAP_FAILED) {
         perror("mmap failed: ");
@@ -136,7 +141,7 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int fd_num,int* fd
 
     _umap *p_umap;
     try {
-        p_umap = new _umap{region, length, fd_num,fd_list,offset,frame};
+        p_umap = new _umap{region, length, num_backing_file,backing_files};
     } catch(const std::exception& e) {
         cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
         return UMAP_FAILED;
@@ -172,18 +177,12 @@ void umap_cfg_set_bufsize( int page_bufsize )
 }
 
 //--------------------------for multi-file support----------------------
-_umap::_umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd,int* file_list, off_t data_offset, off_t frame)
+_umap::_umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file,umap_backing_file* backing_files)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-	backingfile_fd{_mmap_fd},number_file{_mmap_fd},fits_offset{data_offset},fd_list{file_list},frame_size{frame},
+	num_bk_files{num_backing_file},bk_files{backing_files},
         time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
 {
-  //backingfile_fd = (!frame_size)? _mmap_fd : -1;
-
     page_buffer_size = umap_page_bufsize;
-    // if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
-    //     perror("sysconf(_SC_PAGESIZE)");
-    //     throw -1;
-    // }
 
     if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
         perror("userfaultfd syscall not available in this kernel");
@@ -231,7 +230,9 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length, int _mmap_fd,int* file_list,
     umap_page ump;
     pages_in_memory.resize(page_buffer_size, ump);
 
-    listener = (!frame_size)?new thread{&_umap::uffd_handler,this}:new thread{&_umap::uffd_fits_handler, this};      // Start our userfaultfd listener
+    backingfile_fd=bk_files[0].fd;
+    //listener = new thread{&_umap::uffd_handler,this};
+    listener = (num_backing_file==1)?new thread{&_umap::uffd_handler,this}:new thread{&_umap::uffd_fits_handler, this}; // Start our userfaultfd listener
 }
 
 void _umap::uffd_handler(void)
@@ -345,7 +346,14 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     //
     // Page not in memory, read it in and (potentially) evict someone
     //
-    if (pread(backingfile_fd, tmppagebuf, page_size, (off_t)((uint64_t)page_begin - (uint64_t)segment_address)) == -1) {
+
+    int file_id=0;
+    off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
+        //find the file id and offset number
+    file_id=offset/bk_files->data_size;
+    offset%=bk_files->data_size;
+
+    if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
         perror("pread failed");
         exit(1);
     }
@@ -520,15 +528,11 @@ void _umap::uffd_fits_handler(void)
         //
 	int file_id=0;
 	off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
-        //find the file id and offset number                                              
-        while (offset>=frame_size)
-	{
-            file_id++;
-            offset-=frame_size;
-	}
+        //find the file id and offset number
+	file_id=offset/bk_files->data_size;
+	offset%=bk_files->data_size;
 
-        ssize_t pread_ret = pread(fd_list[file_id], tmppagebuf, page_size,
-                       offset+fits_offset);
+        ssize_t pread_ret = pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset);
 
         if (pread_ret == -1) {
             perror("pread failed");
