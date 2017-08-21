@@ -172,7 +172,7 @@ void umap_cfg_set_bufsize( int page_bufsize )
 //--------------------------for multi-file support----------------------
 _umap::_umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file,umap_backing_file* backing_files)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-	num_bk_files{num_backing_file},bk_files{backing_files},
+	      num_bk_files{num_backing_file},bk_files{backing_files},
         time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
 {
     page_buffer_size = umap_page_bufsize;

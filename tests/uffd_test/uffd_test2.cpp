@@ -118,7 +118,7 @@ int main(int argc, char **argv)
       // CALC LATENCY & IOPS
   }
 
-  printf("\n");
+  printf("%d\n", value);
   umt_closeandunmap(&options, totalbytes, base_addr, fd);
 
   for (long i=0;i<num_batches;i++)
