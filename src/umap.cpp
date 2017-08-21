@@ -68,18 +68,11 @@ class _umap {
         vector<umap_page> pages_in_memory;
         char* tmppagebuf;
 
-//--------for multi-file fits support---------
-        int number_file;
-        int* fd_list;
-        off_t fits_offset;
-        off_t frame_size;
-
         map<void*, int> page_index;
 
         void evict_page(umap_page& page);
         void remove_page_index(void* _p) { page_index.erase(_p); }
         void uffd_handler(void);
-        void uffd_fits_handler(void);
         void pagefault_event(const struct uffd_msg& msg);
         inline void stop_faultlistener( void ) noexcept {
             time_to_stop = true;
@@ -231,8 +224,7 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file,umap_ba
     pages_in_memory.resize(page_buffer_size, ump);
 
     backingfile_fd=bk_files[0].fd;
-    //listener = new thread{&_umap::uffd_handler,this};
-    listener = (num_backing_file==1)?new thread{&_umap::uffd_handler,this}:new thread{&_umap::uffd_fits_handler, this}; // Start our userfaultfd listener
+    listener = new thread{&_umap::uffd_handler,this};
 }
 
 void _umap::uffd_handler(void)
@@ -346,7 +338,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     //
     // Page not in memory, read it in and (potentially) evict someone
     //
-
+//-----------------------for multi-file support--------------------
     int file_id=0;
     off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
         //find the file id and offset number
@@ -429,153 +421,6 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
             perror("ioctl(UFFDIO_WAKE)");
             exit(1);
-        }
-    }
-    next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
-}
-//-----------------------for multi-file support--------------------
-void _umap::uffd_fits_handler(void)
-{
-    //struct stat fileinfo;
-    //fstat(fd_list[0],&fileinfo);
-    //cout << __FUNCTION__ << " on CPU " << sched_getcpu() << " Started\n";
-    for (;;) {
-        struct uffd_msg msg;
-
-        struct pollfd pollfd[1];
-        pollfd[0].fd = userfault_fd;
-        pollfd[0].events = POLLIN;
-
-        // wait for a userfaultfd event to occur
-        int pollres = poll(pollfd, 1, 2000);
-
-        if (time_to_stop)
-            return;
-
-        switch (pollres) {
-        case -1:
-            perror("poll/userfaultfd");
-            continue;
-        case 0:
-            continue;
-        case 1:
-            break;
-        default:
-            cerr << __FUNCTION__ << " unexpected uffdio poll result\n";
-            exit(1);
-        }
-
-        if (pollfd[0].revents & POLLERR) {
-            cerr << __FUNCTION__ << " POLLERR\n";
-            exit(1);
-        }
-
-        if (!pollfd[0].revents & POLLIN)
-            continue;
-
-        int readres = read(userfault_fd, &msg, sizeof(msg));
-        if (readres == -1) {
-            if (errno == EAGAIN)
-                continue;
-            perror("read/userfaultfd");
-            exit(1);
-        }
-
-        if (readres != sizeof(msg)) {
-            cerr << __FUNCTION__ << "invalid msg size\n";
-            exit(1);
-        }
-
-        if (msg.event != UFFD_EVENT_PAGEFAULT) {
-            cerr << __FUNCTION__ << " Unexpected event " << hex << msg.event << endl;
-            continue;
-        }
- 
-        //
-        // At this point, we know we have had a page fault.  Let's handle it.
-        //
-#define PAGE_BEGIN(a)   (void*)((uint64_t)a & ~(page_size-1));
-
-        fault_count++;
-        void* fault_addr = (void*)msg.arg.pagefault.address;
-        void* page_begin = PAGE_BEGIN(fault_addr);
-
-        //
-        // Check to see if the faulting page is already in memory. This can
-        // happen if more than one thread causes a fault for the same page.
-        //
-        int bufidx = get_page_index(page_begin);
-
-        if (bufidx >= 0) {
-            if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-                pages_in_memory[bufidx].mark_page_dirty();
-                disable_wp_on_pages((uint64_t)page_begin, 1);
-            }
-
-            struct uffdio_range wake;
-            wake.start = (uint64_t)page_begin;
-            wake.len = page_size; 
-
-            if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-                perror("ioctl(UFFDIO_WAKE)");
-                exit(1);
-            }
-            continue;
-        }
-
-        //
-        // Page not in memory, read it in and evict someone
-        //
-	int file_id=0;
-	off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
-        //find the file id and offset number
-	file_id=offset/bk_files->data_size;
-	offset%=bk_files->data_size;
-
-        ssize_t pread_ret = pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset);
-
-        if (pread_ret == -1) {
-            perror("pread failed");
-            exit(1);
-        }
-
-        if (pages_in_memory[next_page_alloc_index].get_page()) {
-            delete_page_index(pages_in_memory[next_page_alloc_index].get_page());
-            evict_page(pages_in_memory[next_page_alloc_index]);
-        }
-
-        pages_in_memory[next_page_alloc_index].set_page(page_begin);
-        add_page_index(next_page_alloc_index, page_begin);
-
-        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-            disable_wp_on_pages((uint64_t)page_begin, 1);
-            pages_in_memory[next_page_alloc_index].mark_page_dirty();
-        }
-        else {
-            pages_in_memory[next_page_alloc_index].mark_page_clean();
-        }
-
-        next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
-
-        struct uffdio_copy copy;
-        copy.src = (uint64_t)tmppagebuf;
-        copy.dst = (uint64_t)page_begin;
-        copy.len = page_size;
-
-        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-            copy.mode = 0;
-            if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-                perror("ioctl(UFFDIO_COPY wake)");
-                exit(1);
-            }
-        }
-        else {
-            copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
-            if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-                perror("ioctl(UFFDIO_COPY nowake)");
-                exit(1);
-            }
-            enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
         }
     }
     next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
