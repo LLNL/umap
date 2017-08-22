@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include "umap.h"
 #include "umaptest.h"
+#include <vector>
 
 using namespace std;
 
@@ -130,7 +131,8 @@ void* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, voi
   char num[5];
   int open_options = O_RDWR;
 
-  umap_backing_file* fits_files;
+  vector<umap_backing_file> *fits_files=new vector<umap_backing_file>;
+  umap_backing_file now;
   if (testops->iodirect) 
     open_options |= O_DIRECT;
 
@@ -146,7 +148,7 @@ void* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, voi
       perror("number of files not in input");
       exit(-1);
   }
-  fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
+  //fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
   filename=(char *)std::malloc(sizeof(char)*100);
 
   for (int i=0;i<testops->fnum;i++)
@@ -156,16 +158,17 @@ void* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, voi
 	strcat(filename,num);
 	strcat(filename,".fits");
 
-	fits_files[i].fd = open(filename, open_options, S_IRUSR|S_IWUSR);
+	now.fd = open(filename, open_options, S_IRUSR|S_IWUSR);
 	//printf("processing %s, %d\n",filename,fdlist[i]);
 
-	if(fits_files[i].fd == -1) 
+	if(now.fd == -1) 
 	{
 	    perror("open");
 	    exit(-1);
 	}
-	fits_files[i].data_size=data_size;
-	fits_files[i].data_offset=offset;
+	now.data_size=data_size;
+	now.data_offset=offset;
+	fits_files->push_back(now);
   }
 
   if (testops->noinit) {
@@ -173,7 +176,7 @@ void* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, voi
     struct stat sbuf;
     uint64_t totalsize=0;
     for (int i=0;i<testops->fnum;i++){
-      if (fstat(fits_files[i].fd, &sbuf) == -1){
+	if (fstat((*fits_files)[i].fd, &sbuf) == -1){
         perror("fstat");
         exit(-1);
       }
@@ -192,13 +195,13 @@ void* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, voi
     int prot = PROT_READ|PROT_WRITE;
     int flags = UMAP_PRIVATE;
 
-    *region = umap_mf(NULL, numbytes, prot, flags, testops->fnum, fits_files);
+    *region = umap_mf(NULL, numbytes, prot, flags, (void *) fits_files);
     if (*region == UMAP_FAILED) {
       perror("umap");
       exit(-1);
     }
 
-    return fits_files;
+    return (void *)fits_files;
 }
 
 void umt_closeandunmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, void* region,void* p)
@@ -215,9 +218,9 @@ void umt_closeandunmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, v
       exit(-1);
     }
   }
-  umap_backing_file *fits_files=(umap_backing_file *)p;
+  vector<umap_backing_file> *fits_files=(vector<umap_backing_file> *)p;
   for (int i=0;i<testops->fnum;i++)
-  close(fits_files[i].fd);
+  close((*fits_files)[i].fd);
   free(fits_files);
 }
 

@@ -36,7 +36,7 @@ static long page_size;
 class umap_page;
 class _umap {
     public:
-        _umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file, umap_backing_file* backing_files);
+        _umap(void* _mmap_addr, size_t _mmap_length,vector<umap_backing_file> *backing_files);
 
         void uffd_finalize(void);
 
@@ -57,8 +57,7 @@ class _umap {
         void* segment_address;
         size_t segment_length;
         int backingfile_fd;
-        int num_bk_files;
-        umap_backing_file* bk_files;
+        vector<umap_backing_file> bk_files;
         int page_buffer_size;
         bool time_to_stop;
         uint64_t fault_count;
@@ -112,11 +111,13 @@ void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
     struct stat file;
     fstat(fd,&file);
-    umap_backing_file* p=new umap_backing_file{fd,file.st_size,offset};
-    return umap_mf(addr, length, prot, flags, 1, p);
+    umap_backing_file file1={fd,file.st_size,offset};
+    vector<umap_backing_file> *p=new vector<umap_backing_file>;
+    p->push_back(file1);
+    return umap_mf(addr, length, prot, flags, (void *)p);
 }
 //--------------------------for multi-file support----------------------
-void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_file,umap_backing_file* backing_files)
+void* umap_mf(void* addr, size_t length, int prot, int flags,void *backing_files)
 {
     if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
         cerr << "umap: Invalid flags: " << hex << flags << endl;
@@ -134,7 +135,7 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_fi
 
     _umap *p_umap;
     try {
-        p_umap = new _umap{region, length, num_backing_file,backing_files};
+        p_umap = new _umap{region, length, (vector<umap_backing_file> *)backing_files};
     } catch(const std::exception& e) {
         cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
         return UMAP_FAILED;
@@ -170,9 +171,9 @@ void umap_cfg_set_bufsize( int page_bufsize )
 }
 
 //--------------------------for multi-file support----------------------
-_umap::_umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file,umap_backing_file* backing_files)
+_umap::_umap(void* _mmap_addr, size_t _mmap_length,vector<umap_backing_file>* backing_files)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-	num_bk_files{num_backing_file},bk_files{backing_files},
+	bk_files{*backing_files},
         time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
 {
     page_buffer_size = umap_page_bufsize;
@@ -342,8 +343,8 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     int file_id=0;
     off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
         //find the file id and offset number
-    file_id=offset/bk_files->data_size;
-    offset%=bk_files->data_size;
+    file_id=offset/bk_files[0].data_size;
+    offset%=bk_files[0].data_size;
 
     if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
         perror("pread failed");

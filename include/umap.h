@@ -34,15 +34,14 @@ void* umap( void*  addr,    /* See mmap(2) */
             int    fd,      /* See mmap(2) */
             off_t  offset   /* See mmap(2) */
         );
+int uunmap( void*  addr,    /* See mmap(2) */
+            size_t length   /* See mmap(2) */
+        );
 void* umap_mf(void*              addr, 
 	      size_t             length, 
 	      int                prot, 
-	      int                flags, 
-	      int                num_backing_file,
-	      umap_backing_file* backing_files
-        );
-int uunmap( void*  addr,    /* See mmap(2) */
-            size_t length   /* See mmap(2) */
+	      int                flags,
+	      void*              backing_files
         );
 int umap_cfg_get_bufsize( void );
 void umap_cfg_set_bufsize( int page_bufsize );
