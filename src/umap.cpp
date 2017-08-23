@@ -113,6 +113,7 @@ void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
     struct umap_backing_file file1={.fd = fd, .data_size = file.st_size, .data_offset = offset};
     return umap_mf(addr, length, prot, flags, 1, &file1);
 }
+
 //--------------------------for multi-file support----------------------
 void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
 {
@@ -126,7 +127,7 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_fi
     void* region = mmap(addr, length, prot, flags, -1, 0);
  
     if (region == MAP_FAILED) {
-        perror("mmap failed: ");
+        perror("ERROR: mmap failed: ");
         return UMAP_FAILED;
     }
 
@@ -170,21 +171,21 @@ void umap_cfg_set_bufsize( int page_bufsize )
 //--------------------------for multi-file support----------------------
 _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_backing_file* backing_files)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-	time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
+    time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
 {
     for (int i=0;i<num_backing_file;i++)
-	bk_files.push_back(backing_files[i]); 
+        bk_files.push_back(backing_files[i]); 
     page_buffer_size = umap_page_bufsize;
 
     if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
-        perror("userfaultfd syscall not available in this kernel");
+        perror("ERROR: userfaultfd syscall not available in this kernel");
         throw -1;
     }
 
     struct uffdio_api uffdio_api = { .api = UFFD_API, .features = 0};
 
     if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
-        perror("ioctl(UFFDIO_API)");
+        perror("ERROR: ioctl(UFFDIO_API)");
         throw -1;
     }
 
@@ -199,7 +200,7 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
     };
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
-        perror("ioctl/uffdio_register");
+        perror("ERROR: ioctl/uffdio_register");
         close(userfault_fd);
         throw -1;
     }
@@ -212,7 +213,11 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
         throw -1;
     }
 
-    posix_memalign((void**)&tmppagebuf, (size_t)512, page_size);
+    if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
+        perror("ERROR: posix_memalign:");
+        throw -1;
+    }
+
     if (tmppagebuf == nullptr) {
         cerr << "Unable to allocate 512 bytes for temporary buffer\n";
         close(userfault_fd);
@@ -244,7 +249,7 @@ void _umap::uffd_handler(void)
 
         switch (pollres) {
         case -1:
-            perror("poll/userfaultfd");
+            perror("ERROR: poll/userfaultfd");
             continue;
         case 0:
             continue;
@@ -267,7 +272,7 @@ void _umap::uffd_handler(void)
         if (readres == -1) {
             if (errno == EAGAIN)
                 continue;
-            perror("read/userfaultfd");
+            perror("ERROR: read/userfaultfd");
             exit(1);
         }
 
@@ -290,12 +295,12 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     fault_count++;
     void* fault_addr = (void*)msg.arg.pagefault.address;
     void* page_begin = UMAP_PAGE_BEGIN(fault_addr);
+    int bufidx = get_page_index(page_begin);
 
     //
     // Check to see if the faulting page is already in memory. This can
     // happen if more than one thread causes a fault for the same page.
     //
-    int bufidx = get_page_index(page_begin);
     if (bufidx >= 0) {
         if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
 #ifdef DEBUG
@@ -307,15 +312,20 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
                 umapdbg("PF(WRITE)    (In Memory Already) @(%p)=%lu %s\n", page_begin, *(uint64_t*)page_begin, pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean");
 #endif // DEBUG
 
-            //
-            // Check to see if this page is already marked as dirty which means that
-            // some other thread got a WP/WRITE PF ahead of us so we don't need to do
-            // this again.
-            //
-            if ( !pages_in_memory[bufidx].page_is_dirty() ) {
-                pages_in_memory[bufidx].mark_page_dirty();
-                disable_wp_on_pages((uint64_t)page_begin, 1);
-            }
+            pages_in_memory[bufidx].mark_page_dirty();
+            //memcpy(tmppagebuf, page_begin, page_size);
+
+            //struct uffdio_copy copy;
+            //copy.src = (uint64_t)tmppagebuf;
+            //copy.dst = (uint64_t)page_begin;
+            //copy.len = page_size;
+            //copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
+            //if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+                //perror("ERROR: ioctl(UFFDIO_COPY3 nowake)");
+                //exit(1);
+            //}
+
+            disable_wp_on_pages((uint64_t)page_begin, 1);
         }
 #ifdef DEBUG
         else {
@@ -328,7 +338,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         wake.len = page_size; 
 
         if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-            perror("ioctl(UFFDIO_WAKE)");
+            perror("ERROR: ioctl(UFFDIO_WAKE)");
             exit(1);
         }
         return;
@@ -337,15 +347,16 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     //
     // Page not in memory, read it in and (potentially) evict someone
     //
-//-----------------------for multi-file support--------------------
+    //
+    //-----------------------for multi-file support--------------------
     int file_id=0;
     off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
-        //find the file id and offset number
+    //find the file id and offset number
     file_id=offset/bk_files[0].data_size;
     offset%=bk_files[0].data_size;
 
     if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
-        perror("pread failed");
+        perror("ERROR: pread failed");
         exit(1);
     }
 
@@ -366,7 +377,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
 
         copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
         if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-            perror("ioctl(UFFDIO_COPY nowake)");
+            perror("ERROR: ioctl(UFFDIO_COPY nowake)");
             exit(1);
         }
 
@@ -386,7 +397,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         wake.len = page_size;
 
         if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-            perror("ioctl(UFFDIO_WAKE)");
+            perror("ERROR: ioctl(UFFDIO_WAKE)");
             exit(1);
         }
     }
@@ -395,7 +406,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
 
         copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
         if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-            perror("ioctl(UFFDIO_COPY nowake)");
+            perror("ERROR: ioctl(UFFDIO_COPY nowake)");
             exit(1);
         }
 
@@ -410,6 +421,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         //
         if (memcmp(tmppagebuf, page_begin, page_size)) {
             pages_in_memory[next_page_alloc_index].mark_page_dirty();
+            disable_wp_on_pages((uint64_t)page_begin, 1);
             umapdbg("PF(READ) %p changed after UFFDIO_COPY\n", page_begin);
         }
 
@@ -418,7 +430,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         wake.len = page_size;
 
         if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-            perror("ioctl(UFFDIO_WAKE)");
+            perror("ERROR: ioctl(UFFDIO_WAKE)");
             exit(1);
         }
     }
@@ -443,7 +455,7 @@ void _umap::evict_page(umap_page& pb)
         umapdbg("EVICT(DIRTY)  @(%p)=%lu\n", page, *page);
 
         if (pwrite(backingfile_fd, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)segment_address)) == -1) {
-            perror("pwrite failed");
+            perror("ERROR: pwrite failed");
             assert(0);
         }
     }
@@ -454,7 +466,7 @@ void _umap::evict_page(umap_page& pb)
 #endif // DEBUG
 
     if (madvise((void*)page, page_size, MADV_DONTNEED) == -1) {
-        perror("madvise");
+        perror("ERROR: madvise");
         assert(0);
     } 
 
@@ -478,7 +490,7 @@ void _umap::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
     umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
 
     if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
-        perror("ioctl(UFFDIO_WRITEPROTECT Enable)");
+        perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");
         exit(1);
     }
 }
@@ -496,7 +508,7 @@ void _umap::disable_wp_on_pages(uint64_t start, int64_t num_pages)
     umapdbg("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
 
     if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
-        perror("ioctl(UFFDIO_WRITEPROTECT Disable)");
+        perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Disable)");
         exit(1);
     }
 }
@@ -517,7 +529,7 @@ void _umap::uffd_finalize()
     uffdio_register.range.len = segment_length;
 
     if (ioctl(userfault_fd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
-        perror("UFFDIO_UNREGISTER");
+        perror("ERROR: UFFDIO_UNREGISTER");
         exit(1);
     }
 }
@@ -556,21 +568,21 @@ void __attribute ((constructor)) init_umap_lib( void )
     umaplog_init();
 
     if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
-        perror("sysconf(_SC_PAGESIZE)");
+        perror("ERROR: sysconf(_SC_PAGESIZE)");
         throw -1;
     }
 
     act.sa_handler = NULL;
     act.sa_sigaction = sighandler;
     if (sigemptyset(&act.sa_mask) == -1) {
-        perror("sigemptyset: ");
+        perror("ERROR: sigemptyset: ");
         exit(1);
     }
 
     act.sa_flags = SA_NODEFER | SA_SIGINFO;
 
     if (sigaction(SIGBUS, &act, &saved_sa) == -1) {
-        perror("sigaction: ");
+        perror("ERROR: sigaction: ");
         exit(1);
     }
 }
@@ -578,7 +590,7 @@ void __attribute ((constructor)) init_umap_lib( void )
 void __attribute ((destructor)) fine_umap_lib( void )
 {
     if (sigaction(SIGBUS, &saved_sa, NULL) == -1) {
-        perror("sigaction restore: ");
+        perror("ERROR: sigaction restore: ");
         exit(1);
     }
 
