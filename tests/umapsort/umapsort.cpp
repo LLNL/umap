@@ -43,7 +43,7 @@ void initdata(uint64_t *region, int64_t rlen) {
   std::mt19937 gen(rd());
   std::uniform_int_distribution<uint64_t> rnd_int;
 #pragma omp parallel for
-  for(int i=0; i< rlen; ++i) {
+  for(int64_t i=0; i< rlen; ++i) {
     region[i] = (uint64_t) (rlen - i);// rnd_int(gen);
     //region[i] = rnd_int(gen);
   }
@@ -109,7 +109,8 @@ int main(int argc, char **argv)
     fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
   }
 
-  if ( !options.initonly ) {
+  if ( !options.initonly ) 
+  {
     start = getns();
     __gnu_parallel::sort(arr, &arr[arraysize],__gnu_parallel::quicksort_tag());
     fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);

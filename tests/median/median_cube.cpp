@@ -169,7 +169,6 @@ int main(int argc, char **argv)
   start = getns();
   getall_median();
   //median=torben(arr,arraysize);
-  //fprintf(stdout, "Median is %lu, Find median took %f us\n",median,(double)(getns() - start)/1000000.0);
   fprintf(stdout, "Find median took %f us\n",(double)(getns() - start)/1000000.0);
   int i,j;
   for (i=0;i<size_a;i++)

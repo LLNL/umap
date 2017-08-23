@@ -57,7 +57,7 @@ void initdata(uint64_t *region, int64_t rlen) {
   std::mt19937 gen(rd());
   std::uniform_int_distribution<uint64_t> rnd_int;
 #pragma omp parallel for
-  for(int i=0; i< rlen; ++i) {
+  for(int64_t i=0; i< rlen; ++i) {
     region[i] = (uint64_t) (rlen - i);// rnd_int(gen);
     //region[i] = rnd_int(gen)>>1;//divide all values by 2 because of overflow in torben
     //printf("%llu\n", (long long)region[i]);

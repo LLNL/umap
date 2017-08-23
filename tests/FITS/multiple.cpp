@@ -120,20 +120,16 @@ double torben(float *m, int n,uint64_t step)
 	float m_swaped;
 	//fprintf(stdout,"j:%d\n",j);
 	swapbyte(m+j,&m_swaped);
-	if (fequal((double)m_swaped,guess)) 
-	{  
-	    equal++;
-	    //printf("%6.5lf, %6.5lf\n",m_swaped,guess);
-        }
-	else if (m_swaped<guess)
+	if (m_swaped<guess)
 	{
 	  less++;
 	  if (m_swaped>maxltguess) maxltguess = m_swaped;
-	} else {
+	} else if (m_swaped>guess)
+	{
 	  greater++;
 	  //printf("%6.5lf, %6.5lf\n",m_swaped,mingtguess);
 	  if (m_swaped<mingtguess) mingtguess = m_swaped;
-	}
+	} else equal++;
       }
     if (less <= (n+1)/2 && greater <= (n+1)/2) break ;
     else if (less>greater) max = maxltguess ;
@@ -147,22 +143,24 @@ double torben(float *m, int n,uint64_t step)
   if (greater >= half) max = mingtguess;
   else if (greater+equal >= half) max = guess;
   else max = maxltguess;
-  return (min+max)/2;
+  return (min+max)/(double)2;
 }
-void displaycube(double *cube,int a,int b,int c)
+void displaycube(double *cube,struct patch *list,int n)
 {
-  int i,j,k;
-  for (k=0;k<c;k++)
-    {
-      for (i=0;i<a;i++)
-        {
-	  for (j=0;j<b;j++)
-	    if (!fequal(cube[k*a*b+i*b+j],0))
-	    printf("%6.5lf ",cube[k*a*b+i*b+j]);
-	  //printf("\n");
-        }
-        printf("**************\n");
-    }
+     int i,j,k;
+     uint64_t lx=list[0].ex;
+     uint64_t ly=list[0].ey;
+     for (k=1;k<=n;k++)
+     {
+	 for (i=list[k].sy; i<list[k].ey; i++) // bounding box
+	 {
+	     for (j=list[k].sx; j<list[k].ex; j++)
+	     {
+		 printf("%6.5lf\n",cube[i*lx+j]);		 
+		 //printf("\n");
+	     }
+	 }
+     }
 }
  void median_calc(int n,struct patch *list,double *cube_median,float *cube)
 {
@@ -172,13 +170,23 @@ void displaycube(double *cube,int a,int b,int c)
     uint64_t ly=list[0].ey;
     for (k=1;k<=n;k++)
     {
-        #pragma omp parallel for
         for (i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
+            #pragma omp parallel for
             for (j=list[k].sx; j<list[k].ex; j++)
 	    {
 	        cube_median[i*lx+j]=torben(cube+i*lx+j,options.fnum,lx*ly);
-	        //printf("i,j:%d %d\n",i,j);
+	        //printf("i,j:%d %d %6.5lf\n",i,j,cube_median[i*lx+j]);
+		// if (fequal(cube_median[i*lx+j],0))
+		// {
+		//     for (int g=0;g<options.fnum;g++)
+		//     {
+		// 	float num;
+		// 	swapbyte(cube+i*lx+j+g*lx*ly,&num);
+		// 	printf("%6.5lf ",num);
+		//     }
+		//     printf("^^^^^^^^^^^^^^^^\n");
+		// }
 	     }
         }
    }
@@ -190,14 +198,13 @@ static int test_openfiles(const char *fn)
     void *base_addr;
     off_t frame;
     char filename[100];
-    int *fd_list;
+    void *bk_list;
 
     pagesize = umt_getpagesize();
     strcpy(filename,fn);
     strcat(filename,"1");
     strcat(filename,".fits");
 
-    puts(filename);
     char        *    sval ;
     int                dstart;
     int                lx, ly ;
@@ -243,9 +250,9 @@ static int test_openfiles(const char *fn)
     //printf("psize:%d\n",psize);
     //printf("dstart:%d\n",dstart);
     frame=(off_t)lx*ly*psize;
-    printf("psize:%d lx:%d ly:%d\n",frame,lx,ly);
+    //printf("psize:%d lx:%d ly:%d\n",frame,lx,ly);
     totalbytes=options.numpages*pagesize;
-    fd_list = umt_openandmap_fits(&options,totalbytes,&base_addr,(off_t)dstart,frame);
+    bk_list = umt_openandmap_fits(&options,totalbytes,&base_addr,(off_t)dstart,frame);
 
     //printf("thread num:%d\n",options.numthreads);
     omp_set_num_threads(options.numthreads);
@@ -281,10 +288,10 @@ static int test_openfiles(const char *fn)
     double start = gets();
     median_calc(nlist,list,cube_median,cube);
     fprintf(stdout, "Median Calculation %f s\n", (double)(gets() - start));
-    //displaycube(cube_median,ly,lx,1);
+    //displaycube(cube_median,list,nlist);
     free(cube_median);
     free(list);
-    umt_closeandunmap_fits(&options, totalbytes, base_addr, fd_list);
+    umt_closeandunmap_fits(&options, totalbytes, base_addr, bk_list);
     return 0 ;
 }
 
