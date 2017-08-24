@@ -97,7 +97,6 @@ double torben(float *m, int n,uint64_t step)
   swapbyte(m,&num);
   min = max = num;
   j=(uint64_t)step;
-  //fprintf(stdout,"m:%6.5lf\n",num);
 
   for (i=1 ; i<n ; i++) 
   {
@@ -105,10 +104,7 @@ double torben(float *m, int n,uint64_t step)
       if (num<min) min=num;
       if (num>max) max=num;
       j+=step;
-      //printf("j:%llu\n",j);
-      //fprintf(stdout,"m:%6.5lf\n",num);
   }
-  //fprintf(stdout,"Max:%6.5lf\nMin:%6.5lf\n",max,min);
 
   while (1) {
     guess = (min+max)/2;
@@ -118,7 +114,6 @@ double torben(float *m, int n,uint64_t step)
     for (j=0; j<maxj;j+=step)
       {
 	float m_swaped;
-	//fprintf(stdout,"j:%d\n",j);
 	swapbyte(m+j,&m_swaped);
 	if (m_swaped<guess)
 	{
@@ -127,7 +122,6 @@ double torben(float *m, int n,uint64_t step)
 	} else if (m_swaped>guess)
 	{
 	  greater++;
-	  //printf("%6.5lf, %6.5lf\n",m_swaped,mingtguess);
 	  if (m_swaped<mingtguess) mingtguess = m_swaped;
 	} else equal++;
       }
@@ -135,7 +129,6 @@ double torben(float *m, int n,uint64_t step)
     else if (less>greater) max = maxltguess ;
     else min = mingtguess;
   }
-  //fprintf(stdout,"guess: %6.5lf less:%d greater:%d equal:%d all:%d\n",guess,less,greater,equal,(n+1)/2);
   int half=(n+1)/2;
   if (less>=half) min=maxltguess;
   else min=mingtguess;
@@ -164,30 +157,15 @@ void displaycube(double *cube,struct patch *list,int n)
 }
  void median_calc(int n,struct patch *list,double *cube_median,float *cube)
 {
-    uint64_t i,j;
-    int k;
     uint64_t lx=list[0].ex;
     uint64_t ly=list[0].ey;
-    for (k=1;k<=n;k++)
+    for (uint64_t k=1;k<=n;k++)
     {
-        for (i=list[k].sy; i<list[k].ey; i++) // bounding box
+	#pragma omp parallel for
+        for (uint64_t i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
-            #pragma omp parallel for
-            for (j=list[k].sx; j<list[k].ex; j++)
-	    {
+            for (uint64_t j=list[k].sx; j<list[k].ex; j++)
 	        cube_median[i*lx+j]=torben(cube+i*lx+j,options.fnum,lx*ly);
-	        //printf("i,j:%d %d %6.5lf\n",i,j,cube_median[i*lx+j]);
-		// if (fequal(cube_median[i*lx+j],0))
-		// {
-		//     for (int g=0;g<options.fnum;g++)
-		//     {
-		// 	float num;
-		// 	swapbyte(cube+i*lx+j+g*lx*ly,&num);
-		// 	printf("%6.5lf ",num);
-		//     }
-		//     printf("^^^^^^^^^^^^^^^^\n");
-		// }
-	     }
         }
    }
 }  
