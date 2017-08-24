@@ -4,35 +4,42 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
-
-#ifdef DEBUG
+//
 // Usage: This logging facility is available in Debug builds of the library. It is enabled by setting the UMAP_LOGGING to a value (if unset, it will be disabled.
 #include <stdio.h>
+#include <time.h>
 
 extern void __umaplog_init(void);
 extern void umaplog_lock(void);
 extern void umaplog_unlock(void);
 extern bool umap_logging;
 
-#define umapdbg(format, ...)\
-    do {\
-        if (umap_logging) {\
-            umaplog_lock();\
-            fprintf(stdout, format, ## __VA_ARGS__);\
-            umaplog_unlock();\
-        }\
-    } while (0)
-
 #define umaperr(format, ...)\
     do {\
+        struct timespec t;\
+        char _s[120];\
+        (void)clock_gettime(CLOCK_MONOTONIC_RAW, &t);\
         umaplog_lock();\
-        fprintf(stderr, format, ## __VA_ARGS__);\
+        sprintf(_s, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
+        fprintf(stderr, "%s", _s);\
         umaplog_unlock();\
     } while (0)
 #define umaplog_init __umaplog_init
+
+#ifdef DEBUG
+#define umapdbg(format, ...)\
+    do {\
+        if (umap_logging) {\
+            struct timespec t;\
+            char _s[120];\
+            (void)clock_gettime(CLOCK_MONOTONIC_RAW, &t);\
+            umaplog_lock();\
+            sprintf(_s, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
+            fprintf(stdout, "%s", _s);\
+            umaplog_unlock();\
+        }\
+    } while (0)
 #else
-#define umaperr(format, ...)
 #define umapdbg(format, ...)
-#define umaplog_init()
 #endif
 #endif
