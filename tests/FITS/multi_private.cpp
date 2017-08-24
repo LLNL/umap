@@ -163,15 +163,14 @@ void displaycube(double *cube,struct patch *list,int n)
 }
 void median_calc(int n,struct patch *list,double *cube_median,float **d)
 {
-    int i,j,k;
     int lx=list[0].ex;
     int ly=list[0].ey;
-    for (k=1;k<=n;k++)
+    for (uint64_t k=1;k<=n;k++)
     {
-        for (i=list[k].sy; i<list[k].ey; i++) // bounding box
+	#pragma omp parallel for
+        for (uint64_t i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
-	    #pragma omp parallel for
-            for (j=list[k].sx; j<list[k].ex; j++)
+            for (uint64_t j=list[k].sx; j<list[k].ex; j++)
 	    {
 	        //printf("i,j:%d %d\n",i,j);
  	        cube_median[i*lx+j]=torben(d,options.fnum,i*lx+j);
