@@ -145,65 +145,6 @@ double torben(float *m, int n,uint64_t step)
   else max = maxltguess;
   return (min+max)/(double)2;
 }
-double torben2(float *m, int n,uint64_t step)
-{
-  int         i, less, greater, equal;
-  double  min, max, guess, maxltguess, mingtguess;
-  float num;
-  uint64_t j,maxj=n*step;
-
-  swapbyte(m,&num);
-  min = max = num;
-  j=(uint64_t)step;
-  //fprintf(stdout,"m:%6.5lf\n",num);
-
-  for (i=1 ; i<n ; i++) 
-  {
-      swapbyte(m+j,&num);
-      if (num<min) min=num;
-      if (num>max) max=num;
-      j+=step;
-      //printf("j:%llu\n",j);
-      //fprintf(stdout,"m:%6.5lf\n",num);
-  }
-  //fprintf(stdout,"Max:%6.5lf\nMin:%6.5lf\n",max,min);
-
-  while (1) {
-    guess = (min+max)/2;
-    less = 0; greater = 0; equal = 0;
-    maxltguess = min ;
-    mingtguess = max ;
-    for (j=0; j<maxj;j+=step)
-      {
-	float m_swaped;
-	//fprintf(stdout,"j:%d\n",j);
-	swapbyte(m+j,&m_swaped);
-	if (m_swaped<guess)
-	{
-	  less++;
-	  if (m_swaped>maxltguess) maxltguess = m_swaped;
-	} else if (m_swaped>guess)
-	{
-	  greater++;
-	  //printf("%6.5lf, %6.5lf\n",m_swaped,mingtguess);
-	  if (m_swaped<mingtguess) mingtguess = m_swaped;
-	} else equal++;
-      }
-    if (less <= (n+1)/2 && greater <= (n+1)/2) break ;
-    else if (less>greater) max = maxltguess ;
-    else min = mingtguess;
-  }
-  //fprintf(stdout,"guess: %6.5lf less:%d greater:%d equal:%d all:%d\n",guess,less,greater,equal,(n+1)/2);
-  //fprintf(stdout,"min: %6.5lf max: %6.5lf mingtguess: %6.5lf maxltguess: %6.5lf\n",min,max,mingtguess,maxltguess);
-  int half=(n+1)/2;
-  if (less>=half) min=maxltguess;
-  else min=mingtguess;
-  if (n&1) return min;
-  if (greater >= half) max = mingtguess;
-  else if (greater+equal >= half) max = guess;
-  else max = maxltguess;
-  return (min+max)/(double)2;
-}
 void displaycube(double *cube,struct patch *list,int n)
 {
      int i,j,k;
@@ -318,7 +259,7 @@ static int test_openfiles(const char *fn)
 
     //printf("thread num:%d\n",options.numthreads);
     omp_set_num_threads(options.numthreads);
-    printf("region start:%p\n",base_addr);
+    //printf("region start:%p\n",base_addr);
 
     //printf("lx ly:%d %d\n",lx,ly);
 
