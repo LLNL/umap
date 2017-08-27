@@ -30,8 +30,8 @@ using namespace std;
 const int UMAP_VERSION_MAJOR = 0;
 const int UMAP_VERSION_MINOR = 0;
 const int UMAP_VERSION_PATCH = 1;
-const int UMAP_DEFAULT_PBSIZE = 16;
-static int umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
+const unsigned long UMAP_DEFAULT_PBSIZE = 16;
+static unsigned long umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
 static long page_size;
 static uint64_t cnt_evict_dirty = 0;
 static uint64_t cnt_evict_clean = 0;
@@ -63,7 +63,7 @@ class _umap {
         size_t segment_length;
         int backingfile_fd;
         vector<umap_backing_file> bk_files;
-        int page_buffer_size;
+        unsigned long page_buffer_size;
         bool time_to_stop;
         uint64_t fault_count;
         int userfault_fd;
@@ -175,12 +175,12 @@ int uunmap(void*  addr, size_t length)
     return 0;
 }
 
-int umap_cfg_get_bufsize( void )
+unsigned long umap_cfg_get_bufsize( void )
 {
     return umap_page_bufsize;
 }
 
-void umap_cfg_set_bufsize( int page_bufsize )
+void umap_cfg_set_bufsize( unsigned long page_bufsize )
 {
     umap_page_bufsize = page_bufsize;
 }
@@ -239,6 +239,7 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
         throw -1;
     }
 
+    umapdbg("umap: Setting up listener for %lu page buffer\n", page_buffer_size);
     umap_page ump;
     pages_in_memory.resize(page_buffer_size, ump);
 
@@ -315,7 +316,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     if (bufidx >= 0) {
         if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
             if ((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-                fprintf(stderr, "PF(0x%llx WP+WRITE) (In Memory Already) @(%p)=%lu %s ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+                umapdbg("PF(0x%llx WP+WRITE) (In Memory Already) @(%p)=%lu %s ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                         msg.arg.pagefault.flags, 
                         page_begin, 
                         *(uint64_t*)page_begin, 
@@ -328,7 +329,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
                 cnt_pf_wp++;
             }
             else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
-                fprintf(stderr, "PF(0x%llx WP)       (In Memory Already) @(%p)=%lu %s ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+                umapdbg("PF(0x%llx WP)       (In Memory Already) @(%p)=%lu %s ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                         msg.arg.pagefault.flags, 
                         page_begin, 
                         *(uint64_t*)page_begin, 
@@ -341,7 +342,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
                 assert(0);
             }
             else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
-                fprintf(stderr, "PF(0x%llx WRITE)    (In Memory Already) @(%p)=%lu %s ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+                umapdbg("PF(0x%llx WRITE)    (In Memory Already) @(%p)=%lu %s ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                         msg.arg.pagefault.flags, 
                         page_begin, 
                         *(uint64_t*)page_begin, 
@@ -360,7 +361,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             }
         }
         else {
-            fprintf(stderr, "PF(READ)     (In Memory Already) @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+            umapdbg("PF(READ)     (In Memory Already) @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                     page_begin, 
                     *(uint64_t*)page_begin, 
                     (cnt_evict_dirty - pages_in_memory[bufidx].c_evict_dirty), 
@@ -393,6 +394,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     file_id=offset/bk_files[0].data_size;
     offset%=bk_files[0].data_size;
 
+    assert(file_id == 0);
     if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
         perror("ERROR: pread failed");
         exit(1);
@@ -426,7 +428,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         }
 
         if ((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-            fprintf(stderr, "PF(0x%llx WP+WRITE) (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+            umapdbg("PF(0x%llx WP+WRITE) (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                     msg.arg.pagefault.flags, 
                     page_begin, 
                     *(uint64_t*)page_begin, 
@@ -438,7 +440,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             assert(0);
         }
         else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
-            fprintf(stderr, "PF(0x%llx WP)       (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+            umapdbg("PF(0x%llx WP)       (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                     msg.arg.pagefault.flags, 
                     page_begin, 
                     *(uint64_t*)page_begin, 
@@ -450,7 +452,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             assert(0);
         }
         else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
-            fprintf(stderr, "PF(0x%llx WRITE)    (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+            umapdbg("PF(0x%llx WRITE)    (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                     msg.arg.pagefault.flags, 
                     page_begin, 
                     *(uint64_t*)page_begin, 
@@ -471,7 +473,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             exit(1);
         }
 
-        fprintf(stderr, "PF(0x%llx READ)     (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+        umapdbg("PF(0x%llx READ)     (UFFDIO_COPY)       @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                 msg.arg.pagefault.flags, 
                 page_begin, 
                 *(uint64_t*)page_begin, 
@@ -489,7 +491,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         // set WP settings).
         //
         if (memcmp(tmppagebuf, page_begin, page_size)) {
-            fprintf(stderr, "PF(0x%llx READ)     (EARLY_WRITE!)      @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+            umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                     msg.arg.pagefault.flags, 
                     page_begin, 
                     *(uint64_t*)page_begin,
@@ -526,7 +528,7 @@ void _umap::evict_page(umap_page& pb)
         // Preventing further writes is problematic because the kernel module will wake up any threads that might be waiting for a fault
         // to be handled in this page.
         //
-        fprintf(stderr, "EVICT(DIRTY)  @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+        umapdbg("EVICT(DIRTY)  @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                 page, 
                 *page,
                 (cnt_evict_dirty - pb.c_evict_dirty), 
@@ -543,7 +545,7 @@ void _umap::evict_page(umap_page& pb)
         }
     }
     else {
-        fprintf(stderr, "EVICT(CLEAN)  @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+        umapdbg("EVICT(CLEAN)  @(%p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
                 page, 
                 *page,
                 (cnt_evict_dirty - pb.c_evict_dirty), 
@@ -577,7 +579,7 @@ void _umap::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
     wp.range.len = num_pages * page_size;
     wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-    fprintf(stderr, "+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
+    umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
 
     if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");
@@ -595,7 +597,7 @@ void _umap::disable_wp_on_pages(uint64_t start, int64_t num_pages)
     wp.range.len = page_size * num_pages;
     wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
 
-    fprintf(stderr, "-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
+    umapdbg("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+(num_pages*page_size))); 
 
     if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
         perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Disable)");
@@ -641,14 +643,14 @@ void sighandler(int signum, siginfo_t *info, void* buf)
             num_bus_errs++;
 
             if (it.second->get_page_index(page_begin) >= 0)
-                fprintf(stderr, "SIGBUS %p (page=%p) ALREADY IN UMAP PAGE BUFFER!\n", info->si_addr, page_begin); 
+                umapdbg("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE BUFFER!\n", info->si_addr, page_begin); 
             else
-                fprintf(stderr, "SIGBUS %p (page=%p) Not currently in umap page buffer\n", info->si_addr, page_begin); 
+                umapdbg("SIGBUS %p (page=%p) Not currently in umap page buffer\n", info->si_addr, page_begin); 
             assert(0);
             return;
         }
     }
-    fprintf(stderr, "SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin); 
+    umapdbg("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin); 
     assert(0);
 }
 

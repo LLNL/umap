@@ -44,8 +44,8 @@ void* umap_mf(void*              addr,
 	      int                num_backing_file,
 	      umap_backing_file* backing_files
         );
-int umap_cfg_get_bufsize( void );
-void umap_cfg_set_bufsize( int page_bufsize );
+unsigned long umap_cfg_get_bufsize( void );
+void umap_cfg_set_bufsize( unsigned long page_bufsize );
 #ifdef __cplusplus
 }
 #endif

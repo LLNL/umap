@@ -31,11 +31,11 @@ extern bool umap_logging;
     do {\
         if (umap_logging) {\
             struct timespec t;\
-            char _s[120];\
+            char _s[256];\
             (void)clock_gettime(CLOCK_MONOTONIC_RAW, &t);\
             umaplog_lock();\
             sprintf(_s, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
-            fprintf(stdout, "%s", _s);\
+            fprintf(stdout, "(%lu) %s", strlen(_s), _s);\
             umaplog_unlock();\
         }\
     } while (0)
