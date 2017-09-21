@@ -40,12 +40,23 @@ const unsigned long UMAP_DEFAULT_PBSIZE = 16;
 static unsigned long umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
 static long page_size;
 
-class umap_stats;
 class umap_page;
+class umap_umap;
+
+class umap_stats {
+    public:
+        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_faults{0}, write_faults{0}, read_faults{0} {};
+
+        uint64_t stat_faults;
+        uint64_t dirty_evicts;
+        uint64_t clean_evicts;
+        uint64_t wp_faults;
+        uint64_t write_faults;
+        uint64_t read_faults;
+};
 
 class _umap {
-    friend umap_page;
-
+    friend class umap_page;
     public:
         _umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file, umap_backing_file* backing_files);
         void uffd_finalize(void);
@@ -104,32 +115,35 @@ class _umap {
 
 class umap_page {
     public:
-        umap_page(umap_stats& s): page{nullptr}, dirty{false}, stats_snapshot{s} {};
+        umap_page(_umap* _u): u{_u}, page{nullptr}, dirty{false} {};
         bool page_is_dirty() { return dirty; }
         void mark_page_dirty() { dirty = true; }
         void mark_page_clean() { dirty = false; }
         void* get_page(void) { return page; }
+
         void set_page(void* _p) { 
             page = _p;
-            stats_snapshot = stat;
+            snapshot = u->stat;
+        }
+
+        string statstring() {
+          stringstream ss;
+
+          ss <<  "ED(" << (u->stat.dirty_evicts - snapshot.dirty_evicts)
+            << ") EC(" << (u->stat.clean_evicts - snapshot.clean_evicts)
+            << ") WP(" << (u->stat.wp_faults - snapshot.wp_faults)
+            << ") WR(" << (u->stat.write_faults - snapshot.write_faults)
+            << ") RD(" << (u->stat.read_faults - snapshot.read_faults)
+            << ")";
+
+            return ss.str();
         }
 
     private:
+        _umap* u;
         void* page;
         bool dirty;
-        umap_stats stats_snapshot;
-};
-
-class umap_stats {
-    public:
-        umap_stats(): cnt_evict_dirty{0}, cnt_evict_clean{0}, cnt_pf_wp{0}, cnt_pf_write{0}, cnt_pf_read{0} {};
-    private:
-        uint64_t fault_count;
-        uint64_t cnt_evict_dirty;
-        uint64_t cnt_evict_clean;
-        uint64_t cnt_pf_wp;
-        uint64_t cnt_pf_write;
-        uint64_t cnt_pf_read = 0;
+        umap_stats snapshot;
 };
 
 static map<void*, _umap*> active_umaps;
@@ -251,7 +265,7 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
     }
 
     umapdbg("umap: Setting up listener for %lu page buffer\n", page_buffer_size);
-    umap_page ump{stat};
+    umap_page ump{this};
     pages_in_memory.resize(page_buffer_size, ump);
 
     backingfile_fd=bk_files[0].fd;
@@ -260,31 +274,6 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
 
 void _umap::uffd_handler(void)
 {
-#ifdef taken_out
-    int s;
-    cpu_set_t cpuset;
-    pthread_t thread;
-
-    thread = pthread_self();
-
-    CPU_ZERO(&cpuset);
-    CPU_SET(0, &cpuset);
-
-    s = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-    if (s != 0) {
-      perror("ERROR: pthread_setaffinity_np");
-      return;
-    }
-    s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-    if (s != 0) {
-      perror("ERROR: pthread_getaffinity_np");
-      return;
-    }
-    for (int j = 0; j < CPU_SETSIZE; j++)
-      if (CPU_ISSET(j, &cpuset)) 
-        cerr << __FUNCTION__ << " affinity constrained to CPU " << j << std::endl;
-#endif // taken_out
-
     for (;;) {
         struct uffd_msg msg;
 
@@ -414,12 +403,6 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     pages_in_memory[next_page_alloc_index].set_page(page_begin);
     add_page_index(next_page_alloc_index, page_begin);
 
-    pages_in_memory[next_page_alloc_index].c_evict_dirty = cnt_evict_dirty;
-    pages_in_memory[next_page_alloc_index].c_evict_clean = cnt_evict_clean;
-    pages_in_memory[next_page_alloc_index].c_pf_wp = cnt_pf_wp;
-    pages_in_memory[next_page_alloc_index].c_pf_write = cnt_pf_write;
-    pages_in_memory[next_page_alloc_index].c_pf_read = cnt_pf_read;
-
     struct uffdio_copy copy;
     copy.src = (uint64_t)tmppagebuf;
     copy.dst = (uint64_t)page_begin;
@@ -451,16 +434,12 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         // set WP settings).
         //
         if (memcmp(tmppagebuf, page_begin, page_size)) {
-            umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p, %p)=%lu ED(%lu) EC(%lu) WP(%lu) WR(%lu) RD(%lu)\n", 
+            umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p, %p)=%lu %s\n", 
                     msg.arg.pagefault.flags, 
                     page_begin, 
                     fault_addr, 
                     *(uint64_t*)fault_addr, 
-                    (cnt_evict_dirty - pages_in_memory[next_page_alloc_index].c_evict_dirty), 
-                    (cnt_evict_clean - pages_in_memory[next_page_alloc_index].c_evict_clean), 
-                    (cnt_pf_wp - pages_in_memory[next_page_alloc_index].c_pf_wp),
-                    (cnt_pf_write - pages_in_memory[next_page_alloc_index].c_pf_write), 
-                    (cnt_pf_read - pages_in_memory[next_page_alloc_index].c_pf_read));
+                    pages_in_memory[next_page_alloc_index].statstring().c_str());
 
             pages_in_memory[next_page_alloc_index].mark_page_dirty();
             disable_wp_on_pages((uint64_t)page_begin, 1);
@@ -481,12 +460,11 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
 
 void _umap::logpagefault_event(const struct uffd_msg& msg)
 {
-  bool leave_now = false;
   stringstream ss;
   void* fault_addr = (void*)msg.arg.pagefault.address;
   void* page_begin = UMAP_PAGE_BEGIN(fault_addr);
   int bufidx = get_page_index(page_begin);
-  stat.fault_count++;
+  stat.stat_faults++;
 
   if (bufidx >= 0) {
     assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE));
@@ -495,28 +473,20 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
       << ", " 
       << fault_addr 
       << ") " 
-      << (pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty" : "Clean")
-      << " ED(" << (cnt_evict_dirty - pages_in_memory[bufidx].c_evict_dirty)
-      << ") EC(" << (cnt_evict_clean - pages_in_memory[bufidx].c_evict_clean)
-      << ") WP(" << (cnt_pf_wp - pages_in_memory[bufidx].c_pf_wp)
-      << ") WR(" << (cnt_pf_write - pages_in_memory[bufidx].c_pf_write)
-      << ") RD(" << (cnt_pf_read - pages_in_memory[bufidx].c_pf_read)
-      << ")";
-    if (pages_in_memory[bufidx].page_is_dirty()) {
-      ss << " Going to exit, indexes are: " << bufidx << ", " << next_page_alloc_index;
-      leave_now = true;
-    }
-    cnt_pf_wp++;
+      << (pages_in_memory[bufidx].page_is_dirty() ? "Already Dirty " : "Clean ");
+    stat.wp_faults++;
   }
   else {
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == UFFD_PAGEFAULT_FLAG_WRITE);
-      ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ", " << fault_addr << ") ED(0) WP(0) WR(0) RD(0)";
+      ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ", " << fault_addr << ")";
     }
     else {
-      ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ", " << fault_addr << ") ED(0) WP(0) WR(0) RD(0)";
-      cnt_pf_read++;
+      ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ", " << fault_addr << ")";
+      stat.read_faults++;
     }
+
+    ss << pages_in_memory[bufidx].statstring();
 
     if (pages_in_memory[next_page_alloc_index].get_page())
       ss << " Evicting " 
@@ -525,22 +495,6 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
   }
 
   umapdbg("%s\n", ss.str().c_str());
-
-  if (leave_now) {
-      /*
-       * This will trigger a printk in the kernel (look at dmesg for more info)
-       */
-      struct uffdio_writeprotect wp;
-      wp.range.start = 0;
-      wp.range.len = 0;
-      wp.mode = (UFFDIO_WRITEPROTECT_MODE_WP | ((uint64_t)1<<3));
-
-      if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
-          perror("ERROR6: ioctl(UFFDIO_WRITEPROTECT Enable)");
-          exit(1);
-      }
-      //exit(100);
-  }
 }
 
 void _umap::evict_page(umap_page& pb)
@@ -548,12 +502,9 @@ void _umap::evict_page(umap_page& pb)
     uint64_t* page = (uint64_t*)pb.get_page();
 
     if (pb.page_is_dirty()) {
+        stat.dirty_evicts++;
+
         // Prevent further writes.  No need to do this if not dirty because WP is already on.
-        //
-        // Preventing further writes is problematic because the kernel module will wake up any threads that might be waiting for a fault
-        // to be handled in this page.
-        //
-        cnt_evict_dirty++;
 
         enable_wp_on_pages_and_wake((uint64_t)page, 1);
         if (pwrite(backingfile_fd, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)segment_address)) == -1) {
@@ -562,7 +513,7 @@ void _umap::evict_page(umap_page& pb)
         }
     }
     else {
-        cnt_evict_clean++;
+        stat.clean_evicts++;
     }
 
     if (madvise((void*)page, page_size, MADV_DONTNEED) == -1) {
