@@ -335,165 +335,165 @@ void _umap::uffd_handler(void)
 
 void _umap::pagefault_event(const struct uffd_msg& msg)
 {
-    void* fault_addr = (void*)msg.arg.pagefault.address;
-    void* page_begin = UMAP_PAGE_BEGIN(fault_addr);
-    int bufidx = get_page_index(page_begin);
+  void* page_begin = (void*)msg.arg.pagefault.address;
+  int bufidx = get_page_index(page_begin);
+  umap_page* pm;
 
-    assert(fault_addr == UMAP_PAGE_BEGIN(fault_addr));
-    if (bufidx >= 0) {
-        if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-            if (!pages_in_memory[bufidx]->page_is_dirty()) {
-                pages_in_memory[bufidx]->mark_page_dirty();
-                disable_wp_on_pages((uint64_t)page_begin, 1);
-            }
-            else {
-                struct uffdio_copy copy;
-                copy.src = (uint64_t)tmppagebuf;
-                copy.dst = (uint64_t)page_begin;
-                copy.len = page_size;
-                copy.mode = 0;
-
-                pages_in_memory[bufidx]->mark_page_clean();
-
-                // Save our data
-                memcpy(tmppagebuf, page_begin, page_size);
-
-                // Evict ourselves
-                evict_page(pages_in_memory[bufidx]);
-
-                // Bring ourselves back in
-                pages_in_memory[bufidx]->set_page(page_begin);
-
-                umapdbg("EVICT WORKAROUND FOR %p\n", page_begin);
-
-                if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-                    perror("ERROR12: ioctl(UFFDIO_COPY nowake)");
-                    exit(1);
-                }
-            }
-        }
-
-        struct uffdio_range wake;
-        wake.start = (uint64_t)page_begin;
-        wake.len = page_size; 
-
-        if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-            perror("ERROR: ioctl(UFFDIO_WAKE)");
-            exit(1);
-        }
-        return;
-    }
-
-    //
-    // Page not in memory, read it in and (potentially) evict someone
-    //
-    int file_id=0;
-    off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
-    //find the file id and offset number
-    file_id=offset/bk_files[0].data_size;
-    offset%=bk_files[0].data_size;
-
-    assert(file_id == 0);
-    if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
-        perror("ERROR: pread failed");
-        exit(1);
-    }
-
-    if (pages_in_memory[next_page_alloc_index]->get_page()) {
-        delete_page_index(pages_in_memory[next_page_alloc_index]->get_page());
-        evict_page(pages_in_memory[next_page_alloc_index]);
-    }
-    pages_in_memory[next_page_alloc_index]->set_page(page_begin);
-    add_page_index(next_page_alloc_index, page_begin);
-
-    struct uffdio_copy copy;
-    copy.src = (uint64_t)tmppagebuf;
-    copy.dst = (uint64_t)page_begin;
-    copy.len = page_size;
-    copy.mode = 0;
+  assert(page_begin == UMAP_PAGE_BEGIN(page_begin));
+  if (bufidx >= 0) {
+    pm = pages_in_memory[bufidx];
 
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-        pages_in_memory[next_page_alloc_index]->mark_page_dirty();
+      if (!pm->page_is_dirty()) {
+        pm->mark_page_dirty();
+        disable_wp_on_pages((uint64_t)page_begin, 1);
+      }
+      else {
+        struct uffdio_copy copy;
+        copy.src = (uint64_t)tmppagebuf;
+        copy.dst = (uint64_t)page_begin;
+        copy.len = page_size;
+        copy.mode = 0;
+
+        umapdbg("EVICT WORKAROUND FOR %p\n", page_begin);
+
+        pm->mark_page_clean();
+        memcpy(tmppagebuf, page_begin, page_size);  // Save our data
+        evict_page(pm);                              // Evict ourselves
+        pm->set_page(page_begin);                    // Bring ourselves back in
 
         if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-            perror("ERROR: ioctl(UFFDIO_COPY nowake)");
-            exit(1);
+          perror("ERROR12: ioctl(UFFDIO_COPY nowake)");
+          exit(1);
         }
+      }
     }
-    else {
-        pages_in_memory[next_page_alloc_index]->mark_page_clean();
 
-        copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
-        if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-            perror("ERROR: ioctl(UFFDIO_COPY nowake)");
-            exit(1);
-        }
+    struct uffdio_range wake;
+    wake.start = (uint64_t)page_begin;
+    wake.len = page_size; 
 
-        enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
-
-        //
-        // There is a very small window between UFFDIO_COPY_MODE and enable_wp_on_pages_and_wake where
-        // a write may occur before we re-enable WP (the UFFDIO_COPY appears to clear any previously 
-        // set WP settings).
-        //
-        if (memcmp(tmppagebuf, page_begin, page_size)) {
-            umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p, %p)=%lu %s\n", 
-                    msg.arg.pagefault.flags, 
-                    page_begin, 
-                    fault_addr, 
-                    *(uint64_t*)fault_addr, 
-                    pages_in_memory[next_page_alloc_index]->statstring().c_str());
-
-            pages_in_memory[next_page_alloc_index]->mark_page_dirty();
-            disable_wp_on_pages((uint64_t)page_begin, 1);
-        }
-
-        struct uffdio_range wake;
-        wake.start = (uint64_t)page_begin;
-        wake.len = page_size;
-
-        if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-            perror("ERROR: ioctl(UFFDIO_WAKE)");
-            exit(1);
-        }
-
+    if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
+      perror("ERROR: ioctl(UFFDIO_WAKE)");
+      exit(1);
     }
-    next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
+    return;
+  }
+
+  //
+  // Page not in memory, read it in and (potentially) evict someone
+  //
+  int file_id=0;
+  off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
+
+  file_id = offset/bk_files[0].data_size;   //find the file id and offset number
+  offset %= bk_files[0].data_size;
+
+  assert(file_id == 0);
+  if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
+    perror("ERROR: pread failed");
+    exit(1);
+  }
+
+  pm = pages_in_memory[next_page_alloc_index];
+
+  if (pm->get_page()) {
+    delete_page_index(pm->get_page());
+    evict_page(pm);
+  }
+  pm->set_page(page_begin);
+  add_page_index(next_page_alloc_index, page_begin);
+
+  struct uffdio_copy copy;
+  copy.src = (uint64_t)tmppagebuf;
+  copy.dst = (uint64_t)page_begin;
+  copy.len = page_size;
+  copy.mode = 0;
+
+  if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+    pm->mark_page_dirty();
+
+    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+      perror("ERROR: ioctl(UFFDIO_COPY nowake)");
+      exit(1);
+    }
+  }
+  else {
+    pm->mark_page_clean();
+
+    copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
+    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+      perror("ERROR: ioctl(UFFDIO_COPY nowake)");
+      exit(1);
+    }
+
+    enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
+
+    //
+    // There is a very small window between UFFDIO_COPY_MODE and enable_wp_on_pages_and_wake where
+    // a write may occur before we re-enable WP (the UFFDIO_COPY appears to clear any previously 
+    // set WP settings).
+    //
+    if (memcmp(tmppagebuf, page_begin, page_size)) {
+      umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p)u %s\n", 
+              msg.arg.pagefault.flags, 
+              page_begin, 
+              pm->statstring().c_str());
+
+      pm->mark_page_dirty();
+      disable_wp_on_pages((uint64_t)page_begin, 1);
+    }
+
+    struct uffdio_range wake;
+    wake.start = (uint64_t)page_begin;
+    wake.len = page_size;
+
+    if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
+      perror("ERROR: ioctl(UFFDIO_WAKE)");
+      exit(1);
+    }
+  }
+  next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
 }
 
 void _umap::logpagefault_event(const struct uffd_msg& msg)
 {
   stringstream ss;
-  void* fault_addr = (void*)msg.arg.pagefault.address;
-  void* page_begin = UMAP_PAGE_BEGIN(fault_addr);
+  void* page_begin = (void*)msg.arg.pagefault.address;
+  umap_page* pm;
+
+  assert(page_begin == UMAP_PAGE_BEGIN(page_begin));
+
   int bufidx = get_page_index(page_begin);
   stat.stat_faults++;
 
-  assert(fault_addr == UMAP_PAGE_BEGIN(fault_addr));
   if (bufidx >= 0) {
+    pm = pages_in_memory[bufidx];
+
     assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE));
     ss << "PF(" << msg.arg.pagefault.flags << " WP+WRITE) (In Memory Already) @(" 
-      << page_begin << ", " << fault_addr << ") " 
-      << (pages_in_memory[bufidx]->page_is_dirty() ? "Already Dirty " : "Clean ")
-      << pages_in_memory[bufidx]->statstring();
+      << page_begin << ") " 
+      << (pm->page_is_dirty() ? "Already Dirty " : "Clean ")
+      << pm->statstring();
     stat.wp_faults++;
   }
   else {
+    pm = pages_in_memory[next_page_alloc_index];
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == UFFD_PAGEFAULT_FLAG_WRITE);
-      ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ", " << fault_addr << ")"
+      ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")"
         << "ED(0) EC(0) WP(0) WR(0) RD(0)";
     }
     else {
-      ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ", " << fault_addr << ")"
+      ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")"
         << "ED(0) EC(0) WP(0) WR(0) RD(0)";
       stat.read_faults++;
     }
 
-    if (pages_in_memory[next_page_alloc_index]->get_page()) {
+    if (pm->get_page()) {
       ss << " Evicting " 
-        << (pages_in_memory[next_page_alloc_index]->page_is_dirty() ? "Dirty" : "Clean")
-        << "Page " << pages_in_memory[next_page_alloc_index]->get_page();
+        << (pm->page_is_dirty() ? "Dirty" : "Clean")
+        << "Page " << pm->get_page();
     }
   }
   umapdbg("%s\n", ss.str().c_str());
@@ -539,7 +539,7 @@ void _umap::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
     struct uffdio_writeprotect wp;
     wp.range.start = start;
     wp.range.len = num_pages * page_size;
-    wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
+    wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
     //umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
 
