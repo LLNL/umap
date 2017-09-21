@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <vector>
 #include <thread>
-#include <map>
+#include <unordered_map>
 #include <sstream>
 #include <string>
 #include <sys/types.h>
@@ -44,15 +44,15 @@ class umap_page;
 class umap_umap;
 class umap_stats {
     public:
-        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_faults{0}, write_faults{0}, read_faults{0}, stuck_wp{0}, early_writes{0} {};
+        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_messages{0}, read_faults{0}, write_faults{0}, stuck_wp{0}, early_writes{0} {};
 
         void print_stats(void) {
           cerr << stat_faults << " Faults\n"
+            << read_faults << " READ Faults" << endl
+            << write_faults << " WRITE Faults" << endl
+            << wp_messages << " WP Messages" << endl
             << dirty_evicts << " Dirty Evictions" << endl
             << clean_evicts << " Clean Evictions" << endl
-            << wp_faults << " WP Faults" << endl
-            << write_faults << " WRITE Faults" << endl
-            << read_faults << " READ Faults" << endl
             << stuck_wp << " Stuck WP Workarounds" << endl
             << early_writes << " Early Write Workarounds" << endl;
         }
@@ -60,9 +60,9 @@ class umap_stats {
         uint64_t stat_faults;
         uint64_t dirty_evicts;
         uint64_t clean_evicts;
-        uint64_t wp_faults;
-        uint64_t write_faults;
+        uint64_t wp_messages;
         uint64_t read_faults;
+        uint64_t write_faults;
         uint64_t stuck_wp;
         uint64_t early_writes;
 };
@@ -98,7 +98,7 @@ class _umap {
         thread *listener;
         vector<umap_page*> pages_in_memory;
         char* tmppagebuf;
-        map<void*, int> page_index;
+        unordered_map<void*, int> page_index;
         umap_stats stat;
 
         void evict_page(umap_page* page);
@@ -143,9 +143,9 @@ class umap_page {
 
           ss <<  "ED(" << (u->stat.dirty_evicts - snapshot.dirty_evicts)
             << ") EC(" << (u->stat.clean_evicts - snapshot.clean_evicts)
-            << ") WP(" << (u->stat.wp_faults - snapshot.wp_faults)
-            << ") WR(" << (u->stat.write_faults - snapshot.write_faults)
-            << ") RD(" << (u->stat.read_faults - snapshot.read_faults)
+            << ") WP(" << (u->stat.wp_messages - snapshot.wp_messages)
+            << ") RF(" << (u->stat.read_faults - snapshot.read_faults)
+            << ") WF(" << (u->stat.write_faults - snapshot.write_faults)
             << ")";
           return ss.str();
         }
@@ -157,7 +157,7 @@ class umap_page {
         umap_stats snapshot;
 };
 
-static map<void*, _umap*> active_umaps;
+static unordered_map<void*, _umap*> active_umaps;
 
 void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
@@ -352,7 +352,10 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
   int bufidx = get_page_index(page_begin);
   umap_page* pm;
 
+  stat.stat_faults++;
+
   assert(page_begin == UMAP_PAGE_BEGIN(page_begin));
+
   if (bufidx >= 0) {
     pm = pages_in_memory[bufidx];
 
@@ -360,6 +363,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
       if (!pm->page_is_dirty()) {
         pm->mark_page_dirty();
         disable_wp_on_pages((uint64_t)page_begin, 1);
+        stat.wp_messages++;
       }
       else {
         struct uffdio_copy copy;
@@ -425,6 +429,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
   copy.mode = 0;
 
   if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+    stat.write_faults++;
     pm->mark_page_dirty();
 
     if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
@@ -433,6 +438,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     }
   }
   else {
+    stat.read_faults++;
     pm->mark_page_clean();
 
     copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
@@ -480,7 +486,6 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
   assert(page_begin == UMAP_PAGE_BEGIN(page_begin));
 
   int bufidx = get_page_index(page_begin);
-  stat.stat_faults++;
 
   if (bufidx >= 0) {
     pm = pages_in_memory[bufidx];
@@ -490,19 +495,17 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
       << page_begin << ") " 
       << (pm->page_is_dirty() ? "Already Dirty " : "Clean ")
       << pm->statstring();
-    stat.wp_faults++;
   }
   else {
     pm = pages_in_memory[next_page_alloc_index];
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == UFFD_PAGEFAULT_FLAG_WRITE);
       ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")"
-        << "ED(0) EC(0) WP(0) WR(0) RD(0)";
+        << "ED(0) EC(0) WP(0) RF(0) WF(0)";
     }
     else {
       ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")"
-        << "ED(0) EC(0) WP(0) WR(0) RD(0)";
-      stat.read_faults++;
+        << "ED(0) EC(0) WP(0) RF(0) WF(0)";
     }
 
     if (pm->get_page()) {
@@ -592,7 +595,7 @@ void _umap::uffd_finalize()
         }
     }
 
-    stat.print_stats();
+    //stat.print_stats();
 
     stop_faultlistener();
 
