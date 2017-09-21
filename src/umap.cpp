@@ -39,14 +39,13 @@ const int UMAP_VERSION_PATCH = 1;
 const unsigned long UMAP_DEFAULT_PBSIZE = 16;
 static unsigned long umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
 static long page_size;
-static uint64_t cnt_evict_dirty = 0;
-static uint64_t cnt_evict_clean = 0;
-static uint64_t cnt_pf_wp = 0;
-static uint64_t cnt_pf_write = 0;
-static uint64_t cnt_pf_read = 0;
 
+class umap_stats;
 class umap_page;
+
 class _umap {
+    friend umap_page;
+
     public:
         _umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file, umap_backing_file* backing_files);
         void uffd_finalize(void);
@@ -71,14 +70,13 @@ class _umap {
         vector<umap_backing_file> bk_files;
         unsigned long page_buffer_size;
         bool time_to_stop;
-        uint64_t fault_count;
         int userfault_fd;
         int next_page_alloc_index;
         thread *listener;
         vector<umap_page> pages_in_memory;
         char* tmppagebuf;
-
         map<void*, int> page_index;
+        umap_stats stat;
 
         void evict_page(umap_page& page);
         void remove_page_index(void* _p) { page_index.erase(_p); }
@@ -106,26 +104,32 @@ class _umap {
 
 class umap_page {
     public:
-        umap_page(): page{nullptr}, dirty{false} {
-            c_pf_read = cnt_pf_read;
-            c_pf_write = cnt_pf_write;
-            c_pf_wp = cnt_pf_wp;
-            c_evict_clean = cnt_evict_clean;
-            c_evict_dirty = cnt_evict_dirty;
-        };
+        umap_page(umap_stats& s): page{nullptr}, dirty{false}, stats_snapshot{s} {};
         bool page_is_dirty() { return dirty; }
         void mark_page_dirty() { dirty = true; }
         void mark_page_clean() { dirty = false; }
         void* get_page(void) { return page; }
-        void set_page(void* _p) { page = _p; }
-        uint64_t c_evict_dirty;
-        uint64_t c_evict_clean;
-        uint64_t c_pf_wp;
-        uint64_t c_pf_write;
-        uint64_t c_pf_read;
+        void set_page(void* _p) { 
+            page = _p;
+            stats_snapshot = stat;
+        }
+
     private:
         void* page;
         bool dirty;
+        umap_stats stats_snapshot;
+};
+
+class umap_stats {
+    public:
+        umap_stats(): cnt_evict_dirty{0}, cnt_evict_clean{0}, cnt_pf_wp{0}, cnt_pf_write{0}, cnt_pf_read{0} {};
+    private:
+        uint64_t fault_count;
+        uint64_t cnt_evict_dirty;
+        uint64_t cnt_evict_clean;
+        uint64_t cnt_pf_wp;
+        uint64_t cnt_pf_write;
+        uint64_t cnt_pf_read = 0;
 };
 
 static map<void*, _umap*> active_umaps;
@@ -195,7 +199,7 @@ void umap_cfg_set_bufsize( unsigned long page_bufsize )
 //--------------------------for multi-file support----------------------
 _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_backing_file* backing_files)
     :   segment_address{_mmap_addr}, segment_length{_mmap_length},
-    time_to_stop{false}, fault_count{0}, next_page_alloc_index{0}
+    time_to_stop{false}, next_page_alloc_index{0}
 {
     for (int i=0;i<num_backing_file;i++)
         bk_files.push_back(backing_files[i]); 
@@ -247,7 +251,7 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
     }
 
     umapdbg("umap: Setting up listener for %lu page buffer\n", page_buffer_size);
-    umap_page ump;
+    umap_page ump{stat};
     pages_in_memory.resize(page_buffer_size, ump);
 
     backingfile_fd=bk_files[0].fd;
@@ -349,6 +353,31 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
             if (!pages_in_memory[bufidx].page_is_dirty()) {
                 pages_in_memory[bufidx].mark_page_dirty();
                 disable_wp_on_pages((uint64_t)page_begin, 1);
+            }
+            else {
+                struct uffdio_copy copy;
+                copy.src = (uint64_t)tmppagebuf;
+                copy.dst = (uint64_t)page_begin;
+                copy.len = page_size;
+                copy.mode = 0;
+
+                pages_in_memory[bufidx].mark_page_clean();
+
+                // Save our data
+                memcpy(tmppagebuf, page_begin, page_size);
+
+                // Evict ourselves
+                evict_page(pages_in_memory[bufidx]);
+
+                // Bring ourselves back in
+                pages_in_memory[bufidx].set_page(page_begin);
+
+                umapdbg("EVICT WORKAROUND FOR %p\n", page_begin);
+
+                if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+                    perror("ERROR12: ioctl(UFFDIO_COPY nowake)");
+                    exit(1);
+                }
             }
         }
 
@@ -457,7 +486,7 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
   void* fault_addr = (void*)msg.arg.pagefault.address;
   void* page_begin = UMAP_PAGE_BEGIN(fault_addr);
   int bufidx = get_page_index(page_begin);
-  fault_count++;
+  stat.fault_count++;
 
   if (bufidx >= 0) {
     assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE));
@@ -510,7 +539,7 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
           perror("ERROR6: ioctl(UFFDIO_WRITEPROTECT Enable)");
           exit(1);
       }
-      exit(100);
+      //exit(100);
   }
 }
 
@@ -557,7 +586,7 @@ void _umap::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
     struct uffdio_writeprotect wp;
     wp.range.start = start;
     wp.range.len = num_pages * page_size;
-    wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+    wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
 
     //umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
 
