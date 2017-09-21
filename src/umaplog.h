@@ -17,29 +17,21 @@ extern bool umap_logging;
 #define umaperr(format, ...)\
     do {\
         struct timespec t;\
-        char _s[120];\
         (void)clock_gettime(CLOCK_MONOTONIC_RAW, &t);\
         umaplog_lock();\
-        sprintf(_s, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
-        fprintf(stderr, "%s", _s);\
+        fprintf(stderr, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
         umaplog_unlock();\
     } while (0)
 #define umaplog_init __umaplog_init
 
-#ifdef DEBUG
 #define umapdbg(format, ...)\
     do {\
         if (umap_logging) {\
             struct timespec t;\
-            char _s[120];\
             (void)clock_gettime(CLOCK_MONOTONIC_RAW, &t);\
             umaplog_lock();\
-            sprintf(_s, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
-            fprintf(stdout, "%s", _s);\
+            fprintf(stderr, "%ld.%09ld " format, t.tv_sec, t.tv_nsec, ## __VA_ARGS__);\
             umaplog_unlock();\
         }\
     } while (0)
-#else
-#define umapdbg(format, ...)
-#endif
 #endif

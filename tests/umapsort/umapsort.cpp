@@ -1,6 +1,11 @@
 /* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
 // uffd sort benchmark
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif // _GNU_SOURCE
+
+#include <iostream>
 #include <random>
 #include <algorithm>
 #include <sys/stat.h>
@@ -92,12 +97,36 @@ int main(int argc, char **argv)
 
   umt_getoptions(&options, argc, argv);
 
+  omp_set_num_threads(options.numthreads);
+#ifdef TAKEN_OUT
+  int s;
+  cpu_set_t cpuset;
+  pthread_t thread;
+
+  thread = pthread_self();
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(6, &cpuset);
+
+  s = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+  if (s != 0) {
+    perror("ERROR: pthread_setaffinity_np");
+    return -1;
+  }
+  s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+  if (s != 0) {
+    perror("ERROR: pthread_getaffinity_np");
+    return -1;
+  }
+  for (int j = 0; j < CPU_SETSIZE; j++)
+    if (CPU_ISSET(j, &cpuset)) 
+      std::cerr << __FUNCTION__ << " affinity constrained to CPU " << j << std::endl;
+#endif // TAKEN_OUT
+
   totalbytes = options.numpages*pagesize;
   fd = umt_openandmap(&options, totalbytes, &base_addr);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
-
-  omp_set_num_threads(options.numthreads);
 
   uint64_t *arr = (uint64_t *) base_addr; 
   arraysize = totalbytes/sizeof(int64_t);
