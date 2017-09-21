@@ -341,7 +341,8 @@ void _umap::uffd_handler(void)
             continue;
         }
  
-        logpagefault_event(msg);    // Debug log what will happen with this event.
+        if (umap_logging)
+          logpagefault_event(msg);    // Debug log what will happen with this event.
         pagefault_event(msg);       // At this point, we know we have had a page fault.  Let's handle it.
     }
 }
@@ -499,7 +500,6 @@ void _umap::logpagefault_event(const struct uffd_msg& msg)
   else {
     pm = pages_in_memory[next_page_alloc_index];
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-      assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == UFFD_PAGEFAULT_FLAG_WRITE);
       ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")"
         << "ED(0) EC(0) WP(0) RF(0) WF(0)";
     }

@@ -24,7 +24,6 @@ extern bool umap_logging;
     } while (0)
 #define umaplog_init __umaplog_init
 
-#ifdef DEBUG
 #define umapdbg(format, ...)\
     do {\
         if (umap_logging) {\
@@ -35,7 +34,4 @@ extern bool umap_logging;
             umaplog_unlock();\
         }\
     } while (0)
-#else
-#define umapdbg(format, ...)
-#endif
 #endif
