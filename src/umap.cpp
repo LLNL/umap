@@ -595,7 +595,7 @@ void _umap::uffd_finalize()
         }
     }
 
-    //stat.print_stats();
+    stat.print_stats();
 
     stop_faultlistener();
 
