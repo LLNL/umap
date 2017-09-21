@@ -44,7 +44,18 @@ class umap_page;
 class umap_umap;
 class umap_stats {
     public:
-        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_faults{0}, write_faults{0}, read_faults{0} {};
+        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_faults{0}, write_faults{0}, read_faults{0}, stuck_wp{0}, early_writes{0} {};
+
+        void print_stats(void) {
+          cerr << stat_faults << " Faults\n"
+            << dirty_evicts << " Dirty Evictions" << endl
+            << clean_evicts << " Clean Evictions" << endl
+            << wp_faults << " WP Faults" << endl
+            << write_faults << " WRITE Faults" << endl
+            << read_faults << " READ Faults" << endl
+            << stuck_wp << " Stuck WP Workarounds" << endl
+            << early_writes << " Early Write Workarounds" << endl;
+        }
 
         uint64_t stat_faults;
         uint64_t dirty_evicts;
@@ -52,6 +63,8 @@ class umap_stats {
         uint64_t wp_faults;
         uint64_t write_faults;
         uint64_t read_faults;
+        uint64_t stuck_wp;
+        uint64_t early_writes;
 };
 
 class _umap {
@@ -355,6 +368,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         copy.len = page_size;
         copy.mode = 0;
 
+        stat.stuck_wp++;
         umapdbg("EVICT WORKAROUND FOR %p\n", page_begin);
 
         pm->mark_page_clean();
@@ -435,6 +449,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     // set WP settings).
     //
     if (memcmp(tmppagebuf, page_begin, page_size)) {
+      stat.early_writes++;
       umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p)u %s\n", 
               msg.arg.pagefault.flags, 
               page_begin, 
@@ -576,6 +591,8 @@ void _umap::uffd_finalize()
             delete (it);
         }
     }
+
+    stat.print_stats();
 
     stop_faultlistener();
 
