@@ -44,7 +44,7 @@ class umap_page;
 class umap_umap;
 class umap_stats {
     public:
-        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_messages{0}, read_faults{0}, write_faults{0}, stuck_wp{0}, early_writes{0} {};
+        umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_messages{0}, read_faults{0}, write_faults{0}, sigbus{0}, stuck_wp{0}, early_writes{0} {};
 
         void print_stats(void) {
           cerr << stat_faults << " Faults\n"
@@ -53,6 +53,7 @@ class umap_stats {
             << wp_messages << " WP Messages" << endl
             << dirty_evicts << " Dirty Evictions" << endl
             << clean_evicts << " Clean Evictions" << endl
+            << sigbus << " SIGBUS Errors" << endl
             << stuck_wp << " Stuck WP Workarounds" << endl
             << early_writes << " Early Write Workarounds" << endl;
         }
@@ -63,6 +64,7 @@ class umap_stats {
         uint64_t wp_messages;
         uint64_t read_faults;
         uint64_t write_faults;
+        uint64_t sigbus;
         uint64_t stuck_wp;
         uint64_t early_writes;
 };
@@ -86,6 +88,8 @@ class _umap {
             return (void*)((uint64_t)a & ~(page_size-1));
         }
 
+        umap_stats stat;
+
     private:
         void* segment_address;
         size_t segment_length;
@@ -99,7 +103,6 @@ class _umap {
         vector<umap_page*> pages_in_memory;
         char* tmppagebuf;
         unordered_map<void*, int> page_index;
-        umap_stats stat;
 
         void evict_page(umap_page* page);
         void remove_page_index(void* _p) { page_index.erase(_p); }
@@ -442,38 +445,13 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
     stat.read_faults++;
     pm->mark_page_clean();
 
-    copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
+    copy.mode = UFFDIO_COPY_MODE_WP;
     if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
       perror("ERROR: ioctl(UFFDIO_COPY nowake)");
       exit(1);
     }
 
-    enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
-
-    //
-    // There is a very small window between UFFDIO_COPY_MODE and enable_wp_on_pages_and_wake where
-    // a write may occur before we re-enable WP (the UFFDIO_COPY appears to clear any previously 
-    // set WP settings).
-    //
-    if (memcmp(tmppagebuf, page_begin, page_size)) {
-      stat.early_writes++;
-      umapdbg("PF(0x%llx READ)     (EARLY_WRITE!)      @(%p)u %s\n", 
-              msg.arg.pagefault.flags, 
-              page_begin, 
-              pm->statstring().c_str());
-
-      pm->mark_page_dirty();
-      disable_wp_on_pages((uint64_t)page_begin, 1);
-    }
-
-    struct uffdio_range wake;
-    wake.start = (uint64_t)page_begin;
-    wake.len = page_size;
-
-    if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-      perror("ERROR: ioctl(UFFDIO_WAKE)");
-      exit(1);
-    }
+    assert(memcmp(tmppagebuf, page_begin, page_size) == 0);
   }
   next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;
 }
@@ -610,7 +588,6 @@ void _umap::uffd_finalize()
 }
 
 static struct sigaction saved_sa;
-static uint64_t num_bus_errs = 0;
 
 void sighandler(int signum, siginfo_t *info, void* buf)
 {
@@ -621,16 +598,14 @@ void sighandler(int signum, siginfo_t *info, void* buf)
 
     void* page_begin = _umap::UMAP_PAGE_BEGIN(info->si_addr);
  
-    assert(info->si_addr == _umap::UMAP_PAGE_BEGIN(info->si_addr));
     for (auto it : active_umaps) {
         if (it.second->is_in_umap(page_begin)) {
-            num_bus_errs++;
+            it.second->stat.sigbus++;
 
             if (it.second->get_page_index(page_begin) >= 0)
                 umapdbg("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE BUFFER!\n", info->si_addr, page_begin); 
             else
                 umapdbg("SIGBUS %p (page=%p) Not currently in umap page buffer\n", info->si_addr, page_begin); 
-            assert(0);
             return;
         }
     }
