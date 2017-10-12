@@ -1,4 +1,5 @@
 add_subdirectory(libumaptest)
+add_subdirectory(umapcpu)
 add_subdirectory(umapsort)
 add_subdirectory(umaptest)
 add_subdirectory(median)
