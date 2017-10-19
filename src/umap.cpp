@@ -372,13 +372,13 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
         copy.src = (uint64_t)tmppagebuf;
         copy.dst = (uint64_t)page_begin;
         copy.len = page_size;
-        copy.mode = 0;
+        copy.mode = UFFDIO_COPY_MODE_WP;
 
         stat.stuck_wp++;
         umapdbg("EVICT WORKAROUND FOR %p\n", page_begin);
 
         pm->mark_page_clean();
-        memcpy(tmppagebuf, page_begin, page_size);  // Save our data
+        memcpy(tmppagebuf, page_begin, page_size);   // Save our data
         evict_page(pm);                              // Evict ourselves
         pm->set_page(page_begin);                    // Bring ourselves back in
 
