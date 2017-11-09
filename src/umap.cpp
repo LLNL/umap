@@ -67,14 +67,23 @@ class umap_stats {
     uint64_t stuck_wp;
 };
 
+struct umap_segment {
+    void*  base;
+    size_t length;
+};
+
 class _umap {
   friend class umap_page;
   public:
-    _umap(void* _mmap_addr, size_t _mmap_length, int num_backing_file, umap_backing_file* backing_files);
+    _umap(void* _region, size_t _rsize, const vector<umap_segment>& _segs, int num_backing_file, umap_backing_file* backing_files);
     void uffd_finalize(void);
 
     bool is_in_umap(const void* page_begin) {
-        return page_begin >= segment_address && page_begin < (void*)((uint64_t)segment_address + segment_length);
+      for ( auto i : segments )
+        if (page_begin >= i.base && page_begin < (void*)((uint64_t)i.base + i.length))
+            return true;
+
+      return false;
     }
 
     inline int get_page_index(void* _p) {
@@ -83,14 +92,15 @@ class _umap {
     }
 
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
-        return (void*)((uint64_t)a & ~(page_size-1));
+      return (void*)((uint64_t)a & ~(page_size-1));
     }
 
     umap_stats stat;
 
   private:
-    void* segment_address;
-    size_t segment_length;
+    void* region;
+    size_t region_size;
+    vector<umap_segment> segments;
     int backingfile_fd;
     vector<umap_backing_file> bk_files;
     unsigned long page_buffer_size;
@@ -178,16 +188,17 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_fi
 
   flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
 
-  void* region = mmap(addr, length, prot, flags, -1, 0);
+  void* r = mmap(addr, length, prot, flags, -1, 0);
 
-  if (region == MAP_FAILED) {
+  if (r == MAP_FAILED) {
     perror("ERROR: mmap failed: ");
     return UMAP_FAILED;
   }
 
   _umap *p_umap;
   try {
-    p_umap = new _umap{region, length, num_backing_file, backing_files};
+    vector<umap_segment> segs{ umap_segment{r, length} };;
+    p_umap = new _umap{r, length, segs, num_backing_file, backing_files};
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
     return UMAP_FAILED;
@@ -196,8 +207,8 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_fi
     return UMAP_FAILED;
   }
 
-  active_umaps[region] = p_umap;
-  return region;
+  active_umaps[r] = p_umap;
+  return r;
 }
 
 int uunmap(void*  addr, size_t length)
@@ -223,8 +234,8 @@ void umap_cfg_set_bufsize( unsigned long page_bufsize )
 }
 
 //--------------------------for multi-file support----------------------
-_umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_backing_file* backing_files)
-    : segment_address{_mmap_addr}, segment_length{_mmap_length}, time_to_stop{false}, next_page_alloc_index{0}
+_umap::_umap(void* _region, size_t _rsize, const vector<umap_segment>& _segs, int num_backing_file,umap_backing_file* backing_files)
+    : region{_region}, region_size{_rsize}, segments{_segs}, time_to_stop{false}, next_page_alloc_index{0}
 {
   for (int i=0;i<num_backing_file;i++)
     bk_files.push_back(backing_files[i]); 
@@ -247,21 +258,23 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
     throw -1;
   }
 
-  struct uffdio_register uffdio_register = {
-    .range = {.start = (uint64_t)segment_address, .len = segment_length},
-    .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
-  };
+  for ( auto seg : segments ) {
+    struct uffdio_register uffdio_register = {
+      .range = {.start = (uint64_t)seg.base, .len = seg.length},
+      .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
+    };
 
-  if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
-    perror("ERROR: ioctl/uffdio_register");
-    close(userfault_fd);
-    throw -1;
-  }
+    if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
+      perror("ERROR: ioctl/uffdio_register");
+      close(userfault_fd);
+      throw -1;
+    }
 
-  if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS) {
-    cerr << "unexpected userfaultfd ioctl set\n";
-    close(userfault_fd);
-    throw -1;
+    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS) {
+      cerr << "unexpected userfaultfd ioctl set\n";
+      close(userfault_fd);
+      throw -1;
+    }
   }
 
   if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
@@ -277,6 +290,9 @@ _umap::_umap(void* _mmap_addr, size_t _mmap_length,int num_backing_file,umap_bac
 
   umapdbg("umap: Setting up listener for %lu page buffer\n", page_buffer_size);
 
+  /*
+   * TODO: Make the single page buffer threadsafe
+   */
   pages_in_memory.reserve(page_buffer_size);
   for (unsigned long i = 0; i < page_buffer_size; ++i) {
     umap_page *ump = new umap_page(this);
@@ -403,7 +419,7 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
   // Page not in memory, read it in and (potentially) evict someone
   //
   int file_id=0;
-  off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
+  off_t offset=(uint64_t)page_begin - (uint64_t)region;
 
   file_id = offset/bk_files[0].data_size;   //find the file id and offset number
   offset %= bk_files[0].data_size;
@@ -502,7 +518,7 @@ void _umap::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
-    if (pwrite(backingfile_fd, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)segment_address)) == -1) {
+    if (pwrite(backingfile_fd, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)region)) == -1) {
       perror("ERROR: pwrite failed");
       assert(0);
     }
@@ -574,13 +590,15 @@ void _umap::uffd_finalize()
 
   stop_faultlistener();
 
-  struct uffdio_register uffdio_register;
-  uffdio_register.range.start = (uint64_t)segment_address;
-  uffdio_register.range.len = segment_length;
+  for ( auto seg : segments ) {
+    struct uffdio_register uffdio_register;
+    uffdio_register.range.start = (uint64_t)seg.base;
+    uffdio_register.range.len = seg.length;
 
-  if (ioctl(userfault_fd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
-    perror("ERROR: UFFDIO_UNREGISTER");
-    exit(1);
+    if (ioctl(userfault_fd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
+      perror("ERROR: UFFDIO_UNREGISTER");
+      exit(1);
+    }
   }
 }
 
