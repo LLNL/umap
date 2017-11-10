@@ -11,6 +11,7 @@
 #include <iostream>
 #include <cstdint>
 #include <vector>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <sstream>
@@ -126,6 +127,7 @@ class umap_page_buffer {
     umap_page* find_inmem_page_desc(void* page_addr); // Finds page_desc for page_addr in inmem_page_descriptors
 
   private:
+    mutex mutex_;
     size_t page_buffer_size;
     deque<umap_page*> free_page_descriptors;
     deque<umap_page*> inmem_page_descriptors;
@@ -642,6 +644,7 @@ umap_page_buffer::~umap_page_buffer()
 
 umap_page* umap_page_buffer::alloc_page_desc(void* page)
 {
+  lock_guard<mutex> lock(mutex_);
   umap_page* p = nullptr;
   if (!free_page_descriptors.empty()) {
     p = free_page_descriptors.back();
@@ -653,6 +656,7 @@ umap_page* umap_page_buffer::alloc_page_desc(void* page)
 
 void umap_page_buffer::dealloc_page_desc(umap_page* page_desc)
 {
+  lock_guard<mutex> lock(mutex_);
   page_desc->mark_page_clean();
   page_desc->set_page(nullptr);
   free_page_descriptors.push_front(page_desc);
@@ -660,12 +664,14 @@ void umap_page_buffer::dealloc_page_desc(umap_page* page_desc)
 
 void umap_page_buffer::add_page_desc_to_inmem(umap_page* page_desc)
 {
+  lock_guard<mutex> lock(mutex_);
   inmem_page_map[page_desc->get_page()] = page_desc;
   inmem_page_descriptors.push_front(page_desc);
 }
 
 umap_page* umap_page_buffer::get_page_desc_to_evict()
 {
+  lock_guard<mutex> lock(mutex_);
   umap_page* p = nullptr;
   if (!inmem_page_descriptors.empty()) {
     p = inmem_page_descriptors.back();
@@ -679,6 +685,7 @@ umap_page* umap_page_buffer::get_page_desc_to_evict()
 
 umap_page* umap_page_buffer::find_inmem_page_desc(void* page_addr)
 {
+  lock_guard<mutex> lock(mutex_);
   auto it = inmem_page_map.find(page_addr);
   return((it == inmem_page_map.end()) ? nullptr : it->second);
 }
