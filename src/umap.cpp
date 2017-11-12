@@ -41,6 +41,7 @@ const int UMAP_VERSION_PATCH = 1;
 const unsigned long UMAP_DEFAULT_PBSIZE = 16;
 static unsigned long umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
 static long page_size;
+static int listeners_per_umap = 1;
 
 class umap_page;
 struct umap_segment;
@@ -92,15 +93,15 @@ class _umap {
     vector<umap_backing_file> bk_files;
     bool time_to_stop;
     int userfault_fd;
-    thread *listener;
-    char* tmppagebuf;
+    vector<thread *> listeners;
 
     void evict_page(umap_page* page);
     void uffd_handler(void);
-    void pagefault_event(const struct uffd_msg& msg);
-    inline void stop_faultlistener( void ) noexcept {
+    void pagefault_event(const struct uffd_msg& msg, char* tmppagebuf);
+    inline void stop_listeners( void ) noexcept {
       time_to_stop = true;
-      listener->join();
+      for ( auto _l : listeners )
+        _l->join();
     }
 
     void enable_wp_on_pages_and_wake(uint64_t, int64_t);
@@ -329,23 +330,25 @@ _umap::_umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vec
     }
   }
 
-  if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
-    perror("ERROR: posix_memalign:");
-    throw -1;
-  }
-
-  if (tmppagebuf == nullptr) {
-    cerr << "Unable to allocate 512 bytes for temporary buffer\n";
-    close(userfault_fd);
-    throw -1;
-  }
-
   backingfile_fd=bk_files[0].fd;
-  listener = new thread{&_umap::uffd_handler,this};
+  for (int i = 0; i < listeners_per_umap; ++i)
+    listeners.push_back(new thread{&_umap::uffd_handler,this});
 }
 
 void _umap::uffd_handler(void)
 {
+  char* tmppagebuf;
+
+  if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
+    cerr << "ERROR: posix_memalign: failed\n";
+    exit(1);
+  }
+
+  if (tmppagebuf == nullptr) {
+    cerr << "Unable to allocate 512 bytes for temporary buffer\n";
+    exit(1);
+  }
+
   for (;;) {
     struct uffd_msg msg;
 
@@ -353,11 +356,11 @@ void _umap::uffd_handler(void)
     pollfd[0].fd = userfault_fd;
     pollfd[0].events = POLLIN;
 
-    // wait for a userfaultfd event to occur
-    int pollres = poll(pollfd, 1, 2000);
-
     if (time_to_stop)
       return;
+
+    // wait for a userfaultfd event to occur
+    int pollres = poll(pollfd, 1, 2000);
 
     switch (pollres) {
       case -1:
@@ -381,6 +384,7 @@ void _umap::uffd_handler(void)
       continue;
 
     int readres = read(userfault_fd, &msg, sizeof(msg));
+
     if (readres == -1) {
       if (errno == EAGAIN)
         continue;
@@ -398,11 +402,11 @@ void _umap::uffd_handler(void)
       continue;
     }
 
-    pagefault_event(msg);       // At this point, we know we have had a page fault.  Let's handle it.
+    pagefault_event(msg, tmppagebuf);       // At this point, we know we have had a page fault.  Let's handle it.
   }
 }
 
-void _umap::pagefault_event(const struct uffd_msg& msg)
+void _umap::pagefault_event(const struct uffd_msg& msg, char* tmppagebuf)
 {
   void* page_begin = (void*)msg.arg.pagefault.address;
   umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
@@ -601,7 +605,7 @@ void _umap::uffd_finalize()
   delete pagebuffer;
 
   stat.print_stats();
-  stop_faultlistener();
+  stop_listeners();
 
   for ( auto seg : segments ) {
     struct uffdio_register uffdio_register;
