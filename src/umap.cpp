@@ -38,19 +38,40 @@ using namespace std;
 const int UMAP_VERSION_MAJOR = 0;
 const int UMAP_VERSION_MINOR = 0;
 const int UMAP_VERSION_PATCH = 1;
-const unsigned long UMAP_DEFAULT_PBSIZE = 16;
+const unsigned long UMAP_DEFAULT_PBSIZE = (16*1024);
+
 static unsigned long umap_page_bufsize = UMAP_DEFAULT_PBSIZE;
+static const int UMAP_PAGEBLOCK_THREADS = 32;
+static const size_t UMAP_PAGES_PER_BLOCK = 1024;
+static const bool UMAP_CHECKERBOARD_PATTERN = true;
+
 static long page_size;
-static int listeners_per_umap = 1;
+
+// TODO: The listener implementation is not yet thread-safe and will need to change
+// in before setting this to something other than 1.
+static const int listeners_per_umap = 1;
+
 
 class umap_page;
-struct umap_segment;
+struct umap_PageBlock;
 class umap_page_buffer;
 
+// |------------------------- Region --------------------------------------------|
+// |------------------------- Backing File --------------------------------------|
+// |- Page Block 1 -|- Page Block 2 -|- ... -|- Page Block N-1 -|- Page Block N -|
+//
+// Each _umap has a set of page blocks
+// One thread of execution per _umap is currently supported
+// Multiple threads per _umap requires:
+//   1. A producer thread that gets userfaultfd events from userfaultfd
+//   2. A work queue that is added to by producer
+//   2. A set of worker threads that drain the work queue and service userfaultfd events
+//
 class _umap {
   friend class umap_page;
   public:
-    _umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vector<umap_segment>& _segs, int num_backing_file, umap_backing_file* backing_files);
+    _umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vector<umap_PageBlock>& _pblks, int num_backing_file, umap_backing_file* backing_files);
+    ~_umap();
     void uffd_finalize(void);
     bool is_in_umap(const void* page_begin);
 
@@ -88,16 +109,17 @@ class _umap {
     umap_page_buffer* pagebuffer;
     void* region;
     size_t region_size;
-    vector<umap_segment> segments;
+    vector<umap_PageBlock> PageBlocks;
     int backingfile_fd;
     vector<umap_backing_file> bk_files;
     bool time_to_stop;
     int userfault_fd;
+    char* tmppagebuf;
     vector<thread *> listeners;
 
     void evict_page(umap_page* page);
     void uffd_handler(void);
-    void pagefault_event(const struct uffd_msg& msg, char* tmppagebuf);
+    void pagefault_event(const struct uffd_msg& msg);
     inline void stop_listeners( void ) noexcept {
       time_to_stop = true;
       for ( auto _l : listeners )
@@ -108,7 +130,7 @@ class _umap {
     void disable_wp_on_pages(uint64_t, int64_t);
 };
 
-struct umap_segment {
+struct umap_PageBlock {
     void*  base;
     size_t length;
 };
@@ -163,26 +185,51 @@ void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
   return umap_mf(addr, length, prot, flags, 1, &file1);
 }
 
-void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
+void* umap_mf(void* bass_addr, size_t region_size, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
 {
+  assert((region_size % page_size) == 0);
+
   if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
     cerr << "umap: Invalid flags: " << hex << flags << endl;
     return UMAP_FAILED;
   }
 
-  flags |= (MAP_ANONYMOUS | MAP_NORESERVE);
+  void* region = mmap(bass_addr, region_size, prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
 
-  void* r = mmap(addr, length, prot, flags, -1, 0);
-
-  if (r == MAP_FAILED) {
+  if (region == MAP_FAILED) {
     perror("ERROR: mmap failed: ");
     return UMAP_FAILED;
   }
 
+  size_t pages_in_region = region_size / page_size;
+  size_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
+  size_t page_blocks = pages_in_region / pages_per_block;
+  size_t remainder_of_pages_in_last_block = pages_in_region % pages_per_block;
+
+  if (remainder_of_pages_in_last_block)
+    page_blocks++;          // Account for extra block
+
+  size_t num_workers = page_blocks < UMAP_PAGEBLOCK_THREADS ? page_blocks : UMAP_PAGEBLOCK_THREADS;
+  size_t page_blocks_per_worker = page_blocks / num_workers;
+
   _umap *p_umap;
   try {
-    vector<umap_segment> segs{ umap_segment{r, length} };;
-    p_umap = new _umap{new umap_page_buffer(umap_page_bufsize), r, length, segs, num_backing_file, backing_files};
+    for (size_t worker = 0; worker < num_workers; ++worker) {
+      umap_PageBlock pb;
+
+      pb.base = (void*)((uint64_t)region + (worker * page_blocks_per_worker * pages_per_block * page_size));
+      pb.length = page_blocks_per_worker * pages_per_block * page_size;
+
+      // If I am the last worker and we have residual pages in last block
+      if ((worker == num_workers-1) && remainder_of_pages_in_last_block)
+        pb.length -= ((pages_per_block - remainder_of_pages_in_last_block)) * page_size;
+
+      cout << "Region: " << region << " -- " << (void*)((uint64_t)region + region_size)
+        << " : " << pb.base << " -- " << (void*)((uint64_t)pb.base + pb.length) << endl;
+      vector<umap_PageBlock> segs{ pb };
+      p_umap = new _umap{new umap_page_buffer(umap_page_bufsize), region, region_size, segs, num_backing_file, backing_files};
+      active_umaps[pb.base] = p_umap;
+    }
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
     return UMAP_FAILED;
@@ -191,8 +238,7 @@ void* umap_mf(void* addr, size_t length, int prot, int flags, int num_backing_fi
     return UMAP_FAILED;
   }
 
-  active_umaps[r] = p_umap;
-  return r;
+  return region;
 }
 
 int uunmap(void*  addr, size_t length)
@@ -288,11 +334,21 @@ void __attribute ((destructor)) fine_umap_lib( void )
 //
 // _umap class implementation
 //
-_umap::_umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vector<umap_segment>& _segs, int num_backing_file,umap_backing_file* backing_files)
-    : pagebuffer(_pbuffer), region{_region}, region_size{_rsize}, segments{_segs}, time_to_stop{false}
+_umap::_umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vector<umap_PageBlock>& _pblks, int num_backing_file,umap_backing_file* backing_files)
+    : pagebuffer(_pbuffer), region{_region}, region_size{_rsize}, PageBlocks{_pblks}, time_to_stop{false}
 {
   for (int i=0;i<num_backing_file;i++)
     bk_files.push_back(backing_files[i]); 
+
+  if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
+    cerr << "ERROR: posix_memalign: failed\n";
+    exit(1);
+  }
+
+  if (tmppagebuf == nullptr) {
+    cerr << "Unable to allocate 512 bytes for temporary buffer\n";
+    exit(1);
+  }
 
   if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
     perror("ERROR: userfaultfd syscall not available in this kernel");
@@ -311,11 +367,13 @@ _umap::_umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vec
     throw -1;
   }
 
-  for ( auto seg : segments ) {
+  for ( auto seg : PageBlocks ) {
     struct uffdio_register uffdio_register = {
       .range = {.start = (uint64_t)seg.base, .len = seg.length},
       .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
     };
+
+    umapdbg("Register %p\n", seg.base);
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
       perror("ERROR: ioctl/uffdio_register");
@@ -335,20 +393,13 @@ _umap::_umap(umap_page_buffer* _pbuffer, void* _region, size_t _rsize, const vec
     listeners.push_back(new thread{&_umap::uffd_handler,this});
 }
 
+_umap::~_umap(void)
+{
+  free(tmppagebuf);
+}
+
 void _umap::uffd_handler(void)
 {
-  char* tmppagebuf;
-
-  if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
-    cerr << "ERROR: posix_memalign: failed\n";
-    exit(1);
-  }
-
-  if (tmppagebuf == nullptr) {
-    cerr << "Unable to allocate 512 bytes for temporary buffer\n";
-    exit(1);
-  }
-
   for (;;) {
     struct uffd_msg msg;
 
@@ -402,11 +453,11 @@ void _umap::uffd_handler(void)
       continue;
     }
 
-    pagefault_event(msg, tmppagebuf);       // At this point, we know we have had a page fault.  Let's handle it.
+    pagefault_event(msg);       // At this point, we know we have had a page fault.  Let's handle it.
   }
 }
 
-void _umap::pagefault_event(const struct uffd_msg& msg, char* tmppagebuf)
+void _umap::pagefault_event(const struct uffd_msg& msg)
 {
   void* page_begin = (void*)msg.arg.pagefault.address;
   umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
@@ -606,7 +657,7 @@ void _umap::uffd_finalize()
   stat.print_stats();
   stop_listeners();
 
-  for ( auto seg : segments ) {
+  for ( auto seg : PageBlocks ) {
     struct uffdio_register uffdio_register;
     uffdio_register.range.start = (uint64_t)seg.base;
     uffdio_register.range.len = seg.length;
@@ -620,7 +671,7 @@ void _umap::uffd_finalize()
 
 bool _umap::is_in_umap(const void* page_begin)
 {
-  for ( auto i : segments )
+  for ( auto i : PageBlocks )
     if (page_begin >= i.base && page_begin < (void*)((uint64_t)i.base + i.length))
         return true;
 
