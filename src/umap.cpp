@@ -30,6 +30,7 @@
 #include <utmpx.h>              // sched_getcpu()
 #include <signal.h>
 #include <cstring>
+#include <sys/prctl.h>
 #include "umap.h"               // API to library
 #include "umaplog.h"            // umap_log()
 
@@ -212,7 +213,6 @@ void* umap_mf(void* bass_addr, size_t region_size, int prot, int flags, int num_
   size_t num_workers = page_blocks < UMAP_PAGEBLOCK_THREADS ? page_blocks : UMAP_PAGEBLOCK_THREADS;
   size_t page_blocks_per_worker = page_blocks / num_workers;
 
-  _umap *p_umap;
   try {
     for (size_t worker = 0; worker < num_workers; ++worker) {
       umap_PageBlock pb;
@@ -224,11 +224,9 @@ void* umap_mf(void* bass_addr, size_t region_size, int prot, int flags, int num_
       if ((worker == num_workers-1) && remainder_of_pages_in_last_block)
         pb.length -= ((pages_per_block - remainder_of_pages_in_last_block)) * page_size;
 
-      cout << "Region: " << region << " -- " << (void*)((uint64_t)region + region_size)
-        << " : " << pb.base << " -- " << (void*)((uint64_t)pb.base + pb.length) << endl;
+      // cout << "Region: " << region << " -- " << (void*)((uint64_t)region + region_size) << " : " << pb.base << " -- " << (void*)((uint64_t)pb.base + pb.length) << endl;
       vector<umap_PageBlock> segs{ pb };
-      p_umap = new _umap{new umap_page_buffer(umap_page_bufsize), region, region_size, segs, num_backing_file, backing_files};
-      active_umaps[pb.base] = p_umap;
+      active_umaps[pb.base] = new _umap{new umap_page_buffer(umap_page_bufsize), region, region_size, segs, num_backing_file, backing_files};
     }
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
@@ -400,6 +398,7 @@ _umap::~_umap(void)
 
 void _umap::uffd_handler(void)
 {
+  prctl(PR_SET_NAME, "UMAP UFFD Hdlr", 0, 0, 0);
   for (;;) {
     struct uffd_msg msg;
 
