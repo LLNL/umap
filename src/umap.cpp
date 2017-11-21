@@ -11,6 +11,7 @@
 #include <iostream>
 #include <cstdint>
 #include <vector>
+#include <algorithm>
 #include <thread>
 #include <unordered_map>
 #include <sstream>
@@ -39,7 +40,7 @@ const int UMAP_VERSION_MAJOR = 0;
 const int UMAP_VERSION_MINOR = 0;
 const int UMAP_VERSION_PATCH = 1;
 
-static const int UMAP_UFFD_MAX_MESSAGES = 1;
+static const int UMAP_UFFD_MAX_MESSAGES = 256;
 static const int UMAP_PAGEBLOCK_UFFD_HANDLERS = 32;
 const uint64_t UMAP_DEFAULT_PAGES_PER_UFFD_HANDLER = 1024;  // Separate Page Buffer per Thread
 
@@ -100,7 +101,7 @@ class UserFaultHandler {
     vector<umap_PageBlock> PageBlocks;
     uint64_t pbuf_size;
     umap_page_buffer* pagebuffer;
-    vector<struct uffd_msg> uffd_messages;
+    vector<struct uffd_msg> umessages;
 
     int userfault_fd;
     char* tmppagebuf;
@@ -115,7 +116,17 @@ class UserFaultHandler {
 
 class umap_stats {
   public:
-    umap_stats(): stat_faults{0}, dirty_evicts{0}, clean_evicts{0}, wp_messages{0}, read_faults{0}, write_faults{0}, sigbus{0}, stuck_wp{0} {};
+    umap_stats(): 
+      stat_faults{0}, 
+      dirty_evicts{0}, 
+      clean_evicts{0}, 
+      wp_messages{0}, 
+      read_faults{0}, 
+      write_faults{0}, 
+      sigbus{0}, 
+      stuck_wp{0},
+      dropped_dups{0}
+      {};
 
     void print_stats(void);
 
@@ -127,8 +138,7 @@ class umap_stats {
     uint64_t write_faults;
     uint64_t sigbus;
     uint64_t stuck_wp;
-    uint64_t late_read_faults;
-    uint64_t late_write_faults;
+    uint64_t dropped_dups;
 };
 
 struct umap_PageBlock {
@@ -364,6 +374,7 @@ _umap::~_umap(void)
     t.write_faults += handler->stat->write_faults;
     t.sigbus += handler->stat->sigbus;
     t.stuck_wp += handler->stat->stuck_wp;
+    t.dropped_dups += handler->stat->dropped_dups;
   }
 
   t.print_stats();
@@ -380,7 +391,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
       pbuf_size{_pbuf_size}, 
       pagebuffer{ new umap_page_buffer{_pbuf_size} }
 {
-  uffd_messages.resize(UMAP_UFFD_MAX_MESSAGES);
+  umessages.resize(UMAP_UFFD_MAX_MESSAGES);
 
   if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
     cerr << "ERROR: posix_memalign: failed\n";
@@ -456,6 +467,31 @@ UserFaultHandler::~UserFaultHandler(void)
   delete uffd_worker;
 }
 
+#if 0
+static string uffd_pf_reason(const struct uffd_msg& msg)
+{
+  if ((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE))
+    return "UFFD_PAGEFAULT_FLAG_WP UFFD_PAGEFAULT_FLAG_WRITE";
+  else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP)
+    return "UFFD_PAGEFAULT_FLAG_WP";
+  else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
+    return "UFFD_PAGEFAULT_FLAG_WRITE";
+  else
+    return "UFFD_PAGEFAULT_READ";
+}
+#endif
+
+struct less_than_key
+{
+  inline bool operator() (const struct uffd_msg& lhs, const struct uffd_msg& rhs)
+  {
+    if (lhs.arg.pagefault.address == rhs.arg.pagefault.address)
+      return (lhs.arg.pagefault.flags >= rhs.arg.pagefault.address);
+    else
+      return (lhs.arg.pagefault.address < rhs.arg.pagefault.address);
+  }
+};
+
 void UserFaultHandler::uffd_handler(void)
 {
   prctl(PR_SET_NAME, "UMAP UFFD Hdlr", 0, 0, 0);
@@ -499,7 +535,7 @@ void UserFaultHandler::uffd_handler(void)
     if (!pollfd[0].revents & POLLIN)
       continue;
 
-    int readres = read(userfault_fd, &uffd_messages[0], UMAP_UFFD_MAX_MESSAGES * sizeof(struct uffd_msg));
+    int readres = read(userfault_fd, &umessages[0], UMAP_UFFD_MAX_MESSAGES * sizeof(struct uffd_msg));
 
     if (readres == -1) {
       if (errno == EAGAIN)
@@ -517,13 +553,22 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
+    sort(umessages.begin(), umessages.begin()+msgs, less_than_key());
+
+    uint64_t last_addr = 0;
     for (int i = 0; i < msgs; ++i) {
-      if (uffd_messages[i].event != UFFD_EVENT_PAGEFAULT) {
-        cerr << __FUNCTION__ << " Unexpected event " << hex << uffd_messages[i].event << endl;
+      if (umessages[i].event != UFFD_EVENT_PAGEFAULT) {
+        cerr << __FUNCTION__ << " Unexpected event " << hex << umessages[i].event << endl;
         continue;
       }
 
-      pagefault_event(uffd_messages[i]);       // At this point, we know we have had a page fault.  Let's handle it.
+      if (umessages[i].arg.pagefault.address == last_addr) {
+        stat->dropped_dups++;
+        continue;   // Skip pages we have already copied in
+      }
+
+      last_addr = umessages[i].arg.pagefault.address;
+      pagefault_event(umessages[i]);       // At this point, we know we have had a page fault.  Let's handle it.
     }
   }
 }
@@ -802,5 +847,6 @@ void umap_stats::print_stats(void)
     << dirty_evicts << " Dirty Evictions" << endl
     << clean_evicts << " Clean Evictions" << endl
     << sigbus << " SIGBUS Errors" << endl
-    << stuck_wp << " Stuck WP Workarounds" << endl;
+    << stuck_wp << " Stuck WP Workarounds" << endl
+    << dropped_dups << " Dropped Duplicates" << endl;
 }
