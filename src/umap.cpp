@@ -111,7 +111,7 @@ class UserFaultHandler {
     void uffd_handler(void);
     void pagefault_event(const struct uffd_msg& msg);
     void enable_wp_on_pages_and_wake(uint64_t, int64_t);
-    void disable_wp_on_pages(uint64_t, int64_t);
+    void disable_wp_on_pages(uint64_t, int64_t, bool);
 };
 
 class umap_stats {
@@ -555,6 +555,15 @@ void UserFaultHandler::uffd_handler(void)
 
     sort(umessages.begin(), umessages.begin()+msgs, less_than_key());
 
+#if 0
+    stringstream ss;
+    ss << msgs << " Messages:\n";
+    for (int i = 0; i < msgs; ++i) {
+      ss << "    " << uffd_pf_reason(umessages[i]) << endl;
+    }
+    umapdbg("%s\n", ss.str().c_str());
+#endif
+
     uint64_t last_addr = 0;
     for (int i = 0; i < msgs; ++i) {
       if (umessages[i].event != UFFD_EVENT_PAGEFAULT) {
@@ -568,6 +577,7 @@ void UserFaultHandler::uffd_handler(void)
       }
 
       last_addr = umessages[i].arg.pagefault.address;
+      stat->stat_faults++;
       pagefault_event(umessages[i]);       // At this point, we know we have had a page fault.  Let's handle it.
     }
   }
@@ -579,21 +589,14 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
   stringstream ss;
 
-  stat->stat_faults++;
-
   if (pm != nullptr) {
-    assert((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE));
-
-    ss << "PF(" << msg.arg.pagefault.flags << " WP+WRITE) (In Memory Already) @(" << page_begin << ") " << (pm->page_is_dirty() ? "Already Dirty " : "Clean ");
-    umapdbg("%s\n", ss.str().c_str());
-
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       if (!pm->page_is_dirty()) {
         pm->mark_page_dirty();
-        disable_wp_on_pages((uint64_t)page_begin, 1);
+        disable_wp_on_pages((uint64_t)page_begin, 1, false);
         stat->wp_messages++;
       }
-      else {
+      else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
         struct uffdio_copy copy;
         copy.src = (uint64_t)tmppagebuf;
         copy.dst = (uint64_t)page_begin;
@@ -613,16 +616,8 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
           perror("ERROR12: ioctl(UFFDIO_COPY nowake)");
           exit(1);
         }
+
       }
-    }
-
-    struct uffdio_range wake;
-    wake.start = (uint64_t)page_begin;
-    wake.len = page_size; 
-
-    if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
-      perror("ERROR: ioctl(UFFDIO_WAKE)");
-      exit(1);
     }
     return;
   }
@@ -721,7 +716,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
     assert(0);
   }
 
-  disable_wp_on_pages((uint64_t)page, 1);
+  disable_wp_on_pages((uint64_t)page, 1, true);
   pb->set_page(nullptr);
 }
 
@@ -750,12 +745,13 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
 //
 // We intentionally do not wake up faulting thread when disabling WP.  This is to handle the write-fault case when the page needs to be copied in.
 //
-void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages)
+void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bool do_not_awaken)
 {
   struct uffdio_writeprotect wp;
   wp.range.start = start;
   wp.range.len = page_size * num_pages;
-  wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
+  //wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
+  wp.mode = do_not_awaken ? UFFDIO_WRITEPROTECT_MODE_DONTWAKE : 0;
 
   //umapdbg("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
 
