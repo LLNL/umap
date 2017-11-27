@@ -41,10 +41,10 @@ const int UMAP_VERSION_MINOR = 0;
 const int UMAP_VERSION_PATCH = 1;
 
 static const int UMAP_UFFD_MAX_MESSAGES = 256;
-static const int UMAP_PAGEBLOCK_UFFD_HANDLERS = 32;
+static const int UMAP_PAGEBLOCK_UFFD_HANDLERS = 40;
 const uint64_t UMAP_DEFAULT_PAGES_PER_UFFD_HANDLER = 1024;  // Separate Page Buffer per Thread
 
-static const size_t UMAP_PAGES_PER_BLOCK = 1024;
+static const uint64_t UMAP_PAGES_PER_BLOCK = 1024;
 static uint64_t  umap_pages_per_uffd_handler = UMAP_DEFAULT_PAGES_PER_UFFD_HANDLER;
 
 static long page_size;
@@ -67,7 +67,7 @@ class UserFaultHandler;
 class _umap {
   friend UserFaultHandler;
   public:
-    _umap(void* _region, size_t _rsize, int num_backing_file, umap_backing_file* backing_files);
+    _umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_file* backing_files);
     ~_umap();
 
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
@@ -77,7 +77,7 @@ class _umap {
 
   private:
     void* region;
-    size_t region_size;
+    uint64_t region_size;
     int backingfile_fd;
     vector<umap_backing_file> bk_files;
     bool uffd_time_to_stop_working;
@@ -143,7 +143,7 @@ class umap_stats {
 
 struct umap_PageBlock {
     void*  base;
-    size_t length;
+    uint64_t length;
 };
 
 class umap_page_buffer {
@@ -151,7 +151,7 @@ class umap_page_buffer {
    * TODO: Make the single page buffer threadsafe
    */
   public:
-    umap_page_buffer(size_t pbuffersize);
+    umap_page_buffer(uint64_t pbuffersize);
     ~umap_page_buffer();
     umap_page* alloc_page_desc(void* page);
     void dealloc_page_desc(umap_page* page_desc);
@@ -161,7 +161,7 @@ class umap_page_buffer {
     umap_page* find_inmem_page_desc(void* page_addr); // Finds page_desc for page_addr in inmem_page_descriptors
 
   private:
-    size_t page_buffer_size;
+    uint64_t page_buffer_size;
     deque<umap_page*> free_page_descriptors;
     deque<umap_page*> inmem_page_descriptors;
     unordered_map<void*, umap_page*> inmem_page_map;
@@ -186,7 +186,7 @@ static unordered_map<void*, _umap*> active_umaps;
 //
 // Library Interface Entry
 //
-void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
+void* umap(void* addr, uint64_t length, int prot, int flags, int fd, off_t offset)
 {
   struct stat file;
   fstat(fd,&file);
@@ -194,7 +194,7 @@ void* umap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
   return umap_mf(addr, length, prot, flags, 1, &file1);
 }
 
-void* umap_mf(void* bass_addr, size_t region_size, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
+void* umap_mf(void* bass_addr, uint64_t region_size, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
 {
   assert((region_size % page_size) == 0);
 
@@ -222,7 +222,7 @@ void* umap_mf(void* bass_addr, size_t region_size, int prot, int flags, int num_
   return region;
 }
 
-int uunmap(void*  addr, size_t length)
+int uunmap(void*  addr, uint64_t length)
 {
   auto it = active_umaps.find(addr);
 
@@ -233,14 +233,16 @@ int uunmap(void*  addr, size_t length)
   return 0;
 }
 
-unsigned long umap_cfg_get_bufsize( void )
+uint64_t umap_cfg_get_bufsize( void )
 {
   return (umap_pages_per_uffd_handler * UMAP_PAGEBLOCK_UFFD_HANDLERS);
 }
 
-void umap_cfg_set_bufsize( unsigned long page_bufsize )
+void umap_cfg_set_bufsize( uint64_t page_bufsize )
 {
+  cout << "Setting Buffer Size to: " << page_bufsize << endl;
   umap_pages_per_uffd_handler = (page_bufsize / UMAP_PAGEBLOCK_UFFD_HANDLERS);
+  cout << "                         " << umap_pages_per_uffd_handler << " Pages per handler" << endl;
 
   if (umap_pages_per_uffd_handler == 0)
     umap_pages_per_uffd_handler = 1;
@@ -318,25 +320,25 @@ void __attribute ((destructor)) fine_umap_lib( void )
 //
 // _umap class implementation
 //
-_umap::_umap(void* _region, size_t _rsize, int num_backing_file, umap_backing_file* backing_files)
+_umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_file* backing_files)
     : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}
 {
   for (int i=0;i<num_backing_file;i++)
     bk_files.push_back(backing_files[i]); 
 
-  size_t pages_in_region = region_size / page_size;
-  size_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
-  size_t page_blocks = pages_in_region / pages_per_block;
-  size_t remainder_of_pages_in_last_block = pages_in_region % pages_per_block;
+  uint64_t pages_in_region = region_size / page_size;
+  uint64_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
+  uint64_t page_blocks = pages_in_region / pages_per_block;
+  uint64_t remainder_of_pages_in_last_block = pages_in_region % pages_per_block;
 
   if (remainder_of_pages_in_last_block)
     page_blocks++;          // Account for extra block
 
-  size_t num_workers = page_blocks < UMAP_PAGEBLOCK_UFFD_HANDLERS ? page_blocks : UMAP_PAGEBLOCK_UFFD_HANDLERS;
-  size_t page_blocks_per_worker = page_blocks / num_workers;
+  uint64_t num_workers = page_blocks < UMAP_PAGEBLOCK_UFFD_HANDLERS ? page_blocks : UMAP_PAGEBLOCK_UFFD_HANDLERS;
+  uint64_t page_blocks_per_worker = page_blocks / num_workers;
 
   try {
-    for (size_t worker = 0; worker < num_workers; ++worker) {
+    for (uint64_t worker = 0; worker < num_workers; ++worker) {
       umap_PageBlock pb;
 
       pb.base = (void*)((uint64_t)region + (worker * page_blocks_per_worker * pages_per_block * page_size));
@@ -393,7 +395,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
 {
   umessages.resize(UMAP_UFFD_MAX_MESSAGES);
 
-  if (posix_memalign((void**)&tmppagebuf, (size_t)512, page_size)) {
+  if (posix_memalign((void**)&tmppagebuf, (uint64_t)512, page_size)) {
     cerr << "ERROR: posix_memalign: failed\n";
     exit(1);
   }
@@ -764,10 +766,11 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
 //
 // umap_page_buffer class implementation
 //
-umap_page_buffer::umap_page_buffer(size_t pbuffersize) : page_buffer_size{pbuffersize}
+umap_page_buffer::umap_page_buffer(uint64_t pbuffersize) : page_buffer_size{pbuffersize}
 {
-  for (unsigned long i = 0; i < page_buffer_size; ++i)
+  for (uint64_t i = 0; i < page_buffer_size; ++i)
     free_page_descriptors.push_front(new umap_page());
+  cout << "Free Page Descriptor set to: " << free_page_descriptors.size() << endl;
 }
 
 umap_page_buffer::~umap_page_buffer()
@@ -787,6 +790,9 @@ umap_page* umap_page_buffer::alloc_page_desc(void* page)
     p = free_page_descriptors.back();
     free_page_descriptors.pop_back();
     p->set_page(page);
+  }
+  else {
+    cout << "Free Pages Exausted: " << inmem_page_descriptors.size() << endl;
   }
   return p;
 }
