@@ -1,0 +1,29 @@
+#!/bin/bash
+function free_mem {
+    m=`grep MemFree /proc/meminfo | awk -v N=2 '{print $N}'`
+    fm=$(((${m}/1024)/1024))
+    echo $fm GB Free
+}
+
+function drop_page_cache {
+  echo "Dropping page cache"
+  sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+}
+
+function disable_swap {
+  echo "Disabling swap"
+  sudo swapoff -a
+}
+
+function turn_off_readahead {
+  fs=`mount | grep intel | cut -d " " -f 1`
+  sudo blockdev --setra 0 $fs
+  ra=`sudo blockdev --getra $fs`
+  echo "Read ahead set to $ra for $fs"
+}
+
+free_mem
+disable_swap
+turn_off_readahead
+drop_page_cache
+free_mem

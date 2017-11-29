@@ -32,7 +32,7 @@
 #include "umap.h"
 #include "umaptest.h"
 
-static const uint64_t IndexesSize = 10000000;
+static const uint64_t IndexesSize = 20000000;
 static uint64_t* Indexes;
 
 // We initilize an array with a random set of indexes into our GIANT 600GB array
