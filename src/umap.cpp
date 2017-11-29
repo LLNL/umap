@@ -240,9 +240,7 @@ uint64_t umap_cfg_get_bufsize( void )
 
 void umap_cfg_set_bufsize( uint64_t page_bufsize )
 {
-  cout << "Setting Buffer Size to: " << page_bufsize << endl;
   umap_pages_per_uffd_handler = (page_bufsize / UMAP_PAGEBLOCK_UFFD_HANDLERS);
-  cout << "                         " << umap_pages_per_uffd_handler << " Pages per handler" << endl;
 
   if (umap_pages_per_uffd_handler == 0)
     umap_pages_per_uffd_handler = 1;
@@ -348,7 +346,6 @@ _umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_
       if ((worker == num_workers-1) && remainder_of_pages_in_last_block)
         pb.length -= ((pages_per_block - remainder_of_pages_in_last_block)) * page_size;
 
-      // cout << "Region: " << region << " -- " << (void*)((uint64_t)region + region_size) << " : " << pb.base << " -- " << (void*)((uint64_t)pb.base + pb.length) << endl;
       vector<umap_PageBlock> segs{ pb };
 
       ufault_handlers.push_back( new UserFaultHandler{this, segs, umap_pages_per_uffd_handler} );
@@ -770,7 +767,6 @@ umap_page_buffer::umap_page_buffer(uint64_t pbuffersize) : page_buffer_size{pbuf
 {
   for (uint64_t i = 0; i < page_buffer_size; ++i)
     free_page_descriptors.push_front(new umap_page());
-  cout << "Free Page Descriptor set to: " << free_page_descriptors.size() << endl;
 }
 
 umap_page_buffer::~umap_page_buffer()
@@ -790,9 +786,6 @@ umap_page* umap_page_buffer::alloc_page_desc(void* page)
     p = free_page_descriptors.back();
     free_page_descriptors.pop_back();
     p->set_page(page);
-  }
-  else {
-    cout << "Free Pages Exausted: " << inmem_page_descriptors.size() << endl;
   }
   return p;
 }

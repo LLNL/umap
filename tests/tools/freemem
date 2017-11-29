@@ -1,0 +1,4 @@
+#!/bin/bash
+m=`grep MemFree /proc/meminfo | awk -v N=2 '{print $N}'`
+fm=$(((${m}/1024)/1024))
+echo $fm GB Free
