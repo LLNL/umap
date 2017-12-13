@@ -262,6 +262,10 @@ static int test_openfiles(const char *fn)
       }
       input.close();
     }
+    else {
+        printf("Unable to find input.txt file\n");
+        return -1;
+    }
 
     double start = gets();
     median_calc(nlist,list,cube_median,cube);
