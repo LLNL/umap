@@ -409,7 +409,6 @@ void _umap::pagefault_event(const struct uffd_msg& msg)
   file_id = offset/bk_files[0].data_size;   //find the file id and offset number
   offset %= bk_files[0].data_size;
 
-  assert(file_id == 0);
   if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
     perror("ERROR: pread failed");
     exit(1);
