@@ -630,7 +630,6 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   file_id = offset/_u->bk_files[0].data_size;   //find the file id and offset number
   offset %= _u->bk_files[0].data_size;
 
-  assert(file_id == 0);
   if (pread(_u->bk_files[file_id].fd, tmppagebuf, page_size, offset+_u->bk_files[file_id].data_offset) == -1) {
     perror("ERROR: pread failed");
     exit(1);
