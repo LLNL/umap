@@ -1,16 +1,16 @@
 #!/bin/bash
 function usage {
   echo "Usage:"
-  echo "$0 Size - Size is the number of GB to waste."
+  echo "$0 Size - Size is the number of GB to adjust free memory to."
   exit 1
 }
 
-function free_mem {
+function amounttowaste {
     m=`grep MemFree /proc/meminfo | awk -v N=2 '{print $N}'`
     echo $m
     fm=$(((${m}/1024)/1024))
-    wm=$((${fm}-20))
-    echo $fm GB Available, Wasting $wm GB
+    waste=$((${fm}-${memtoleave}))
+    echo $fm GB Available, Wasting $waste GB
 }
 
 function setuptmpfs {
@@ -72,11 +72,11 @@ if [ $# -ne 1 ]; then
   usage
 fi
 
-waste=$1
+memtoleave=$1
 
+turn_off_readahead
+disable_swap
 setuptmpfs
 drop_page_cache
-disable_swap
-turn_off_readahead
-drop_page_cache
+amounttowaste
 waste_memory
