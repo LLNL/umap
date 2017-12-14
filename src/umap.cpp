@@ -41,7 +41,7 @@ const int UMAP_VERSION_MINOR = 0;
 const int UMAP_VERSION_PATCH = 1;
 
 static const int UMAP_UFFD_MAX_MESSAGES = 256;
-static const int UMAP_PAGEBLOCK_UFFD_HANDLERS = 40;
+static unsigned int uffd_threads;
 const uint64_t UMAP_DEFAULT_PAGES_PER_UFFD_HANDLER = 1024;  // Separate Page Buffer per Thread
 
 static const uint64_t UMAP_PAGES_PER_BLOCK = 1024;
@@ -235,12 +235,12 @@ int uunmap(void*  addr, uint64_t length)
 
 uint64_t umap_cfg_get_bufsize( void )
 {
-  return (umap_pages_per_uffd_handler * UMAP_PAGEBLOCK_UFFD_HANDLERS);
+  return (umap_pages_per_uffd_handler * uffd_threads);
 }
 
 void umap_cfg_set_bufsize( uint64_t page_bufsize )
 {
-  umap_pages_per_uffd_handler = (page_bufsize / UMAP_PAGEBLOCK_UFFD_HANDLERS);
+  umap_pages_per_uffd_handler = (page_bufsize / uffd_threads);
 
   if (umap_pages_per_uffd_handler == 0)
     umap_pages_per_uffd_handler = 1;
@@ -288,6 +288,9 @@ void __attribute ((constructor)) init_umap_lib( void )
     throw -1;
   }
 
+  unsigned int n = std::thread::hardware_concurrency();
+  uffd_threads = (n == 0) ? 16 : n;
+
   act.sa_handler = NULL;
   act.sa_sigaction = sighandler;
   if (sigemptyset(&act.sa_mask) == -1) {
@@ -332,8 +335,10 @@ _umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_
   if (remainder_of_pages_in_last_block)
     page_blocks++;          // Account for extra block
 
-  uint64_t num_workers = page_blocks < UMAP_PAGEBLOCK_UFFD_HANDLERS ? page_blocks : UMAP_PAGEBLOCK_UFFD_HANDLERS;
+  uint64_t num_workers = page_blocks < uffd_threads ? page_blocks : uffd_threads;
   uint64_t page_blocks_per_worker = page_blocks / num_workers;
+
+  // cout << "umap " << num_workers << " workers for: " << region << " - " << (void*)((char*)region+region_size) << endl;
 
   try {
     for (uint64_t worker = 0; worker < num_workers; ++worker) {
