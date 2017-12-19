@@ -14,7 +14,9 @@ if(OPENMP_FOUND)
     add_executable(multiple multiple.cpp)
     add_executable(simple simple_loader.cpp)
     add_executable(private multi_private.cpp)
-    
+    add_executable(generate_dummy_cube generate_dummy_cube.cpp)
+    add_executable(run_median_calculation_mmap run_median_calculation_mmap.cpp)
+
     target_link_libraries(multiple libumap_static)
     target_link_libraries(multiple libumaptest_static)
     target_link_libraries(multiple qfits)
@@ -28,7 +30,7 @@ if(OPENMP_FOUND)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
-    install(TARGETS multiple simple private
+    install(TARGETS multiple simple private generate_dummy_cube run_median_calculation_mmap
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )

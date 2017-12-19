@@ -16,10 +16,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <fstream>
 #include <string>
 #include <unistd.h>
+#include <tuple>
 
-#include "utility/time.hpp"
-#include "utility/openmp.hpp"
-#include "utility/mmap.hpp"
+#include "../utility/time.hpp"
+#include "../utility/openmp.hpp"
+#include "../utility/mmap.hpp"
 
 #include "median_calculation_kernel.hpp"
 

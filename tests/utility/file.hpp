@@ -34,7 +34,7 @@ namespace utility
 /// -------------------------------------------------------------------------------- ///
 /// Change file size
 /// -------------------------------------------------------------------------------- ///
-void extend_file_size_manually(const int fd, const size_t file_size)
+void extend_file_size_manually(const int fd, const off_t file_size)
 {
   unsigned char* buffer = new unsigned char[4096];
   for (off_t i = 0; i < file_size / 4096; ++i) {
