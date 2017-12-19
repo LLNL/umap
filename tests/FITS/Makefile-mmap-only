@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------------------------------- #
+CXX = g++
+# ---------------------------------------------------------------------------------------------------- #
+
+# ----- Common----- #
+CFLAGS = -O3 -Wall -std=c++11 -pthread #-g3
+INCS = -I./ -I../
+
+#----- To avoid adding fopenmp on OSX----- #
+UNAME := $(shell uname)
+ifneq ($(UNAME), Darwin)
+	CFLAGS += -fopenmp
+endif
+
+#----- For generate_cube----- #
+GEN = generate_dummy_cube
+
+#----- For run_median_bench----- #
+MEDM = run_median_calculation_mmap
+
+
+#----- Build----- #
+BUILD_DIR = ./build
+MKDIR_P = mkdir -p
+
+all: ${BUILD_DIR} $(GEN) $(MEDM)
+
+${BUILD_DIR}:
+	$(MKDIR_P) $(BUILD_DIR)
+
+$(GEN): $(GEN).cpp
+	$(CXX) $(CFLAGS) $(INCS) -o $(BUILD_DIR)/$(GEN) $(GEN).cpp
+
+$(MEDM): $(MEDM).cpp
+	$(CXX) $(CFLAGS) $(INCS) $(CFLAGS_MED) -o $(BUILD_DIR)/$(MEDM) $(MEDM).cpp
+
+clean:
+	$(RM) $(BUILD_DIR)/$(GEN) $(BUILD_DIR)/$(MEDM)
