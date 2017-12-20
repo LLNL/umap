@@ -61,7 +61,7 @@ std::pair<int, void*> map_file_read_mode(const std::string& file_name, void *con
   if (fd == -1) { ::perror("open"); return std::make_pair(-1, nullptr); }
 
   /// ----- Map the file ----- ///
-  void* mapped_addr = reinterpret_cast<unsigned char *>(map_file(addr, length, PROT_READ, MAP_PRIVATE, fd, offset));
+  void* mapped_addr = map_file(addr, length, PROT_READ, MAP_PRIVATE, fd, offset);
   if (mapped_addr == MAP_FAILED) {
     close(fd);
     return std::make_pair(-1, nullptr);
@@ -90,6 +90,14 @@ std::pair<int, void*> map_file_write_mode(const std::string& file_name, void *co
   }
 
   return std::make_pair(fd, mapped_addr);
+}
+
+/// \brief Reserve a vm address region
+/// \param length Length of region
+/// \return The address of the regision
+void* reserve_vm_address(const size_t length)
+{
+  return map_file(nullptr, length, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
 
 /// \brief create and map a file with write mode
@@ -147,6 +155,23 @@ void madvise_willneed(void *const addr, const size_t length)
   if (ret != 0) { ::perror("madvise MADV_WILLNEED"); }
 }
 
+bool mprotect_read(void *const addr, const size_t length)
+{
+  if (::mprotect(addr, length, PROT_READ) == -1) {
+    ::perror("mprotect");
+    return false;
+  }
+  return true;
+}
+
+bool mprotect_write(void *const addr, const size_t length)
+{
+  if (::mprotect(addr, length, PROT_WRITE) == -1) {
+    ::perror("mprotect");
+    return false;
+  }
+  return true;
+}
 
 } // namespace utility
 #endif // UTILITY_MMAP_HPP

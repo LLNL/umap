@@ -44,7 +44,7 @@ class pareto_int_distribution
     uint64_t safe_counter = 0;
 
     while (true) {
-      const auto t = static_cast<uint64_t>(m_am / std::pow(m_uniform_dist(m_rnd_gen), 1.0 / m_alpha)) - 1.0;
+      const auto t = static_cast<uint64_t>(m_am / std::pow(m_uniform_dist(m_rnd_gen), 1.0 / m_alpha)) - am;
       if (t < m_max_t)
         return t;
 
