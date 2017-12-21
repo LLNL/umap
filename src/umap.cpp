@@ -186,9 +186,39 @@ static unordered_map<void*, _umap*> active_umaps;
 //
 // Library Interface Entry
 //
+static int check_uffd_compatibility( void )
+{
+  int fd;
+
+  if ((fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
+    perror("UFFD Compatibilty Check - Unable to open userfaultfd: ");
+    exit(1);
+  }
+
+  struct uffdio_api uffdio_api = { .api = UFFD_API, .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP };
+
+  if (ioctl(fd, UFFDIO_API, &uffdio_api) == -1) {
+    cerr << "UFFD Compatibilty Check - userfaultfd WP Not Available\n";
+    exit(1);
+  }
+
+  if (!(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP)) {
+    cerr << "UFFD Compatibilty Check - unsupported userfaultfd WP\n";
+    exit(1);
+  }
+
+  close(fd);
+
+  return 0;
+}
+
 void* umap(void* addr, uint64_t length, int prot, int flags, int fd, off_t offset)
 {
   struct stat file;
+
+  if (check_uffd_compatibility() < 0)
+    return NULL;
+
   fstat(fd,&file);
   struct umap_backing_file file1={.fd = fd, .data_size = file.st_size, .data_offset = offset};
   return umap_mf(addr, length, prot, flags, 1, &file1);
@@ -409,18 +439,6 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
 
   if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
     perror("ERROR: userfaultfd syscall not available in this kernel");
-    throw -1;
-  }
-
-  struct uffdio_api uffdio_api = { .api = UFFD_API, .features = 0};
-
-  if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
-    perror("ERROR: ioctl(UFFDIO_API)");
-    throw -1;
-  }
-
-  if (uffdio_api.api != UFFD_API) {
-    cerr << __FUNCTION__ << ": unsupported userfaultfd api\n";
     throw -1;
   }
 
