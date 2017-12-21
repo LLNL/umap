@@ -442,6 +442,18 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
     throw -1;
   }
 
+  struct uffdio_api uffdio_api = { .api = UFFD_API, .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP };
+
+  if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
+    perror("ERROR: UFFDIO_API Failed: ");
+    exit(1);
+  }
+
+  if (!(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP)) {
+    perror("ERROR: userfaultfd WP: ");
+    exit(1);
+  }
+
   for ( auto seg : PageBlocks ) {
     struct uffdio_register uffdio_register = {
       .range = {.start = (uint64_t)seg.base, .len = seg.length},
