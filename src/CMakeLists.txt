@@ -6,7 +6,7 @@ set_target_properties(libumap_static PROPERTIES OUTPUT_NAME libumap)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../include )
+include_directories( BEFORE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../include ${CMAKE_CURRENT_SOURCE_DIR}/../sysincludes )
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
 
