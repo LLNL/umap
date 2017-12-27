@@ -6,7 +6,7 @@ if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (default Debug)" FORCE)
 endif()
 
-OPTION (BUILD_FITS "Build FITS-based Tests (requires qfits library)" FALSE)
+OPTION (BUILD_QFITS "Build qfits-based Tests (requires qfits library)" FALSE)
 
 set (FLAGS_ALL "-Wall")
 set (FLAGS_DEBUG_ALL "-g -O0 -DDEBUG")

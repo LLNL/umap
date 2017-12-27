@@ -13,9 +13,13 @@ Public License along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #include <iostream>
+#include <string>
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
+#include <cmath>
+#include <cstddef>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -27,20 +31,29 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 using namespace std;
 
-int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** region)
+
+/// \brief Note: this function is not visible from outside
+/// mapaddr is ignored for umap allocation
+int umt_openandmap_impl(const umt_optstruct_t* testops, uint64_t numbytes, void* mapaddr, void** region)
 {
+  const long pagesize = ::sysconf(_SC_PAGE_SIZE);
+  if ((ptrdiff_t)mapaddr % pagesize != 0) {
+    cerr << "address is not page aligned " << mapaddr << std::endl;
+    exit(-1);
+  }
+
   int fd;
   int open_options = O_RDWR;
 
-  if (testops->iodirect) 
+  if (testops->iodirect)
     open_options |= O_DIRECT;
 
   if ( !testops->noinit )
     open_options |= O_CREAT;
 
-#ifdef O_LARGEFILE
-    open_options |= O_LARGEFILE;
-#endif
+//#ifdef O_LARGEFILE
+  open_options |= O_LARGEFILE;
+//#endif
 
   fd = open(testops->fn, open_options, S_IRUSR|S_IWUSR);
   if(fd == -1) {
@@ -58,15 +71,15 @@ int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** reg
     }
 
     if ((uint64_t)sbuf.st_size < numbytes) {
-      cerr << testops->fn 
-        << " file is not large enough.  "  << sbuf.st_size 
-        << " < size requested " << numbytes << endl;
+      cerr << testops->fn
+           << " file is not large enough.  "  << sbuf.st_size
+           << " < size requested " << numbytes << endl;
       exit(-1);
     }
   }
 
   try {
-      int x;
+    int x;
     if((x = posix_fallocate(fd,0, numbytes) != 0)) {
       perror("??posix_fallocate");
 
@@ -74,19 +87,22 @@ int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** reg
       exit(-1);
     }
   } catch(const std::exception& e) {
-      cerr << "posix_fallocate: " << e.what() << endl;
-      exit(-1);
+    cerr << "posix_fallocate: " << e.what() << endl;
+    exit(-1);
   } catch(...) {
-      cerr << "posix_fallocate failed to instantiate _umap object\n";
-      exit(-1);
+    cerr << "posix_fallocate failed to instantiate _umap object\n";
+    exit(-1);
   }
 
   int prot = PROT_READ|PROT_WRITE;
 
   if ( testops->usemmap ) {
     int flags = MAP_SHARED;
+    if ( testops->fnum > 1 && mapaddr != nullptr ) { /// when map multiple files, must be mapped to the given address
+      flags |= MAP_FIXED;
+    }
 
-    *region = mmap(NULL, numbytes, prot, flags, fd, 0);
+    *region = mmap(mapaddr, numbytes, prot, flags, fd, 0);
     if (*region == MAP_FAILED) {
       perror("mmap");
       exit(-1);
@@ -95,7 +111,7 @@ int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** reg
   else {
     int flags = UMAP_PRIVATE;
 
-    *region = umap(NULL, numbytes, prot, flags, fd, 0);
+    *region = umap(nullptr, numbytes, prot, flags, fd, 0);
     if (*region == UMAP_FAILED) {
       perror("umap");
       exit(-1);
@@ -103,6 +119,11 @@ int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** reg
   }
 
   return fd;
+}
+
+int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** region)
+{
+  return umt_openandmap_impl(testops, numbytes, nullptr, region);
 }
 
 void umt_closeandunmap(const umt_optstruct_t* testops, uint64_t numbytes, void* region, int fd)
@@ -121,6 +142,47 @@ void umt_closeandunmap(const umt_optstruct_t* testops, uint64_t numbytes, void* 
   }
 
   close(fd);
+}
+
+/// \brief Map multiple files; the size of each file MUST BE the same
+/// \return List of file descriptor; MUST be freed later
+void umt_openandmap_mf(const umt_optstruct_t* testops, uint64_t numbytes, void* regionlist[], int fdlist[])
+{
+  // ----- Reserve VM region ----- //
+  if (testops->usemmap) {
+    regionlist[0] = mmap(nullptr, numbytes * testops->fnum, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (regionlist[0] == MAP_FAILED) {
+      perror("mmap");
+      exit(-1);
+    }
+    if (mprotect(regionlist[0], numbytes * testops->fnum, PROT_READ | PROT_WRITE) == -1) {
+      perror("mprotect");
+      exit(-1);
+    }
+  }
+
+  // ----- Map files ----- //
+  umt_optstruct_t wk_testops = *testops;
+
+  for (int i = 0; i < testops->fnum; ++i) {
+    std::string file_name(testops->fn);
+    file_name += "_" + std::to_string(i);
+    wk_testops.fn = file_name.c_str();
+    char* mapaddr = reinterpret_cast<char*>(regionlist[0]) + numbytes * i;
+    fdlist[i] = umt_openandmap_impl(&wk_testops, numbytes, mapaddr, &(regionlist[i]));
+    if (mapaddr != regionlist[i]) {
+      cerr << "Mapped to different address" << mapaddr << " " << regionlist[i] << endl;
+      exit(-1);
+    }
+  }
+}
+
+/// \brief Unmap multiple files; the size of each file MUST be the same
+void umt_closeandunmap_mf(const umt_optstruct_t* testops, uint64_t numbytes, void* region[], int fdlist[])
+{
+  for (int i = 0; i < testops->fnum; ++i) {
+    umt_closeandunmap(testops, numbytes, region[i], fdlist[i]);
+  }
 }
 
 //-------support fits files ----------------
