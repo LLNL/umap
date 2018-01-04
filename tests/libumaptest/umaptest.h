@@ -25,21 +25,19 @@ typedef struct {
   uint64_t numpages;
   uint64_t numthreads;
   uint64_t bufsize;
-  char const* fn;
-  int fnum;
+  int num_files;
+  char const* filename; // file prefix if num_files > 1
 } umt_optstruct_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
   void umt_getoptions(umt_optstruct_t*, int, char *argv[]);
-  int umt_openandmap(const umt_optstruct_t*, uint64_t, void**);
-  void umt_closeandunmap(const umt_optstruct_t*, uint64_t, void*, int);
+  void* umt_openandmap(const umt_optstruct_t*, uint64_t, void**);
+  void umt_closeandunmap(const umt_optstruct_t*, uint64_t, void*, void*);
   long umt_getpagesize(void);
-  void* umt_openandmap_fits(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
-  void umt_closeandunmap_fits(const umt_optstruct_t*, uint64_t, void*,void*);
-  void* umt_openandmap_fits2(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
-  void umt_closeandunmap_fits2(const umt_optstruct_t*, uint64_t, void**,void*);
+  void* umt_openandmap_mf(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_mf(const umt_optstruct_t*, uint64_t, void*,void*);
 #ifdef __cplusplus
 }
 #endif

@@ -81,7 +81,7 @@ int main(int argc, char **argv)
   int64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
-  int fd;
+  void* maphandle;
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> rnd_int(0, 39);
@@ -93,7 +93,8 @@ int main(int argc, char **argv)
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  fd = umt_openandmap(&options, totalbytes, &base_addr);
+  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
+  assert(maphandle != NULL);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
@@ -136,7 +137,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "test took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  umt_closeandunmap(&options, totalbytes, base_addr, fd);
+  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
 
   return 0;
 }

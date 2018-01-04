@@ -60,9 +60,10 @@ public:
         umt_options.iodirect = options.iodirect;
         umt_options.usemmap = options.usemmap;
         umt_options.noinit = 0;
-        umt_options.fn = options.fn;
+        umt_options.filename = options.fn;
 
-        fd = umt_openandmap(&umt_options, (options.num_churn_pages+2*options.num_load_pages)*pagesize, &base_addr);
+        maphandle = umt_openandmap(&umt_options, (options.num_churn_pages+2*options.num_load_pages)*pagesize, &base_addr);
+        assert(maphandle != NULL);
 
         read_load_pages = base_addr;
         write_load_pages = (void*)((uint64_t)base_addr + (options.num_load_pages*pagesize));
@@ -84,7 +85,7 @@ public:
     }
 
     ~pageiotest( void ) {
-        umt_closeandunmap(&umt_options, (options.num_churn_pages+2*options.num_load_pages)*pagesize, base_addr, fd);
+        umt_closeandunmap(&umt_options, (options.num_churn_pages+2*options.num_load_pages)*pagesize, base_addr, maphandle);
     }
 
     void start( void ) {
@@ -142,7 +143,7 @@ private:
     void* churn_pages;
     vector<thread*> churn_readers;
 
-    int fd;
+    void* maphandle;
 
     void init() {
         cout << "Initializing\n";
