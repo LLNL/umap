@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cassert>
 #include <unistd.h>
 #ifdef _OPENMP
 #include <omp.h>
@@ -61,33 +62,34 @@ int main(int argc, char *argv[])
   umt_getoptions(&options, argc, argv);
 
   const size_t frame_mem_size = median::get_frame_size(cube) * sizeof(pixcel_value_type);
+  const size_t cube_mem_size = median::get_cube_size(cube) * sizeof(pixcel_value_type);
   omp_set_num_threads(static_cast<int>(options.numthreads));
 
   // -------------------- Map the file -------------------- //
-  std::vector<void*> raw_pointer_list(options.fnum);
-  std::vector<int> fd_list(options.fnum);
+  void* raw_pointer;
   std::cout << "Map files" << std::endl;
-  umt_openandmap_mf(&options, frame_mem_size, raw_pointer_list.data(), fd_list.data());
-  cube.data = reinterpret_cast<pixcel_value_type *>(raw_pointer_list[0]);
+  void* bk_list = umt_openandmap_mf(&options, cube_mem_size, &raw_pointer, 0, frame_mem_size);
+  assert(bk_list != nullptr);
+  cube.data = reinterpret_cast<pixcel_value_type *>(raw_pointer);
   std::cout << "done" << std::endl;
 
   // -------------------- Calculate median -------------------- //
-  std::vector<pixcel_value_type> median_value(median::get_frame_size(cube));
+  std::vector<pixcel_value_type> median_calculation_result(median::get_frame_size(cube));
   std::cout << "An array is allocated to store median values (GB) "
             << static_cast<double>(frame_mem_size) / (1ULL << 30) << std::endl;
 
   std::cout << "\nMedian calculation start" << std::endl;
   const auto time_start = utility::elapsed_time_sec();
-  median::calculate_median<pixcel_value_type>(cube, median_value.data());
+  median::calculate_median<pixcel_value_type>(cube, median_calculation_result.data());
   std::cout << "done (sec) " << utility::elapsed_time_sec(time_start) << std::endl;
 
   if (!median_result_file_name.empty()) {
     std::cout << "\nDump median value" << std::endl;
-    dump_median_value(median_value, median_result_file_name);
+    dump_median_value(median_calculation_result, median_result_file_name);
     std::cout << "done" << std::endl;
   }
 
-  umt_closeandunmap_mf(&options, frame_mem_size, raw_pointer_list.data(), fd_list.data());
+  umt_closeandunmap_mf(&options, cube_mem_size, raw_pointer, bk_list);
 
   return 0;
 }

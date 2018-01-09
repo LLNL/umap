@@ -58,7 +58,7 @@ size_t get_frame_size(const cube_t<pixel_type>& cube)
 
 /// \brief Return cube size (number of elements)
 template <typename pixel_type>
-size_t cal_cube_size(const cube_t<pixel_type>& cube)
+size_t get_cube_size(const cube_t<pixel_type>& cube)
 {
   return cube.size_x * cube.size_y * cube.size_k;
 }

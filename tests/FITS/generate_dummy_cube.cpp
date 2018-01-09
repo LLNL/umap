@@ -145,7 +145,7 @@ create_and_map_cube_file(const size_t size_x, const size_t size_y, const size_t 
     utility::mprotect_write(base_address, cube_size);
 
     for (size_t k = 0; k < size_k; ++k) {
-      const std::string file_name(cube_file_name + "_" + std::to_string(k));
+      const std::string file_name(cube_file_name + std::to_string(k + 1) + ".data");
       const size_t frame_size = size_x * size_y * sizeof(value_type);
 
       map_list[k] = create_and_map_file(file_name, base_address, frame_size);
