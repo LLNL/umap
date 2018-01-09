@@ -105,7 +105,9 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
     usage(pname);
   }
 
-  umap_cfg_set_bufsize(testops->bufsize);
+  if (!testops->usemmap) {
+    umap_cfg_set_bufsize(testops->bufsize);
+  }
 }
 
 long umt_getpagesize(void)
