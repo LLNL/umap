@@ -148,7 +148,7 @@ void displaycube(double *cube,struct patch *list,int n)
 {
      int i,j,k;
      uint64_t lx=list[0].ex;
-     uint64_t ly=list[0].ey;
+     //uint64_t ly=list[0].ey;
      for (k=1;k<=n;k++)
      {
 	 for (i=list[k].sy; i<list[k].ey; i++) // bounding box
@@ -164,13 +164,13 @@ void displaycube(double *cube,struct patch *list,int n)
 void median_calc(int n,struct patch *list,double *cube_median,float **d)
 {
     int lx=list[0].ex;
-    int ly=list[0].ey;
-    for (uint64_t k=1;k<=n;k++)
+    //int ly=list[0].ey;
+    for (int k=1;k<=n;k++)
     {
 	#pragma omp parallel for
-        for (uint64_t i=list[k].sy; i<list[k].ey; i++) // bounding box
+        for (int i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
-            for (uint64_t j=list[k].sx; j<list[k].ex; j++)
+            for (int j=list[k].sx; j<list[k].ex; j++)
 	    {
 	        //printf("i,j:%d %d\n",i,j);
  	        cube_median[i*lx+j]=torben(d,options.fnum,i*lx+j);
@@ -242,6 +242,7 @@ static int test_openfiles(const char *fn)
     //printf("psize:%d lx:%d ly:%d\n",frame,lx,ly);
     totalbytes=options.numpages*pagesize;
     bk_list = umt_openandmap_fits2(&options,totalbytes,base_addr,(off_t)dstart,frame);
+    assert(bk_list != NULL);
 
     printf("thread num:%lu\n",options.numthreads);
     omp_set_num_threads(options.numthreads);

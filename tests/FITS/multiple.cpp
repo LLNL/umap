@@ -140,14 +140,14 @@ double torben(float *m, int n,uint64_t step)
 }
 void displaycube(double *cube,struct patch *list,int n)
 {
-     int i,j,k;
+     //int i,j,k;
      uint64_t lx=list[0].ex;
-     uint64_t ly=list[0].ey;
-     for (k=1;k<=n;k++)
+     //uint64_t ly=list[0].ey;
+     for (int k=1;k<=n;k++)
      {
-	 for (i=list[k].sy; i<list[k].ey; i++) // bounding box
+	 for (unsigned int i=list[k].sy; i<list[k].ey; i++) // bounding box
 	 {
-	     for (j=list[k].sx; j<list[k].ex; j++)
+	     for (unsigned int j=list[k].sx; j<list[k].ex; j++)
 	     {
 		 printf("%6.5lf\n",cube[i*lx+j]);		 
 		 //printf("\n");
@@ -159,13 +159,13 @@ void displaycube(double *cube,struct patch *list,int n)
 {
     uint64_t lx=list[0].ex;
     uint64_t ly=list[0].ey;
-    for (uint64_t k=1;k<=n;k++)
+    for (int k=1;k<=n;k++)
     {
 	#pragma omp parallel for
         for (uint64_t i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
             for (uint64_t j=list[k].sx; j<list[k].ex; j++)
-	        cube_median[i*lx+j]=torben(cube+i*lx+j,options.fnum,lx*ly);
+	        cube_median[i*lx+j]=torben(cube+i*lx+j,options.num_files,lx*ly);
         }
    }
 }  
@@ -230,7 +230,8 @@ static int test_openfiles(const char *fn)
     frame=(off_t)lx*ly*psize;
     //printf("psize:%d lx:%d ly:%d\n",frame,lx,ly);
     totalbytes=options.numpages*pagesize;
-    bk_list = umt_openandmap_fits(&options,totalbytes,&base_addr,(off_t)dstart,frame);
+    bk_list = umt_openandmap_mf(&options,totalbytes,&base_addr,(off_t)dstart,frame);
+    assert(bk_list != NULL);
 
     //printf("thread num:%d\n",options.numthreads);
     omp_set_num_threads(options.numthreads);
@@ -273,7 +274,7 @@ static int test_openfiles(const char *fn)
     //displaycube(cube_median,list,nlist);
     free(cube_median);
     free(list);
-    umt_closeandunmap_fits(&options, totalbytes, base_addr, bk_list);
+    umt_closeandunmap_mf(&options, totalbytes, base_addr, bk_list);
     return 0 ;
 }
 
@@ -285,7 +286,7 @@ int main(int argc, char * argv[])
     int err ;
     umt_getoptions(&options, argc, argv);
     err=0;
-    test_openfiles(options.fn);
+    test_openfiles(options.filename);
     //err += fits();
     if (err>0)
     {

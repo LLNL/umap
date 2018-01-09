@@ -140,14 +140,14 @@ double torben(float **m, int n,int pos)
 }
 void displaycube(double *cube,struct patch *list,int n)
 {
-     int i,j,k;
+     //unsigned int i,j,k;
      uint64_t lx=list[0].ex;
-     uint64_t ly=list[0].ey;
-     for (k=1;k<=n;k++)
+     //uint64_t ly=list[0].ey;
+     for (int k=1;k<=n;k++)
      {
-	 for (i=list[k].sy; i<list[k].ey; i++) // bounding box
+	 for (unsigned int i=list[k].sy; i<list[k].ey; i++) // bounding box
 	 {
-	     for (j=list[k].sx; j<list[k].ex; j++)
+	     for (unsigned int j=list[k].sx; j<list[k].ex; j++)
 	     {
 		 printf("%6.5lf\n",cube[i*lx+j]);		 
 		 //printf("\n");
@@ -159,15 +159,15 @@ void displaycube(double *cube,struct patch *list,int n)
 void median_calc(int n,struct patch *list,double *cube_median,float **d)
 {
     uint64_t lx=list[0].ex;
-    uint64_t ly=list[0].ey;
-    for (uint64_t k=1;k<=n;k++)
+    //uint64_t ly=list[0].ey;
+    for (int k=1;k<=n;k++)
     {
 	#pragma omp parallel for
         for (uint64_t i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
             for (uint64_t j=list[k].sx; j<list[k].ex; j++)
 	    {
- 	        cube_median[i*lx+j]=torben((float **)d,options.fnum,i*lx+j);
+ 	        cube_median[i*lx+j]=torben((float **)d,options.num_files,i*lx+j);
 	    }
         }
    }
@@ -182,7 +182,7 @@ static int process(const char * filename)
     fdlist=(int *)calloc(500,sizeof(int));
     nfilename=(char *)malloc(sizeof(char)*100);
 
-    for (int i=0;i<options.fnum;i++)
+    for (int i=0;i<options.num_files;i++)
     {
         strcpy(nfilename,filename);
 	sprintf(num,"%d",i+1);
@@ -259,7 +259,7 @@ static int process(const char * filename)
     int frame=dstart+lx*ly*psize;
     //printf("frame size:%d\n",frame);
     char *f1[100];
-    for (int i=0;i<options.fnum;i++)
+    for (int i=0;i<options.num_files;i++)
     {
         f1[i] = (char*)mmap(0,fileinfo.st_size,PROT_READ | PROT_WRITE,MAP_SHARED,fdlist[i],0);
 	if (f1[i]==(char*)-1) 
@@ -300,7 +300,7 @@ static int process(const char * filename)
     //displaycube(cube_median,list,nlist);
     free(cube_median);
     free(list);
-    for (i=0;i<options.fnum;i++)
+    for (i=0;i<options.num_files;i++)
     {
         if (munmap(f1[i], frame)!=0) 
         {
@@ -319,7 +319,7 @@ int main(int argc, char * argv[])
     int err ;
     umt_getoptions(&options, argc, argv);
     err=0;
-    err += process(options.fn);
+    err += process(options.filename);
     if (err>0)
     {
         fprintf(stderr, "%s: %d error(s) occurred\n", argv[0], err);

@@ -91,40 +91,17 @@ int main(int argc, char **argv)
   int64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
-  int fd;
+  void* umaphandle;
 
   pagesize = umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   omp_set_num_threads(options.numthreads);
-#ifdef TAKEN_OUT
-  int s;
-  cpu_set_t cpuset;
-  pthread_t thread;
-
-  thread = pthread_self();
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(6, &cpuset);
-
-  s = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-  if (s != 0) {
-    perror("ERROR: pthread_setaffinity_np");
-    return -1;
-  }
-  s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-  if (s != 0) {
-    perror("ERROR: pthread_getaffinity_np");
-    return -1;
-  }
-  for (int j = 0; j < CPU_SETSIZE; j++)
-    if (CPU_ISSET(j, &cpuset)) 
-      std::cerr << __FUNCTION__ << " affinity constrained to CPU " << j << std::endl;
-#endif // TAKEN_OUT
 
   totalbytes = options.numpages*pagesize;
-  fd = umt_openandmap(&options, totalbytes, &base_addr);
+  umaphandle = umt_openandmap(&options, totalbytes, &base_addr);
+  assert(umaphandle != NULL);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
@@ -149,7 +126,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  umt_closeandunmap(&options, totalbytes, base_addr, fd);
+  umt_closeandunmap(&options, totalbytes, base_addr, umaphandle);
 
   return 0;
 }
