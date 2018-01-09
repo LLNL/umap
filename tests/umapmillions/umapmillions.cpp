@@ -62,14 +62,15 @@ int main(int argc, char **argv)
   long pagesize;
   uint64_t totalbytes;
   void* base_addr;
-  int fd;
+  void* maphandle;
 
   pagesize = umt_getpagesize();
   umt_getoptions(&options, argc, argv);
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  fd = umt_openandmap(&options, totalbytes, &base_addr);
+  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
+  assert(maphandle != NULL);
  
   fprintf(stdout, "%lu GB %lu pages, %lu threads\n", totalbytes/1024/1024/1024, options.numpages, options.numthreads);
 
@@ -91,7 +92,7 @@ int main(int argc, char **argv)
       (double)IndexesSize / (double)((double)(end - start)/100000000.0)
       );
 
-  umt_closeandunmap(&options, totalbytes, base_addr, fd);
+  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
 
   return 0;
 }

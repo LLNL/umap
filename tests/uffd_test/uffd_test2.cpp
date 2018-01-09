@@ -59,7 +59,7 @@ int main(int argc, char **argv)
   int64_t totalbytes;
   void *base_addr;
   int value=0;
-  int fd;
+  void* maphandle;
 
   pagesize = umt_getpagesize();
 
@@ -67,7 +67,8 @@ int main(int argc, char **argv)
 
   totalbytes = options.numpages*pagesize;
 
-  fd = umt_openandmap(&options, totalbytes, &base_addr);
+  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
+  assert(maphandle != NULL);
 
   uint64_t*   array = (uint64_t*)  base_addr; // feed it the mmaped region
   uint64_t    array_length = totalbytes/sizeof(int64_t);   // in number of 8-byte integers.
@@ -119,7 +120,7 @@ int main(int argc, char **argv)
   }
 
   printf("%d\n", value);
-  umt_closeandunmap(&options, totalbytes, base_addr, fd);
+  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
 
   for (long i=0;i<num_batches;i++)
   {

@@ -13,12 +13,11 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 
-typedef
-struct umap_backing_file {
+typedef struct umap_backing_file {
     int fd;
     off_t data_size;
     off_t data_offset;    /* Offset of data portion in file */
-}umap_backing_file;
+} umap_backing_file;
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,13 +36,15 @@ void* umap( void*  addr,    /* See mmap(2) */
 int uunmap( void*  addr,    /* See mmap(2) */
             size_t length   /* See mmap(2) */
         );
-void* umap_mf(void*              addr, 
-	      size_t             length, 
-	      int                prot, 
-	      int                flags,
-	      int                num_backing_file,
-	      umap_backing_file* backing_files
+
+void* umap_mf(void* addr, 
+      size_t        length, 
+      int           prot, 
+      int           flags,
+      int           num_backing_files,
+      umap_backing_file* backing_files
         );
+
 uint64_t umap_cfg_get_bufsize( void );
 void umap_cfg_set_bufsize( uint64_t page_bufsize );
 #ifdef __cplusplus

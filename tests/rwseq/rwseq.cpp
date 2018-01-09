@@ -10,6 +10,7 @@
 //#include <utmpx.h>  // sched_getcpu()
 #include <omp.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "umap.h"
 #include "options.h"
@@ -26,13 +27,14 @@ public:
         umt_options.iodirect = 1;
         umt_options.usemmap = 0;
         umt_options.noinit = 0;
-        umt_options.fn = options.fn;
+        umt_options.filename = options.fn;
 
-        fd = umt_openandmap(&umt_options, pagesize, &base_addr);
+        maphandle = umt_openandmap(&umt_options, pagesize, &base_addr);
+        assert(maphandle != NULL);
     }
 
     ~pageiotest( void ) {
-        umt_closeandunmap(&umt_options, pagesize, base_addr, fd);
+        umt_closeandunmap(&umt_options, pagesize, base_addr, maphandle);
     }
 
     void start( void ) {
@@ -54,7 +56,7 @@ private:
     options_t options;
     long pagesize;
     void* base_addr;
-    int fd;
+    void* maphandle;
 
     void read( void ) {
         if (options.noread) {

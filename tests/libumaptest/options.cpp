@@ -13,7 +13,6 @@ char const* FILENAME = "/tmp/abc";
 const uint64_t NUMPAGES = 10000000;
 const uint64_t NUMTHREADS = 2;
 const uint64_t BUFFERSIZE = 16;
-const int SINGLEFILE = -1;
 
 using namespace std;
 
@@ -47,8 +46,8 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
-  testops->fn = FILENAME;
-  testops->fnum = SINGLEFILE;
+  testops->filename = FILENAME;
+  testops->num_files = 1;
 
   while (1) {
     int option_index = 0;
@@ -86,11 +85,11 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
           break;
         else goto R0;
       case 'n':
-        if ((testops->fnum = strtoull(optarg, nullptr, 0)) > 0)
+        if ((testops->num_files = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
       case 'f':
-        testops->fn = optarg;
+        testops->filename = optarg;
         break;
       default:
       R0:

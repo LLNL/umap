@@ -78,14 +78,15 @@ int main(int argc, char **argv)
   int64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
-  int fd;
+  void* maphandle;
 
   pagesize = umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   totalbytes = options.numpages*pagesize;
-  fd = umt_openandmap(&options, totalbytes, &base_addr);
+  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
+  assert(maphandle != NULL);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
@@ -107,6 +108,6 @@ int main(int argc, char **argv)
     fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
   }
 
-  umt_closeandunmap(&options, totalbytes, base_addr, fd);
+  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
   return 0;
 }

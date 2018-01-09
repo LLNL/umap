@@ -13,308 +13,217 @@ Public License along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #include <iostream>
+#include <string>
+#include <sstream>
+#include <vector>
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
+#include <assert.h>
 #include "umap.h"
 #include "umaptest.h"
 
 using namespace std;
 
-int umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** region)
-{
-  int fd;
-  int open_options = O_RDWR;
+typedef struct umt_map_handle {
+  uint64_t total_range_size;
+  vector<string> files;
+  vector<umap_backing_file> mf_files;
+} umt_map_handle;
 
-  if (testops->iodirect) 
+void* umt_openandmap(const umt_optstruct_t* testops, uint64_t numbytes, void** region)
+{
+  return umt_openandmap_mf(testops, numbytes, region, (off_t)0, numbytes);
+}
+
+void umt_closeandunmap(const umt_optstruct_t* testops, uint64_t numbytes, void* region, void* p)
+{
+  umt_closeandunmap_mf(testops, numbytes, region, p);
+}
+
+//
+// Usage:
+//   If testops->num_files is 1, the testops->filname is assumed to point
+//   to the full name of the file.
+//
+//   Otherwise, if testops->num_files > 1, the testops->filename is
+//   assumed to be a prefix and the first file is assumed to contain
+//   the FITS header.  The test programs use the header located in the
+//   first file to determine the data size.  The implementation ASSUMES
+//   that all of the data files are the same size and that the size
+//   is page-aligned.
+//
+//   For 3 FITS files with "foo" prefix, the implementation will look for
+//   the following files:
+//
+//   foo1.fits - 1st file containing BOTH FITS Header and Data
+//   foo1.data - 1st file containing only data (use exdata_fits to generate)
+//   foo2.data - 2nd file containing only data
+//   foo3.data - 3rd file containing only data
+//
+void* umt_openandmap_mf(const umt_optstruct_t* testops, uint64_t numbytes, void** region, off_t offset, off_t data_size)
+{
+  int open_options = O_RDWR | O_LARGEFILE;  // TODO: Handle READONLY case someday
+  umt_map_handle* handle = new umt_map_handle;
+
+  offset = 0;     // Hack for now until we determine how to distinguish files without headers.
+
+  if ( testops->iodirect ) 
     open_options |= O_DIRECT;
 
   if ( !testops->noinit )
     open_options |= O_CREAT;
 
-#ifdef O_LARGEFILE
-    open_options |= O_LARGEFILE;
-#endif
+  handle->total_range_size = 0;
 
-  fd = open(testops->fn, open_options, S_IRUSR|S_IWUSR);
-  if(fd == -1) {
-    perror("open");
-    exit(-1);
-  }
+  for ( int i = 0; i < testops->num_files; ++i ) {
+    string filename;
+    umap_backing_file bfile;
 
-  if (testops->noinit) {
-    // If we are not initializing file, make sure that it is big enough
-    struct stat sbuf;
-
-    if (fstat(fd, &sbuf) == -1) {
-      perror("fstat");
-      exit(-1);
-    }
-
-    if ((uint64_t)sbuf.st_size < numbytes) {
-      cerr << testops->fn 
-        << " file is not large enough.  "  << sbuf.st_size 
-        << " < size requested " << numbytes << endl;
-      exit(-1);
-    }
-  }
-
-  try {
-      int x;
-    if((x = posix_fallocate(fd,0, numbytes) != 0)) {
-      perror("??posix_fallocate");
-
-      cerr << "posix_fallocate(" << fd << ", 0, " << numbytes << ") returned " << x << endl;
-      exit(-1);
-    }
-  } catch(const std::exception& e) {
-      cerr << "posix_fallocate: " << e.what() << endl;
-      exit(-1);
-  } catch(...) {
-      cerr << "posix_fallocate failed to instantiate _umap object\n";
-      exit(-1);
-  }
-
-  int prot = PROT_READ|PROT_WRITE;
-
-  if ( testops->usemmap ) {
-    int flags = MAP_SHARED;
-
-    *region = mmap(NULL, numbytes, prot, flags, fd, 0);
-    if (*region == MAP_FAILED) {
-      perror("mmap");
-      exit(-1);
-    }
-  }
-  else {
-    int flags = UMAP_PRIVATE;
-
-    *region = umap(NULL, numbytes, prot, flags, fd, 0);
-    if (*region == UMAP_FAILED) {
-      perror("umap");
-      exit(-1);
-    }
-  }
-
-  return fd;
-}
-
-void umt_closeandunmap(const umt_optstruct_t* testops, uint64_t numbytes, void* region, int fd)
-{
-  if ( testops->usemmap ) {
-    if (munmap(region, numbytes) < 0) {
-      perror("munmap");
-      exit(-1);
-    }
-  }
-  else {
-    if (uunmap(region, numbytes) < 0) {
-      perror("uunmap");
-      exit(-1);
-    }
-  }
-
-  close(fd);
-}
-
-//-------support fits files ----------------
-void* umt_openandmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, void** region,off_t offset,off_t data_size)
-{
-  char* filename;
-  char num[5];
-  int open_options = O_RDWR;
-
-  umap_backing_file *fits_files;
-  if (testops->iodirect) 
-    open_options |= O_DIRECT;
-
-  if ( !testops->noinit )
-    open_options |= O_CREAT;
-
-#ifdef O_LARGEFILE
-    open_options |= O_LARGEFILE;
-#endif
-
-  if (testops->fnum==-1)
-  {
-      perror("number of files not in input");
-      exit(-1);
-  }
-  fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
-  filename=(char *)std::malloc(sizeof(char)*100);
-
-  for (int i=0;i<testops->fnum;i++)
-  {
-        strcpy(filename,testops->fn);
-	sprintf(num,"%d",i+1);
-	strcat(filename,num);
-	strcat(filename,".fits");
-
-	fits_files[i].fd = open(filename, open_options, S_IRUSR|S_IWUSR);
-	//printf("processing %s, %d\n",filename,fdlist[i]);
-
-	if(fits_files[i].fd == -1) 
-	{
-	    perror("open");
-	    exit(-1);
-	}
-	fits_files[i].data_size=data_size;
-	fits_files[i].data_offset=offset;
-  }
-
-  if (testops->noinit) {
-    // If we are not initializing file, make sure that it is big enough
-    struct stat sbuf;
-    uint64_t totalsize=0;
-    for (int i=0;i<testops->fnum;i++){
-	if (fstat(fits_files[i].fd, &sbuf) == -1){
-        perror("fstat");
-        exit(-1);
-      }
-      //printf("size:%d\n",sbuf.st_size);
-      totalsize+=(uint64_t)sbuf.st_size;
-    }
-
-    if (totalsize < numbytes) {
-       cerr << testops->fn 
-        << " file is not large enough.  "  << sbuf.st_size 
-        << " < size requested " << numbytes << endl;
-      exit(-1);
-    }
-  }
-
-    int prot = PROT_READ|PROT_WRITE;
-    int flags = UMAP_PRIVATE;
-
-    *region = umap_mf(NULL, numbytes, prot, flags, testops->fnum, fits_files);
-    if (*region == UMAP_FAILED) {
-      perror("umap");
-      exit(-1);
-    }
-
-    return (void *)fits_files;
-}
-
-void umt_closeandunmap_fits(const umt_optstruct_t* testops, uint64_t numbytes, void* region,void* p)
-{
-  if ( testops->usemmap ) {
-    if (munmap(region, numbytes) < 0) {
-      perror("munmap");
-      exit(-1);
-    }
-  }
-  else {
-    if (uunmap(region, numbytes) < 0) {
-      perror("uunmap");
-      exit(-1);
-    }
-  }
-  umap_backing_file *fits_files=(umap_backing_file *)p;
-  for (int i=0;i<testops->fnum;i++)
-  close(fits_files[i].fd);
-  free(fits_files);
-}
-
-//-------support fits file (private)------------
-void* umt_openandmap_fits2(const umt_optstruct_t* testops, uint64_t numbytes, void** region,off_t offset,off_t data_size)
-{
-  umap_backing_file* fits_files;
-  char* filename;
-  char num[5];
-  int open_options = O_RDWR;
-
-  if (testops->iodirect) 
-    open_options |= O_DIRECT;
-
-  if ( !testops->noinit )
-    open_options |= O_CREAT;
-
-#ifdef O_LARGEFILE
-    open_options |= O_LARGEFILE;
-#endif
-
-  if (testops->fnum==-1)
-  {
-      perror("number of files not in input");
-      exit(-1);
-  }
-  fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
-  filename=(char *)std::malloc(sizeof(char)*100);
-
-  for (int i=0;i<testops->fnum;i++)
-  {
-        strcpy(filename,testops->fn);
-	sprintf(num,"%d",i+1);
-	strcat(filename,num);
-	strcat(filename,".fits");
-
-	fits_files[i].fd = open(filename, open_options, S_IRUSR|S_IWUSR);
-	//printf("processing %s, %d\n",filename,fdlist[i]);
-
-	if(fits_files[i].fd == -1) 
-	{
-	    perror("open");
-	    exit(-1);
-	}
-  }
-
-  if (testops->noinit) {
-    // If we are not initializing file, make sure that it is big enough
-    struct stat sbuf;
-    for (int i=0;i<testops->fnum;i++){
-      if (fstat(fits_files[i].fd, &sbuf) == -1){
-        perror("fstat");
-        exit(-1);
-      }
-      //printf("size:%d\n",sbuf.st_size);
-      if ((uint64_t)sbuf.st_size < numbytes) {
-        cerr << testops->fn 
-        << " file is not large enough.  "  << sbuf.st_size 
-        << " < size requested " << numbytes << endl;
-        exit(-1);
-      }
-    }
-  }
-
-    int prot = PROT_READ|PROT_WRITE;
-    int flags = UMAP_PRIVATE;
-
-    for (int i=0;i<testops->fnum;i++)
     {
-      region[i] = umap(NULL, numbytes, prot, flags, fits_files[i].fd, 0);
-      if (region[i] == UMAP_FAILED) 
-      {
-	perror("umap");
-	exit(-1);
+      ostringstream ss;
+      if (testops->num_files > 1) // Treat file name as a basename
+        ss << testops->filename << (i+1) << ".data";
+      else
+        ss << testops->filename;
+      filename = ss.str();
+    }
+
+    if ( ( bfile.fd = open(filename.c_str(), open_options, S_IRUSR | S_IWUSR) ) == -1 ) {
+      string estr = "Failed to open/create " + filename + ": ";
+      perror(estr.c_str());
+      return NULL;
+    }
+
+    if ( ! testops->noinit ) { // If we are initializing, attempt to pre-allocate disk space for the file.
+      try {
+        int x;
+        if ( ( x = posix_fallocate(bfile.fd, 0, data_size) != 0 ) ) {
+          ostringstream ss;
+          ss << "Failed to pre-allocate " << data_size << " bytes in " << filename << ": ";
+          perror(ss.str().c_str());
+          return NULL;
+        }
+      } catch(const std::exception& e) {
+        cerr << "posix_fallocate: " << e.what() << endl;
+        return NULL;
+      } catch(...) {
+        cerr << "posix_fallocate failed to instantiate _umap object\n";
+        return NULL;
       }
     }
 
-    return (void *)fits_files;
-}
+    struct stat sbuf;
+    if (fstat(bfile.fd, &sbuf) == -1) {
+      string estr = "Failed to get status (fstat) for " + filename + ": ";
+      perror(estr.c_str());
+      return NULL;
+    }
 
-void umt_closeandunmap_fits2(const umt_optstruct_t* testops, uint64_t numbytes, void** region,void* p)
-{
+    if ( (off_t)sbuf.st_size != (data_size+offset) ) {
+      cerr << filename << " size " << sbuf.st_size << " does not match specified data size of " << (data_size+offset) << endl;
+      return NULL;
+    }
+
+    handle->total_range_size += (uint64_t)data_size;
+    bfile.data_size = data_size;
+    bfile.data_offset = offset;
+    handle->mf_files.push_back(bfile);
+    handle->files.push_back(filename);
+  }
+
+  const int prot = PROT_READ|PROT_WRITE;
+
   if ( testops->usemmap ) {
-    if (munmap(region, numbytes) < 0) {
-      perror("munmap");
-      exit(-1);
+    void* next_mmap = mmap(NULL, handle->total_range_size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (next_mmap == MAP_FAILED) {
+      ostringstream ss;
+      ss << "reservation (mmap) of " << handle->total_range_size << " bytes failed: ";
+      perror(ss.str().c_str());
+      return NULL;
+    }
+
+    *region = next_mmap;
+
+    if ( munmap(next_mmap, handle->total_range_size) < 0 ) {
+      ostringstream ss;
+      ss << "reservation (mumap) of " << handle->total_range_size << " from " << next_mmap << " failed: ";
+      perror(ss.str().c_str());
+      return NULL;
+    }
+
+    //cout << "Starting contiguous mappings at: " << next_mmap << endl;
+
+    for ( int i = 0; i < testops->num_files; ++i ) {
+      void* mmap_region;
+      mmap_region = mmap(next_mmap, handle->mf_files[i].data_size, prot, MAP_PRIVATE | MAP_FIXED | MAP_NORESERVE, handle->mf_files[i].fd, offset);
+      if (mmap_region == MAP_FAILED) {
+        ostringstream ss;
+        ss << "mmap of " << handle->mf_files[i].data_size << " bytes failed for " << handle->files[i] << ": ";
+        perror(ss.str().c_str());
+        return NULL;
+      }
+      //cout << handle->files[i] << "\t" << next_mmap << "\t" << mmap_region << endl;
+
+      assert(mmap_region == next_mmap);
+      next_mmap = static_cast<char*>(mmap_region) + handle->mf_files[i].data_size;
     }
   }
   else {
-    for (int i=0;i<testops->fnum;i++)
-    if (uunmap(region[i], numbytes) < 0) {
-      perror("uunmap");
+    int flags = UMAP_PRIVATE;
+
+    *region = umap_mf(NULL, handle->total_range_size, prot, flags, testops->num_files, &handle->mf_files[0]);
+    if ( *region == UMAP_FAILED ) {
+        ostringstream ss;
+        ss << "umap_mf of " << handle->total_range_size << " bytes failed for " << handle->files[0] << ": ";
+        perror(ss.str().c_str());
+        return NULL;
+    }
+    //cout << handle->files[0] << "\t" << handle->total_range_size << " bytes allocated at " << *region << endl;
+  }
+
+  //umt_closeandunmap_mf(testops, handle->total_range_size, *region, handle);
+
+  //exit(0);
+  return (void *)handle;
+}
+
+void umt_closeandunmap_mf(const umt_optstruct_t* testops, uint64_t numbytes, void* region, void* p)
+{
+  umt_map_handle* handle = static_cast<umt_map_handle*>(p);
+
+  if ( testops->usemmap ) {
+    int cnt = 0;
+    for ( auto i : handle->mf_files ) {
+      //cout << "munmap(region=" << region << ", size=" << i.data_size << ") for file " << handle->files[ cnt ] << endl;
+      if ( munmap(region, i.data_size) < 0 ) {
+        ostringstream ss;
+        ss << "munmap of " << i.data_size << " bytes failed for " << handle->files[0] << "on region " << region << ": ";
+        perror(ss.str().c_str());
+        exit(-1);
+      }
+      cnt++;
+      region = static_cast<char*>(region) + i.data_size;
+    }
+  }
+  else {
+    //cout << "uunmap(region=" << region << ", size=" << numbytes << ") for file " << handle->files[0] << endl;
+    if (uunmap(region, numbytes) < 0) {
+      ostringstream ss;
+      ss << "munmap of " << numbytes << " bytes failed for " << handle->files[0] << "on region " << region << ": ";
+      perror(ss.str().c_str());
       exit(-1);
     }
   }
-  umap_backing_file *fits_files=(umap_backing_file *)p;
-  for (int i=0;i<testops->fnum;i++)
-  close(fits_files[i].fd);
-  free(fits_files);
+
+  for ( auto i : handle->mf_files )
+    close(i.fd);
+
+  delete handle;
 }
