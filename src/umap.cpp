@@ -33,12 +33,13 @@
 #include <sys/prctl.h>
 #include "umap.h"               // API to library
 #include "umaplog.h"            // umap_log()
+#include "config.h"
 
 using namespace std;
 
-const int UMAP_VERSION_MAJOR = 0;
-const int UMAP_VERSION_MINOR = 0;
-const int UMAP_VERSION_PATCH = 1;
+const int umap_Version_Major = UMAP_VERSION_MAJOR;
+const int umap_Version_Minor = UMAP_VERSION_MINOR;
+const int umap_Version_Patch = UMAP_VERSION_PATCH;
 
 static const int UMAP_UFFD_MAX_MESSAGES = 256;
 static unsigned int uffd_threads;
