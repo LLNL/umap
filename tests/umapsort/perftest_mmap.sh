@@ -10,25 +10,14 @@ function drop_page_cache {
   echo 3 > /proc/sys/vm/drop_caches
 }
 
-function enable_swap {
-  echo "Enabling swap"
-  swapon -a
-}
-
 function disable_swap {
   echo "Disabling swap"
-  swapoff -a
+  swapoff -av
 }
 
-function display_readahead {
+function set_readahead {
   fs=`mount | grep intel | cut -d " " -f 1`
-  ra=`blockdev --getra $fs`
-  echo "Read ahead set to $ra for $fs"
-}
-
-function turn_off_readahead {
-  fs=`mount | grep intel | cut -d " " -f 1`
-  blockdev --setra 0 $fs
+  blockdev --setra $readahead $fs
   ra=`blockdev --getra $fs`
   echo "Read ahead set to $ra for $fs"
 }
@@ -76,9 +65,10 @@ function waste_memory {
 }
 
 memtoleave=$((64+6))
+readahead=256
 
-display_readahead
-enable_swap
+set_readahead
+disable_swap
 setuptmpfs
 drop_page_cache
 amounttowaste
@@ -86,7 +76,7 @@ waste_memory
 
 for t in 128 64 32 16
 do
-  rm /f /mnt/intel/sort_perf_data
+  rm -f /mnt/intel/sort_perf_data
   drop_page_cache
   free_mem
   cmd="./umapsort --usemmap --directio -f /mnt/intel/sort_perf_data -p $(((96*1024*1024*1024)/4096)) -n 1 -b $(((64*1024*1024*1024)/4096)) -t $t"
