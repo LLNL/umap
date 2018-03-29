@@ -1,4 +1,4 @@
-# UMAP v0.0.1 (alpha)
+# UMAP v0.0.2 (alpha)
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
