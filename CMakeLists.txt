@@ -1,5 +1,10 @@
 cmake_minimum_required (VERSION 3.5.1)
-project(umap VERSION 0.0.1)
+project(umap VERSION 0.0.2)
+
+configure_file(
+  "${PROJECT_SOURCE_DIR}/config/config.h.in"
+  "${PROJECT_BINARY_DIR}/config/config.h"
+  )
 
 if (NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type selected, default to Debug")

@@ -141,7 +141,7 @@ void* umt_openandmap_mf(const umt_optstruct_t* testops, uint64_t numbytes, void*
   const int prot = PROT_READ|PROT_WRITE;
 
   if ( testops->usemmap ) {
-    void* next_mmap = mmap(NULL, handle->total_range_size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    void* next_mmap = mmap(NULL, handle->total_range_size, prot, MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (next_mmap == MAP_FAILED) {
       ostringstream ss;
       ss << "reservation (mmap) of " << handle->total_range_size << " bytes failed: ";
@@ -162,7 +162,7 @@ void* umt_openandmap_mf(const umt_optstruct_t* testops, uint64_t numbytes, void*
 
     for ( int i = 0; i < testops->num_files; ++i ) {
       void* mmap_region;
-      mmap_region = mmap(next_mmap, handle->mf_files[i].data_size, prot, MAP_PRIVATE | MAP_FIXED | MAP_NORESERVE, handle->mf_files[i].fd, offset);
+      mmap_region = mmap(next_mmap, handle->mf_files[i].data_size, prot, MAP_SHARED | MAP_FIXED | MAP_NORESERVE, handle->mf_files[i].fd, offset);
       if (mmap_region == MAP_FAILED) {
         ostringstream ss;
         ss << "mmap of " << handle->mf_files[i].data_size << " bytes failed for " << handle->files[i] << ": ";
