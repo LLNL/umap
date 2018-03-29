@@ -1,0 +1,82 @@
+#!/bin/bash
+function usage {
+  echo "Usage:"
+  echo "$0 Size - Size is the number of GB to waste."
+  exit 1
+}
+
+function free_mem {
+    m=`grep MemFree /proc/meminfo | awk -v N=2 '{print $N}'`
+    echo $m
+    fm=$(((${m}/1024)/1024))
+    wm=$((${fm}-20))
+    echo $fm GB Available, Wasting $wm GB
+}
+
+function setuptmpfs {
+  if [ ! -d /mnt/tmpfs ]; then
+    sudo mkdir -p /mnt/tmpfs
+  fi
+
+  # Unmount / Reset of already mounted
+  fs=`stat -f -c '%T' /mnt/tmpfs`
+
+  if [ "$fs" = "tmpfs" ]; then
+    echo "Resetting tmpfs"
+    sudo umount /mnt/tmpfs
+  fi
+
+  fs=`stat -f -c '%T' /mnt/tmpfs`
+  if [ "$fs" != "tmpfs" ]; then
+    if [ ! -d /mnt/tmpfs ]; then
+      sudo mkdir -p /mnt/tmpfs
+    fi
+    sudo chmod go+rwx /mnt/tmpfs
+    sudo mount -t tmpfs -o size=600g tmpfs /mnt/tmpfs
+    fs=`stat -f -c '%T' /mnt/tmpfs`
+    echo "/mnt/tmpfs mounted as: $fs"
+  else
+    echo "Unable to reset /mnt/tmpfs, exiting"
+    exit 1
+  fi
+}
+
+function drop_page_cache {
+  echo "Dropping page cache"
+  sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+}
+
+function disable_swap {
+  echo "Disabling swap"
+  sudo swapoff -a
+}
+
+function turn_off_readahead {
+  fs=`mount | grep intel | cut -d " " -f 1`
+  sudo blockdev --setra 0 $fs
+  ra=`sudo blockdev --getra $fs`
+  echo "Read ahead set to $ra for $fs"
+}
+
+function waste_memory {
+  echo "Wasting $waste GB of memory"
+
+  #echo numactl -i 1 dd if=/dev/zero of=/mnt/tmpfs/${waste}GB bs=4096 count=$((${waste}*256*1024))
+  #numactl -i 1 dd if=/dev/zero of=/mnt/tmpfs/${waste}GB bs=4096 count=$((${waste}*256*1024))
+  echo dd if=/dev/zero of=/mnt/tmpfs/${waste}GB bs=4096 count=$((${waste}*256*1024))
+  dd if=/dev/zero of=/mnt/tmpfs/${waste}GB bs=4096 count=$((${waste}*256*1024))
+}
+
+if [ $# -ne 1 ]; then
+  echo "Bad argument count: $#"
+  usage
+fi
+
+waste=$1
+
+setuptmpfs
+drop_page_cache
+disable_swap
+turn_off_readahead
+drop_page_cache
+waste_memory

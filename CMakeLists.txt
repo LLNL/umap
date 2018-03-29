@@ -1,13 +1,20 @@
-cmake_minimum_required (VERSION 3.5.2)
-project(umap VERSION 0.0.1)
+cmake_minimum_required (VERSION 3.5.1)
+project(umap VERSION 0.0.2)
+
+configure_file(
+  "${PROJECT_SOURCE_DIR}/config/config.h.in"
+  "${PROJECT_BINARY_DIR}/config/config.h"
+  )
 
 if (NOT CMAKE_BUILD_TYPE)
   message(STATUS "No build type selected, default to Debug")
   set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (default Debug)" FORCE)
 endif()
 
+OPTION (BUILD_FITS "Build FITS-based Tests (requires qfits library)" FALSE)
+
 set (FLAGS_ALL "-Wall")
-set (FLAGS_DEBUG_ALL "-g -O0")
+set (FLAGS_DEBUG_ALL "-g -O0 -DDEBUG")
 set (FLAGS_RELEASE_ALL "-O3")
 
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 ${FLAGS_ALL}")

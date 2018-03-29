@@ -33,7 +33,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <random>
 #include <iostream>
 
-
 #define NUMPAGES 10000
 #define NUMTHREADS 1
 #define BUFFERSIZE 100
@@ -42,11 +41,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <omp.h>
 #endif
 
-extern "C"{
-#include "../uffd_handler/uffd_handler.h"
-
-volatile int stop_uffd_handler;
-}
+#include "umap.h"
+#include "umaptest.h"
 
 static inline uint64_t getns(void)
 {
@@ -56,43 +52,26 @@ static inline uint64_t getns(void)
   return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
 }
 
-typedef struct {
-  int numpages;
-  int numthreads;
-  int bufsize;
-  char *fn;
-} optstruct_t;
-
-optstruct_t options;
-
 int main(int argc, char **argv)
 {
-  long num_pages;
-  int uffd;
+  umt_optstruct_t options;
   long pagesize;
   int64_t totalbytes;
-  pthread_t uffd_thread;
-  int64_t arraysize;
-  void *base_mmap_array;
+  void *base_addr;
   int value=0;
-  pagesize = get_pagesize();
+  void* maphandle;
 
-  options.numpages = NUMPAGES;
-  options.numthreads = NUMTHREADS;
-  options.bufsize= BUFFERSIZE;
-  options.fn = NULL;
-  num_pages= options.numpages;
+  pagesize = umt_getpagesize();
 
-  base_mmap_array = mmap(NULL, options.numpages*pagesize, PROT_READ|PROT_WRITE,
-                MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, -1, 0);
-  if (base_mmap_array == MAP_FAILED)
-  {
-      perror("mmap");
-      exit(1);
-  }
+  umt_getoptions(&options, argc, argv);
 
-  uint64_t*   array = (uint64_t*)  base_mmap_array; // feed it the mmaped region
-  uint64_t    array_length = num_pages * 512;   // in number of 8-byte integers.
+  totalbytes = options.numpages*pagesize;
+
+  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
+  assert(maphandle != NULL);
+
+  uint64_t*   array = (uint64_t*)  base_addr; // feed it the mmaped region
+  uint64_t    array_length = totalbytes/sizeof(int64_t);   // in number of 8-byte integers.
   uint64_t    experiment_count = 100000;   // Size of experiment, number of accesses
   uint64_t    batch_size = 1000;  // Set a batch size MUST BE MULTIPLE OF experiment_count
   std::vector<uint64_t>  vec_random_indices;
@@ -112,27 +91,7 @@ int main(int argc, char **argv)
   assert(latencies);
   memset(latencies,0,sizeof(uint64_t)*num_batches);
 
-  //getoptions(&options, argc, argv);
-
-  //totalbytes = options.numpages*pagesize;
-  //openandmap(options.fn, totalbytes, p->fd,  p->base_addr);
-
-  // start the thread that will handle userfaultfd events
-
-  stop_uffd_handler = 0;
-
-  params_t *p = (params_t *)malloc(sizeof(params_t));
-  p->base_addr = (void *)array;
-  p->pagesize = pagesize;
-  p->bufsize = options.bufsize;
-  p->faultnum = 0;
-  p->uffd = uffd_init(p->base_addr, pagesize, num_pages);
-
   //fprintf(stdout, "%d pages, %d threads\n", options.numpages, options.numthreads);
-
-  pthread_create(&uffd_thread, NULL, uffd_handler, p);
-
-  sleep(1);
 
   omp_set_num_threads(options.numthreads);
 
@@ -160,12 +119,8 @@ int main(int argc, char **argv)
       // CALC LATENCY & IOPS
   }
 
-
-  printf("\n");
-  stop_uffd_handler = 1;
-  pthread_join(uffd_thread, NULL);
-  //fprintf(stdout, "mode %llu\n", (unsigned long long)uffdio_register.mode);
-  uffd_finalize(p,  options.numpages);
+  printf("%d\n", value);
+  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
 
   for (long i=0;i<num_batches;i++)
   {
@@ -173,6 +128,5 @@ int main(int argc, char **argv)
   }
 
   free(latencies);
-  munmap(base_mmap_array, pagesize * num_pages);
   return 0;
 }

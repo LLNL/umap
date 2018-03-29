@@ -1,0 +1,7 @@
+// the (cmake) configured options and settings for umap
+#ifndef _UMAP_UMAPCONFIG_H
+#define _UMAP_UMAPCONFIG_H
+#define UMAP_VERSION_MAJOR @umap_VERSION_MAJOR@
+#define UMAP_VERSION_MINOR @umap_VERSION_MINOR@
+#define UMAP_VERSION_PATCH @umap_VERSION_PATCH@
+#endif

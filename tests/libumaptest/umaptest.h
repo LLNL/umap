@@ -14,7 +14,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #ifndef _UMAPTEST_H
 #define _UMAPTEST_H
-#include <cstdint>
+#include <stdint.h>
 
 typedef struct {
   int initonly;
@@ -25,11 +25,20 @@ typedef struct {
   uint64_t numpages;
   uint64_t numthreads;
   uint64_t bufsize;
-  char const* fn;
+  int num_files;
+  char const* filename; // file prefix if num_files > 1
 } umt_optstruct_t;
 
+#ifdef __cplusplus
 extern "C" {
-  void umt_getoptions(umt_optstruct_t&, int, char *argv[]);
-  void umt_openandmap(const umt_optstruct_t&, uint64_t, int&, void*&);
+#endif
+  void umt_getoptions(umt_optstruct_t*, int, char *argv[]);
+  void* umt_openandmap(const umt_optstruct_t*, uint64_t, void**);
+  void umt_closeandunmap(const umt_optstruct_t*, uint64_t, void*, void*);
+  long umt_getpagesize(void);
+  void* umt_openandmap_mf(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_mf(const umt_optstruct_t*, uint64_t, void*,void*);
+#ifdef __cplusplus
 }
+#endif
 #endif // _UMAPTEST_H

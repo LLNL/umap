@@ -1,4 +1,4 @@
-# UMAP v0.0.1 (alpha)
+# UMAP v0.0.2 (alpha)
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
@@ -26,13 +26,22 @@ cmake -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
 make install
 ```
 
+The default for cmake is to build a Debug version of the software.  If you would like to build an optimized (-O3)
+version, simply run 
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
+```
+
 ## umap() Interface
 
-The interface is currently a work in progress (see [umap.h](src/umap.h)).
+The interface is currently a work in progress (see [umap.h](include/umap.h)).
 
-## Contact/Legal
+## License
 
-The license is [LGPL](/LICENSE).
+- The license is [LGPL](/LICENSE).
+- [thirdparty_licenses.md](/thirdparty_licenses.md)
+
+## Contact
 
 Primary contact/Lead developer
 
