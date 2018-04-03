@@ -13,36 +13,63 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 
-typedef struct umap_backing_file {
-    int fd;
-    off_t data_size;
-    off_t data_offset;    /* Offset of data portion in file */
-} umap_backing_file;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*
- * umap() is a wrapper around mmap(2) and userfaultfd(2) to allow for creating a mapping of pages managed in user-space.
+/** Signatures for application provided callbacks to read/write data from/to 
+ * persistant storage.
+ *
+ * \param region Returned from previous umap() call
+ * \param buf Buffer provided and owned by umap to read data in to
+ * \param nbytes # of bytes to read/write in/from \a buf
+ * \param region_offset Byte offset from beginning of \a region
+ * \returns If successful, the number of bytes read/written in/from \a buf.
+ * Otherwise, -1.
+ *
+ * \b Note: This callback is assumed to be threadsafe.  Since this is
+ * a "C" interface, this will need to be inforced by convention and
+ * implementations that are thread-unsafe may not function correctly.
  */
-void* umap( void*  addr,    /* See mmap(2) */
-            size_t length,  /* See mmap(2) */
-            int    prot,    /* See mmap(2) */
-            int    flags,   /* See below, see mmap(2) for general notes */
-            int    fd,      /* See mmap(2) */
-            off_t  offset   /* See mmap(2) */
-        );
+typedef ssize_t (*umap_pstore_read_f_t)(
+    void* region,
+    void* buf,
+    size_t nbytes,
+    off_t region_offset
+    );
+
+typedef ssize_t (*umap_pstore_write_f_t)(
+    void* region,
+    void* buf,
+    size_t nbytes,
+    off_t region_offset
+    );
+
+/** Allow application to create region of memory to a peristant store
+ * \param addr Same as input argument for mmap(2)
+ * \param length Same as input argument of mmap(2)
+ * \param prot Same as input argument of mmap(2)
+ * \param flags Same as input argument of mmap(2)
+ * \param fd file descriptor of file to be used as persistant store.  
+ *           If \b fd is greater than 0, then umap() will assume it is for a single
+ *           file to be used as the persistent storage and the \a r_pstore and
+ *           w_pstore parameters will be ignored.
+ * \param r_pstore pointer to callback function to be used for providing data from
+ *                 persistent storage.
+ * \param w_pstore pointer to callback function to be used for saving data to
+ *                 persistent storage.
+ */
+void* umap(
+    void* addr,
+    size_t length,
+    int prot,
+    int flags,
+    int fd,
+    umap_pstore_read_f_t r_pstore,
+    umap_pstore_write_f_t w_pstore
+);
+
 int uunmap( void*  addr,    /* See mmap(2) */
             size_t length   /* See mmap(2) */
-        );
-
-void* umap_mf(void* addr, 
-      size_t        length, 
-      int           prot, 
-      int           flags,
-      int           num_backing_files,
-      umap_backing_file* backing_files
         );
 
 uint64_t umap_cfg_get_bufsize( void );
@@ -61,4 +88,4 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize );
  * Return codes
  */
 #define UMAP_FAILED (void *)-1
-#endif // _UMAP_H_
+#endif // _UMAP_H

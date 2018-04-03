@@ -6,7 +6,7 @@
 #include <iostream>     // cout/cerr
 #include <unistd.h>     // getopt()
 #include <getopt.h>     // duh...
-#include "umaptest.h"
+#include "testoptions.h"
 #include "umap.h"
 
 char const* FILENAME = "/tmp/abc";

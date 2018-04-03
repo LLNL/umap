@@ -46,7 +46,8 @@
 
 #include "umap.h"
 #include "options.h"
-#include "umaptest.h"
+#include "testoptions.h"
+#include "PerFile.h"
 
 uint64_t g_count = 0;
 using namespace std;
@@ -67,8 +68,8 @@ public:
         num_rw_load_pages = num_read_load_pages = options.num_load_pages;
         num_churn_pages = options.num_churn_pages;
 
-        maphandle = umt_openandmap(&umt_options, (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize, &base_addr);
-        assert(maphandle != NULL);
+        base_addr = PerFile_openandmap(&umt_options, (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
+        assert(base_addr != NULL);
 
         read_load_pages = base_addr;
         rw_load_pages = (void*)((uint64_t)base_addr + (num_read_load_pages*pagesize));
@@ -93,7 +94,7 @@ public:
     }
 
     ~pageiotest( void ) {
-        umt_closeandunmap(&umt_options, (options.num_churn_pages+num_rw_load_pages+num_read_load_pages)*pagesize, base_addr, maphandle);
+        PerFile_closeandunmap(&umt_options, (options.num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize, base_addr);
     }
 
     void start( void ) {
@@ -152,7 +153,6 @@ private:
     uint64_t num_churn_pages;
     uint64_t num_read_load_pages;
     uint64_t num_rw_load_pages;
-    void* maphandle;
 
     void check() {
         cout << "Checking churn load pages\n";

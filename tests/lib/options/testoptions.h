@@ -33,11 +33,7 @@ typedef struct {
 extern "C" {
 #endif
   void umt_getoptions(umt_optstruct_t*, int, char *argv[]);
-  void* umt_openandmap(const umt_optstruct_t*, uint64_t, void**);
-  void umt_closeandunmap(const umt_optstruct_t*, uint64_t, void*, void*);
   long umt_getpagesize(void);
-  void* umt_openandmap_mf(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
-  void umt_closeandunmap_mf(const umt_optstruct_t*, uint64_t, void*,void*);
 #ifdef __cplusplus
 }
 #endif

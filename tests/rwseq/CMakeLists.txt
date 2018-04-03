@@ -8,7 +8,8 @@ if(OPENMP_FOUND)
     add_executable(rwseq rwseq.cpp options.cpp)
 
     target_link_libraries(rwseq libumap_static)
-    target_link_libraries(rwseq libumaptest_static)
+    target_link_libraries(rwseq libtestoptions_static)
+    target_link_libraries(rwseq libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

@@ -13,7 +13,8 @@ if(OPENMP_FOUND)
     add_executable(churn churn.cpp options.cpp)
 
     target_link_libraries(churn libumap_static)
-    target_link_libraries(churn libumaptest_static)
+    target_link_libraries(churn libtestoptions_static)
+    target_link_libraries(churn libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

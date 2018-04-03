@@ -10,9 +10,11 @@ if(OPENMP_FOUND)
     add_executable(median_cube median_cube.cpp)
 
     target_link_libraries(median libumap_static)
-    target_link_libraries(median libumaptest_static)
+    target_link_libraries(median libtestoptions_static)
+    target_link_libraries(median libPerFile_static)
     target_link_libraries(median_cube libumap_static)
-    target_link_libraries(median_cube libumaptest_static)
+    target_link_libraries(median_cube libtestoptions_static)
+    target_link_libraries(median_cube libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

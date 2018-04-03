@@ -18,7 +18,8 @@ if(OPENMP_FOUND)
     add_executable(umapsort umapsort.cpp)
 
     target_link_libraries(umapsort libumap_static)
-    target_link_libraries(umapsort libumaptest_static)
+    target_link_libraries(umapsort libtestoptions_static)
+    target_link_libraries(umapsort libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

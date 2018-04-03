@@ -14,7 +14,8 @@
 
 #include "umap.h"
 #include "options.h"
-#include "umaptest.h"
+#include "testoptions.h"
+#include "PerFile.h"
 
 uint64_t g_count = 0;
 using namespace std;
@@ -29,12 +30,12 @@ public:
         umt_options.noinit = 0;
         umt_options.filename = options.fn;
 
-        maphandle = umt_openandmap(&umt_options, pagesize, &base_addr);
-        assert(maphandle != NULL);
+        base_addr = PerFile_openandmap(&umt_options, pagesize);
+        assert(base_addr != NULL);
     }
 
     ~pageiotest( void ) {
-        umt_closeandunmap(&umt_options, pagesize, base_addr, maphandle);
+        PerFile_closeandunmap(&umt_options, pagesize, base_addr);
     }
 
     void start( void ) {
@@ -56,7 +57,6 @@ private:
     options_t options;
     long pagesize;
     void* base_addr;
-    void* maphandle;
 
     void read( void ) {
         if (options.noread) {

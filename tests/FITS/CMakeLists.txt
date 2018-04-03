@@ -1,10 +1,6 @@
 project(FITS)
 
 add_library(qfits SHARED IMPORTED)
-set_target_properties(qfits PROPERTIES
-  IMPORTED_LOCATION "$ENV{HOME}/qfits/lib/libqfits.so.0.0.0"
-  INTERFACE_INCLUDE_DIRECTORIES "$ENV{HOME}/qfits/include"
-)
 
 FIND_PACKAGE( OpenMP REQUIRED )
 if(OPENMP_FOUND)
@@ -17,10 +13,10 @@ if(OPENMP_FOUND)
     
     target_link_libraries(multiple libumap_static)
     target_link_libraries(multiple libumaptest_static)
-    target_link_libraries(multiple qfits)
+    target_link_libraries(multiple ${CFITS_LIBRARY} )
 
     target_link_libraries(simple libumaptest_static)
-    target_link_libraries(simple qfits)
+    target_link_libraries(multiple ${CFITS_LIBRARY} )
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
