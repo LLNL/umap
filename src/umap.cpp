@@ -227,7 +227,7 @@ void* umap(void* addr, uint64_t length, int prot, int flags, int fd, off_t offse
 
 void* umap_mf(void* bass_addr, uint64_t region_size, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
 {
-  assert((region_size % page_size) == 0);
+  assert("UMAP: Region size must be multple of page_size" && (region_size % page_size) == 0);
 
   if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
     cerr << "umap: Invalid flags: " << hex << flags << endl;
@@ -359,17 +359,26 @@ _umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_
     bk_files.push_back(backing_files[i]); 
 
   uint64_t pages_in_region = region_size / page_size;
+
+
   uint64_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
   uint64_t page_blocks = pages_in_region / pages_per_block;
-  uint64_t remainder_of_pages_in_last_block = pages_in_region % pages_per_block;
-
-  if (remainder_of_pages_in_last_block)
-    page_blocks++;          // Account for extra block
 
   uint64_t num_workers = page_blocks < uffd_threads ? page_blocks : uffd_threads;
   uint64_t page_blocks_per_worker = page_blocks / num_workers;
+  uint64_t additional_blocks_for_last_worker = page_blocks % num_workers;
 
-  // cout << "umap " << num_workers << " workers for: " << region << " - " << (void*)((char*)region+region_size) << endl;
+  stringstream ss;
+  ss << "umap(" 
+    << region << " - " << (void*)((char*)region+region_size) 
+    << ") " << pages_in_region << " region pages, "
+    << pages_per_block << " pages per block, "
+    << page_blocks  << " page blocks, "
+    << num_workers << " workers, " 
+    << page_blocks_per_worker << " page blocks per worker, "
+    << additional_blocks_for_last_worker << " additional pages blocks for last worker"
+    << endl;
+  umapdbg("%s\n", ss.str().c_str());
 
   try {
     for (uint64_t worker = 0; worker < num_workers; ++worker) {
@@ -379,8 +388,8 @@ _umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_
       pb.length = page_blocks_per_worker * pages_per_block * page_size;
 
       // If I am the last worker and we have residual pages in last block
-      if ((worker == num_workers-1) && remainder_of_pages_in_last_block)
-        pb.length -= ((pages_per_block - remainder_of_pages_in_last_block)) * page_size;
+      if ((worker == num_workers-1) && additional_blocks_for_last_worker)
+        pb.length += (additional_blocks_for_last_worker * pages_per_block * page_size);
 
       vector<umap_PageBlock> segs{ pb };
 
@@ -461,7 +470,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
       .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
     };
 
-    umapdbg("Register %p\n", seg.base);
+    umapdbg("Register %p - %p\n", seg.base, (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
       perror("ERROR: ioctl/uffdio_register");

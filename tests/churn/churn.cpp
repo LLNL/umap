@@ -6,11 +6,11 @@
   
    +==================================================+
    |                                                  |
-   |               One Read Load Page                 |
+   |                Read Load Page(s)                 |
    |                                                  |
    +--------------------------------------------------+
    |                                                  |
-   |            One Write{/Read} Load Page            |
+   |           Write{/Read} Load Page(s)              |
    |                                                  |
    +--------------------------------------------------+
    |                                                  |
@@ -59,49 +59,55 @@ public:
 
         umt_options.iodirect = options.iodirect;
         umt_options.usemmap = options.usemmap;
-        umt_options.noinit = 0;
         umt_options.filename = options.fn;
+        umt_options.num_files = 1;
+        umt_options.noinit = options.noinit;
+        umt_options.initonly = options.initonly;
 
-        maphandle = umt_openandmap(&umt_options, (options.num_churn_pages+2*options.num_load_pages)*pagesize, &base_addr);
+        num_rw_load_pages = num_read_load_pages = options.num_load_pages;
+        num_churn_pages = options.num_churn_pages;
+
+        maphandle = umt_openandmap(&umt_options, (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize, &base_addr);
         assert(maphandle != NULL);
 
         read_load_pages = base_addr;
-        write_load_pages = (void*)((uint64_t)base_addr + (options.num_load_pages*pagesize));
-        churn_pages = (void*)((uint64_t)base_addr + ((options.num_load_pages*2)*pagesize));
+        rw_load_pages = (void*)((uint64_t)base_addr + (num_read_load_pages*pagesize));
+        churn_pages = (void*)((uint64_t)base_addr + ( (num_read_load_pages + num_rw_load_pages) * pagesize));
 
-        if ( ! options.noinit )
+        if ( ! options.noinit ) {
             init();
+        }
 
         cout << "Churn Test:\n\t"
             << options.page_buffer_size << " Pages in page buffer\n\t"
-            << options.num_load_pages << " Read Load (focus) pages from " << hex << read_load_pages << " - " << (void*)((char*)read_load_pages+((options.num_load_pages*pagesize)-1)) << dec << "\n\t"
-            << options.num_load_pages << " Write Load (focus) pages from " << hex << write_load_pages << " - " << (void*)((char*)write_load_pages+((options.num_load_pages*pagesize)-1)) << dec << "\n\t"
+            << num_read_load_pages << " Read Load (focus) pages from " << hex << read_load_pages << " - " << (void*)((char*)read_load_pages+((num_read_load_pages*pagesize)-1)) << dec << "\n\t"
+            << num_rw_load_pages << " RW Load (focus) pages from " << hex << rw_load_pages << " - " << (void*)((char*)rw_load_pages+((num_rw_load_pages*pagesize)-1)) << dec << "\n\t"
             << options.num_churn_pages << " Churn pages from " << hex << churn_pages << " - " << (void*)((char*)churn_pages+((options.num_churn_pages*pagesize)-1)) << dec << "\n\t"
             << options.num_churn_threads << " Churn threads\n\t"
             << options.num_load_reader_threads << " Load Reader threads\n\t"
             << options.num_load_writer_threads << " Load Writer threads\n\t"
             << options.fn << " Backing file\n\t"
             << options.testduration << " seconds for test duration.\n\n";
+
+        //check();
     }
 
     ~pageiotest( void ) {
-        umt_closeandunmap(&umt_options, (options.num_churn_pages+2*options.num_load_pages)*pagesize, base_addr, maphandle);
+        umt_closeandunmap(&umt_options, (options.num_churn_pages+num_rw_load_pages+num_read_load_pages)*pagesize, base_addr, maphandle);
     }
 
     void start( void ) {
         if (options.initonly)
             return;
 
-        for (uint64_t p = 0; p < options.num_load_pages; ++p) {
-            for (uint64_t t = 0; t < options.num_load_reader_threads; ++t)
-                load_readers.push_back(new thread{&pageiotest::load_read2, this, p, t});
+        for (uint64_t t = 0; t < options.num_load_reader_threads; ++t)
+          load_readers.push_back(new thread{&pageiotest::load_read, this, t});
 
-            for (uint64_t t = 0; t < options.num_load_reader_threads; ++t)
-                load_readers.push_back(new thread{&pageiotest::load_read, this, p, t});
+        for (uint64_t t = 0; t < options.num_load_reader_threads; ++t)
+          load_rw_readers.push_back(new thread{&pageiotest::load_rw_read, this, t});
 
-            for (uint64_t t = 0; t < options.num_load_writer_threads && t < 1; ++t)
-                load_writers.push_back(new thread{&pageiotest::load_write, this, p});
-        }
+        for (uint64_t t = 0; t < options.num_load_writer_threads && t < 1; ++t)
+          load_rw_writers.push_back(new thread{&pageiotest::load_rw_write, this});
 
         for (uint64_t t = 0; t < options.num_churn_threads; ++t)
             churn_readers.push_back(new thread{&pageiotest::churn, this, t});
@@ -116,14 +122,14 @@ public:
 
     void stop( void ) {
         time_to_stop = true;
-        for (auto i : load_readers2)
-            i->join();
         for (auto i : load_readers)
-            i->join();
-        for (auto i : load_writers)
-            i->join();
+          i->join();
+        for (auto i : load_rw_readers)
+          i->join();
+        for (auto i : load_rw_writers)
+          i->join();
         for (auto i : churn_readers)
-            i->join();
+          i->join();
     }
 
 private:
@@ -135,36 +141,66 @@ private:
     void* base_addr;
 
     void* read_load_pages;
-    void* write_load_pages;
-    vector<thread*> load_readers;
-    vector<thread*> load_readers2;
-    vector<thread*> load_writers;
-
+    void* rw_load_pages;
     void* churn_pages;
+
+    vector<thread*> load_readers;
+    vector<thread*> load_rw_readers;
+    vector<thread*> load_rw_writers;
     vector<thread*> churn_readers;
 
+    uint64_t num_churn_pages;
+    uint64_t num_read_load_pages;
+    uint64_t num_rw_load_pages;
     void* maphandle;
 
+    void check() {
+        cout << "Checking churn load pages\n";
+        {
+          uint64_t* p = (uint64_t*)churn_pages;
+          for (uint64_t i = 0; i < num_churn_pages * (pagesize/sizeof(*p)); i += (pagesize/sizeof(*p)))
+              if (p[i] != i) {
+                cerr << "check(CHURN): *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (unsigned long long)i << endl;
+                return;
+              }
+        }
+        cout << "Checking read load pages\n";
+        {
+          uint64_t* p = (uint64_t*)(uint64_t)read_load_pages;
+          for (uint64_t i = 0; i < num_read_load_pages * (pagesize/sizeof(*p)); ++i)
+              if (p[i] != i) {
+                cerr << "check(READER): *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (unsigned long long)i << endl;
+                break;
+              }
+        }
+        cerr << "Check Complete\n";
+    }
+
     void init() {
-        cout << "Initializing\n";
+        cout << "Initializing churn pages\n";
         {
             uint64_t* p = (uint64_t*)churn_pages;
-            for (uint64_t i = 0; i < options.num_churn_pages*(pagesize/sizeof(*p)); ++i)
+#pragma omp parallel for
+            for (uint64_t i = 0; i < num_churn_pages * (pagesize/sizeof(*p)); ++i)
                 p[i] = i;
         }
 
+        cout << "Initializing read load pages pages\n";
         {
-            for (uint64_t pageno = 0; pageno < options.num_load_pages; ++pageno) {
-                uint64_t* p = (uint64_t*)((uint64_t)read_load_pages+(pagesize*pageno));
-                for (uint64_t i = 0; i < options.num_load_pages*(pagesize/sizeof(*p)); ++i)
-                    p[i] = i;
-
-                p = (uint64_t*)((uint64_t)write_load_pages+(pagesize*pageno));
-                for (uint64_t i = 0; i < options.num_load_pages*(pagesize/sizeof(*p)); ++i)
-                    p[i] = i;
-            }
+          uint64_t* p = (uint64_t*)(uint64_t)read_load_pages;
+#pragma omp parallel for
+          for (uint64_t i = 0; i < num_read_load_pages * (pagesize/sizeof(*p)); ++i)
+              p[i] = i;
         }
-        cout << "Initialization Complete\n";
+
+        cout << "Initializing rw load pages pages\n";
+        {
+          uint64_t* p = (uint64_t*)(uint64_t)rw_load_pages;
+#pragma omp parallel for
+          for (uint64_t i = 0; i < num_rw_load_pages * (pagesize/sizeof(*p)); ++i)
+              p[i] = i;
+        }
+        cerr << "Initialization Complete\n";
     }
 
     mutex lock;
@@ -174,7 +210,7 @@ private:
         uint64_t idx;
         uint64_t* p = (uint64_t*)churn_pages;
         mt19937 gen(tnum);
-        uniform_int_distribution<uint64_t> rnd_int(0, ((options.num_churn_pages*(pagesize/sizeof(*p)))-1));
+        uniform_int_distribution<uint64_t> rnd_int(0, ((num_churn_pages*(pagesize/sizeof(*p)))-1));
 
         while ( !time_to_stop ) {
             idx = rnd_int(gen);
@@ -188,11 +224,11 @@ private:
         return cnt;
     }
 
-    void load_read(uint64_t pageno, int tnum) {
-        uint64_t* p = (uint64_t*)((uint64_t)read_load_pages+(pagesize*pageno));
-        tnum = tnum + tnum * pageno;
+    void load_read(int tnum) {
+        uint64_t* p = (uint64_t*)read_load_pages;
+        tnum = tnum + 2048;
         mt19937 gen(tnum);
-        uniform_int_distribution<uint64_t> rnd_int(0, ((pagesize/sizeof(*p))-1));
+        uniform_int_distribution<uint64_t> rnd_int(0, ((num_read_load_pages*(pagesize/sizeof(*p)))-1));
 
         while ( !time_to_stop ) {
             uint64_t idx = rnd_int(gen);
@@ -207,11 +243,11 @@ private:
     }
 
     // Have a reader going nuts on the write page for fun. No data validation since the writer is changing it from underneath us.
-    void load_read2(uint64_t pageno, int tnum) {
-        uint64_t* p = (uint64_t*)((uint64_t)write_load_pages+(pagesize*pageno));
-        tnum = tnum + tnum * pageno;
+    void load_rw_read(int tnum) {
+        uint64_t* p = (uint64_t*)rw_load_pages;
+        tnum = tnum + tnum * 53;
         mt19937 gen(tnum);
-        uniform_int_distribution<uint64_t> rnd_int(0, ((pagesize/sizeof(*p))-1));
+        uniform_int_distribution<uint64_t> rnd_int(0, ((num_rw_load_pages*(pagesize/sizeof(*p)))-1));
 
         while ( !time_to_stop ) {
             uint64_t idx = rnd_int(gen);
@@ -219,10 +255,10 @@ private:
         }
     }
 
-    void load_write(uint64_t pageno) {
+    void load_rw_write() {
         uint64_t cnt = 0;
-        uint64_t* p = (uint64_t*)((uint64_t)write_load_pages+(pagesize*pageno));
-        const int num_entries = pagesize/sizeof(*p);
+        uint64_t* p = (uint64_t*)((uint64_t)rw_load_pages);
+        const int num_entries = num_rw_load_pages * pagesize/sizeof(*p);
 
         omp_set_num_threads(options.num_load_writer_threads);
 
@@ -240,9 +276,9 @@ private:
 #pragma omp critical
                     {
                         lock.lock();
-                        cerr << "load_write *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (cnt_base+i) << ": (" << cnt_base << "+" << i << "=" << (cnt_base+i) << ") - " << p[i] << " = " << ((cnt_base+i)-p[i]) << endl;
+                        cerr << "load_rw_write *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (cnt_base+i) << ": (" << cnt_base << "+" << i << "=" << (cnt_base+i) << ") - " << p[i] << " = " << ((cnt_base+i)-p[i]) << endl;
                         if (i != 0)
-                            cerr << "load_write *(uint64_t*)" << &p[0] << "=" << p[0] << " ,  " << (cnt_base+0) << ": (" << cnt_base << "+" << 0 << "=" << (cnt_base+0) << ") - " << p[0] << " = " << ((cnt_base+0)-p[0]) << endl;
+                            cerr << "load_rw_write *(uint64_t*)" << &p[0] << "=" << p[0] << " ,  " << (cnt_base+0) << ": (" << cnt_base << "+" << 0 << "=" << (cnt_base+0) << ") - " << p[0] << " = " << ((cnt_base+0)-p[0]) << endl;
                         lock.unlock();
                     }
                     exit(1);
@@ -257,10 +293,10 @@ private:
 int main(int argc, char **argv)
 {
     pageiotest test{argc, argv};
+
     test.start();
     test.run();
     test.stop();
-    cout << g_count << endl;
 
     return 0;
 }

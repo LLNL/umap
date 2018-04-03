@@ -28,7 +28,7 @@ static void usage(char* pname)
   << " --noinit                     - No Initialization\n"
   << " --directio                   - Use O_DIRECT for file IO\n"
   << " --usemmap                    - Use mmap instead of umap\n"
-  << " -p # of pages in page buffer - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -b # of pages in page buffer - default: " << umap_cfg_get_bufsize() << " Pages\n"
   << " -c # of churn pages          - default: " << NUMCHURNPAGES << " Pages\n"
   << " -l # of load pages           - default: " << NUMLOADPAGES << " Pages\n"
   << " -t # of churn threads        - default: " << NUMCHURNTHREADS << endl
@@ -68,7 +68,7 @@ void getoptions(options_t& testops, int& argc, char **argv)
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:c:l:t:r:w:f:d:", long_options, &option_index);
+    c = getopt_long(argc, argv, "b:c:l:t:r:w:f:d:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -80,7 +80,7 @@ void getoptions(options_t& testops, int& argc, char **argv)
         usage(pname);
         break;
 
-      case 'p':
+      case 'b':
         if ((testops.page_buffer_size = strtoull(optarg, nullptr, 0)) > 0)
           break;
         goto R0;
