@@ -128,7 +128,7 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
   const int prot = PROT_READ|PROT_WRITE;
 
   if ( testops->usemmap ) {
-    region = mmap(NULL, handle->range_size, prot, MAP_PRIVATE | MAP_NORESERVE, handle->fd, 0);
+    region = mmap(NULL, handle->range_size, prot, MAP_SHARED | MAP_NORESERVE, handle->fd, 0);
     if (region == MAP_FAILED) {
       ostringstream ss;
       ss << "mmap of " << handle->range_size << " bytes failed for " << handle->filename << ": ";
