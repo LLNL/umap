@@ -49,10 +49,6 @@ typedef ssize_t (*umap_pstore_write_f_t)(
  * \param length Same as input argument of mmap(2)
  * \param prot Same as input argument of mmap(2)
  * \param flags Same as input argument of mmap(2)
- * \param fd file descriptor of file to be used as persistant store.  
- *           If \b fd is greater than 0, then umap() will assume it is for a single
- *           file to be used as the persistent storage and the \a r_pstore and
- *           w_pstore parameters will be ignored.
  * \param r_pstore pointer to callback function to be used for providing data from
  *                 persistent storage.
  * \param w_pstore pointer to callback function to be used for saving data to
@@ -63,7 +59,6 @@ void* umap(
     size_t length,
     int prot,
     int flags,
-    int fd,
     umap_pstore_read_f_t r_pstore,
     umap_pstore_write_f_t w_pstore
 );

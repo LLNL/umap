@@ -1,4 +1,19 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
+/* This file is part of UMAP.  
+ *
+ * For copyright information see the COPYRIGHT file in the top level 
+ * directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT 
+ * This program is free software; you can redistribute it and/or modify 
+ * it under the terms of the GNU Lesser General Public License (as 
+ * published by the Free Software Foundation) version 2.1 dated 
+ * February 1999.  This program is distributed in the hope that it will 
+ * be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED 
+ * WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ * See the terms and conditions of the GNU Lesser General Public 
+ * License for more details.  You should have received a copy of 
+ * the GNU Lesser General Public License along with this program; 
+ * if not, write to the Free Software Foundation, Inc., 
+ * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA 
+ */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
@@ -9,7 +24,8 @@
 #include "testoptions.h"
 #include "umap.h"
 
-char const* FILENAME = "/tmp/abc";
+char const* DIRNAME = "./";
+char const* FILENAME = "abc";
 const uint64_t NUMPAGES = 10000000;
 const uint64_t NUMTHREADS = 2;
 const uint64_t BUFFERSIZE = 16;
@@ -29,8 +45,8 @@ static void usage(char* pname)
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -b page buffer size    - default: " << umap_cfg_get_bufsize() << " Pages\n"
-  << " -n number of files     - default: " << -1 << endl
-  << " -f [file name]         - backing file name.  Must exist and be correct size for noinit\n";
+  << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
+  << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n";
   exit(1);
 }
 
@@ -47,7 +63,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
   testops->filename = FILENAME;
-  testops->num_files = 1;
+  testops->dirname = DIRNAME;
 
   while (1) {
     int option_index = 0;
@@ -60,7 +76,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:n:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:d:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -84,10 +100,9 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
         if ((testops->bufsize = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
-      case 'n':
-        if ((testops->num_files = strtoull(optarg, nullptr, 0)) > 0)
-          break;
-        else goto R0;
+      case 'd':
+        testops->dirname = optarg;
+        break;
       case 'f':
         testops->filename = optarg;
         break;

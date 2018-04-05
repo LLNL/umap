@@ -61,7 +61,6 @@ public:
         umt_options.iodirect = options.iodirect;
         umt_options.usemmap = options.usemmap;
         umt_options.filename = options.fn;
-        umt_options.num_files = 1;
         umt_options.noinit = options.noinit;
         umt_options.initonly = options.initonly;
 

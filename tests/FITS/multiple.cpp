@@ -21,35 +21,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <stdint.h>
-#include <pthread.h>
-#include <string>
-#include <math.h>
-#include <assert.h>
-#include <fstream>
-#include <iostream>
-#include <string>
-
-#define NUMPAGES 10000
-#define NUMTHREADS 1
-#define BUFFERSIZE 100
-
-#include "umap.h"
-#include "umaptest.h"
-#include "fitsio.h"
-#include "helper.hpp"
-
 #include <omp.h>
+#include <fstream>
+
+#include "testoptions.h"
+#include "helper.hpp"
+#include "PerFits.h"
 
 helper_funs hf;
 
@@ -119,7 +96,7 @@ double torben(float *m, int n, uint64_t step)
   return (min + max) / (double)2;
 }
 
-void median_calc(int n, struct patch *list, double *cube_median, float *cube)
+void median_calc(int n, struct patch *list, off_t zDim, double *cube_median, float *cube)
 {
   uint64_t lx=list[0].ex;
   uint64_t ly=list[0].ey;
@@ -127,49 +104,24 @@ void median_calc(int n, struct patch *list, double *cube_median, float *cube)
 #pragma omp parallel for
     for ( uint64_t i = list[k].sy; i < list[k].ey; i++ ) { // bounding box
       for ( uint64_t j = list[k].sx; j < list[k].ex; j++ )
-        cube_median[ i * lx + j ] = torben( cube + i * lx + j, hf.options.num_files,lx*ly);
+        cube_median[ i * lx + j ] = torben( cube + i * lx + j, zDim, lx*ly);
     }
   }
 }  
 
-static int test_openfiles(const char *fn)
+static int run_test( void )
 {
-  long pagesize;
-  int64_t totalbytes;
-  void* base_addr;
-  off_t frame;
-  void* bk_list;
-  std::string filename = fn + std::to_string(1) + ".fits";
+  float* mycube;
+  size_t BytesPerElement;
+  size_t xDim;
+  size_t yDim;
+  size_t zDim;
 
-  pagesize = umt_getpagesize();
-
-  char* sval ;
-  int dstart;
-  int lx, ly ;
-  int bpp;
-  int psize;
-
-  if ( hf.get_fits_image_info(filename) )
-    return -1;
-
-  lx = hf.naxes[0];
-  ly = hf.naxes[1];
-  bpp = hf.bitpix;
-  dstart = hf.datastart;
-
-  psize = bpp / 8;
-
-  frame = (off_t)lx * ly * psize;
-
-  totalbytes = hf.options.numpages * pagesize;
-  bk_list = umt_openandmap_mf(&hf.options, totalbytes, &base_addr, (off_t)dstart, frame);
-  assert(bk_list != NULL);
-
+  mycube = (float*)PerFits::PerFits_alloc_cube(&hf.options, &BytesPerElement, &xDim, &yDim, &zDim);
   omp_set_num_threads(hf.options.numthreads);
 
   //median calculation
-  double *cube_median = (double *)malloc(sizeof(double) * lx * ly);
-  float *cube=(float *)base_addr;
+  double *cube_median = (double *)malloc(sizeof(double) * xDim * yDim);
 
   struct patch *list;
   int nlist, i;
@@ -180,8 +132,8 @@ static int test_openfiles(const char *fn)
     list=(struct patch *)calloc(nlist+1,sizeof(struct patch));
     list[0].sx=0;
     list[0].sy=0;
-    list[0].ex=lx;
-    list[0].ey=ly;//boundry of the image
+    list[0].ex=xDim;
+    list[0].ey=yDim;//boundry of the image
     i=0;
     while ( !input.eof() ) {
       i++;
@@ -195,25 +147,22 @@ static int test_openfiles(const char *fn)
   }
 
   double start = hf.gets();
-  median_calc(nlist,list,cube_median,cube);
+  median_calc(nlist, list, zDim, cube_median, mycube);
   std::cout << "Median Calculation " << (double)(hf.gets() - start) << " s\n";
+
   //uf.displaycube(cube_median,list,nlist);
  
-  free(cube_median);
   free(list);
-  umt_closeandunmap_mf(&hf.options, totalbytes, base_addr, bk_list);
+  free(cube_median);
+  PerFits::PerFits_free_cube(mycube);
   return 0 ;
 }
 
 int main(int argc, char * argv[])
 {
-  int err = 0;
   umt_getoptions(&hf.options, argc, argv);
-  test_openfiles(hf.options.filename);
 
-  if ( err > 0 ) {
-    std::cerr << argv[0] << ": " << err << " error(s) occurred\n";
-    return -1 ;
-  }
-  return 0 ;
+  run_test();
+
+  return 0;
 }

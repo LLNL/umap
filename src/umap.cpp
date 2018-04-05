@@ -68,7 +68,7 @@ class UserFaultHandler;
 class _umap {
   friend UserFaultHandler;
   public:
-    _umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write, int fd);
+    _umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write);
     ~_umap();
 
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
@@ -82,7 +82,6 @@ class _umap {
     bool uffd_time_to_stop_working;
     umap_pstore_read_f_t pstore_read;
     umap_pstore_write_f_t pstore_write;
-    int pstore_fd;
 };
 
 class UserFaultHandler {
@@ -214,7 +213,7 @@ static int check_uffd_compatibility( void )
   return 0;
 }
 
-void* umap(void* base_addr, uint64_t region_size, int prot, int flags, int fd, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
+void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
 {
   if (check_uffd_compatibility() < 0)
     return NULL;
@@ -234,7 +233,7 @@ void* umap(void* base_addr, uint64_t region_size, int prot, int flags, int fd, u
   }
 
   try {
-    active_umaps[region] = new _umap{region, region_size, _ps_read, _ps_write, fd};
+    active_umaps[region] = new _umap{region, region_size, _ps_read, _ps_write};
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
     return UMAP_FAILED;
@@ -344,8 +343,8 @@ void __attribute ((destructor)) fine_umap_lib( void )
 //
 // _umap class implementation
 //
-_umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write, int fd)
-    : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}, pstore_read{_ps_read}, pstore_write{_ps_write}, pstore_fd{fd}
+_umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
+    : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}, pstore_read{_ps_read}, pstore_write{_ps_write}
 {
   uint64_t pages_in_region = region_size / page_size;
   uint64_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;

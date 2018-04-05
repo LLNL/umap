@@ -29,11 +29,10 @@
 #include <string>
 #include <omp.h>
 
-#include "umaptest.h"
-#include "helper.hpp"
+#include "testoptions.h"
+#include "PerFits.h"
 
-helper_funs hf;
-
+#if 0
 double torben(float **m, int n, int pos)
 {
   int i, j, less, greater, equal;
@@ -216,9 +215,11 @@ static int process(const char * filename)
   }
   return 0;
 }
+#endif
 
 int main(int argc, char * argv[])
 {
+#if 0
   int err = 0;
 
   umt_getoptions(&hf.options, argc, argv);
@@ -227,5 +228,6 @@ int main(int argc, char * argv[])
     std::cerr << argv[0] << ": " << err << " error(s) occurred\n";
     return -1 ;
   }
+#endif
   return 0 ;
 }
