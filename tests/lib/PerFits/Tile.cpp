@@ -108,12 +108,11 @@ ssize_t Tile::pread(void *buf, std::size_t nbytes, off_t offset)
 std::ostream &operator<<(std::ostream &os, Tile const &ft)
 {
   os << ft.file.fname << " "
-     << ((ft.file.fd == -1) ? "Unopened " : "Open     ")
      << "Start=" << ft.file.tile_start << ", "
      << "Size=" << ft.file.tile_size << ", "
-     << "X Dimension=" << ft.dim.xDim << ", "
-     << "Y Dimension=" << ft.dim.yDim << ", "
-     << "Element Size=" << ft.dim.elem_size << " ";
+     << "XDim=" << ft.dim.xDim << ", "
+     << "YDim=" << ft.dim.yDim << ", "
+     << "ESize=" << ft.dim.elem_size << " ";
 
   return os;
 }
