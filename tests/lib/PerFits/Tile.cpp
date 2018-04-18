@@ -94,9 +94,10 @@ ssize_t Tile::pread(void *buf, std::size_t nbytes, off_t offset)
   std::size_t rval;
 
   assert("File not large enough" && (offset + nbytes) <= (dim.xDim * dim.yDim * dim.elem_size));
+  //std::cout << *this << " Reading " << nbytes << " from offset(" << offset << ") + " << file.tile_start << " = " << offset+file.tile_start << std::endl;
+
   offset += file.tile_start;  // Skip to data portion of file
 
-  //std::cout << *this << " Reading " << nbytes << " from offset " << offset << std::endl;
   if ( ( rval = ::pread(file.fd, buf, nbytes, offset) ) == -1) {
     perror("ERROR: pread failed");
     exit(1);
