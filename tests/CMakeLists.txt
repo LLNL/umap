@@ -2,6 +2,7 @@ add_subdirectory(lib)
 
 if ( ENABLE_FITS_TESTS )
   add_subdirectory(FITS)
+  add_subdirectory(median_calculation)
 endif()
 
 add_subdirectory(umapsort)
