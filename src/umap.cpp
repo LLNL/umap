@@ -860,6 +860,7 @@ void umap_page::set_page(void* _p)
 //
 void umap_stats::print_stats(void)
 {
+#ifdef UMAP_DISPLAY_STATS
   cerr << stat_faults << " Faults\n"
     << read_faults << " READ Faults" << endl
     << write_faults << " WRITE Faults" << endl
@@ -869,4 +870,5 @@ void umap_stats::print_stats(void)
     << sigbus << " SIGBUS Errors" << endl
     << stuck_wp << " Stuck WP Workarounds" << endl
     << dropped_dups << " Dropped Duplicates" << endl;
+#endif
 }
