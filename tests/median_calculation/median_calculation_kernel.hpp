@@ -143,6 +143,9 @@ pixel_type torben(const cube_t<pixel_type>& cube, const vector_t& vector)
     for (size_t k = 0; k < cube.size_k; ++k) {
       const size_t pos = get_index(cube, vector, k);
       const pixel_type value = reverse_byte_order(cube.data[pos]);
+      // if (loop_cnt == 0)
+        // std::cout << value << std::endl;
+      
       if (value < guess) {
         less++;
         if (value > maxltguess) maxltguess = value;

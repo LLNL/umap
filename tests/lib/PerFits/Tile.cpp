@@ -50,7 +50,7 @@ Tile::Tile(const std::string& _fn)
   dim.elem_size = 0;
   file.fd = -1;
 
-  if ( fits_open_file(&fptr, file.fname.c_str(), READONLY, &status) ) {
+  if ( fits_open_data(&fptr, file.fname.c_str(), READONLY, &status) ) {
     fits_report_error(stderr, status);
     assert("NOT a FITS file" && 0);
   }

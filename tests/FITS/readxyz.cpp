@@ -39,11 +39,14 @@ int main(int argc, char * argv[])
   size_t y = 124;
   size_t z = 0;
 
-  std::cout << "epoch(z) " 
-    << std::dec << z 
-    << " x_pixel_loc " << x 
-    << " y_pixel_loc " << y 
-    << " pixel_value " << pixel_value(mycube, xDim, yDim, x, y, z) << std::endl;
+  x = 1058; y = 124; z = 0;
+  std::cout << "epoch(z) " << std::dec << z << " x_pixel_loc " << x << " y_pixel_loc " << y << " pixel_value " << pixel_value(mycube, xDim, yDim, x, y, z) << std::endl;
+
+  x = 64; y = 996; z = 1;
+  std::cout << "epoch(z) " << std::dec << z << " x_pixel_loc " << x << " y_pixel_loc " << y << " pixel_value " << pixel_value(mycube, xDim, yDim, x, y, z) << std::endl;
+
+  x = 512; y = 3; z = 5;
+  std::cout << "epoch(z) " << std::dec << z << " x_pixel_loc " << x << " y_pixel_loc " << y << " pixel_value " << pixel_value(mycube, xDim, yDim, x, y, z) << std::endl;
 
   PerFits::PerFits_free_cube(mycube);
   return 0;

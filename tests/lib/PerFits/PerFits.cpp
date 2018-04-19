@@ -108,7 +108,7 @@ void* PerFits_alloc_cube(
 
     Fits::Tile T(ss.str());
 
-    //cout << T << endl;
+    // cout << T << endl;
 
     Fits::Tile_Dim dim = T.get_Dim();
     if ( *BytesPerElement == 0 ) {
