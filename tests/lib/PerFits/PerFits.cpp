@@ -20,6 +20,7 @@
  * Boston, MA 02111-1307 USA
  */
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <sstream>
 #include <cassert>
@@ -100,7 +101,7 @@ void* PerFits_alloc_cube(
   *xDim = *yDim = *BytesPerElement = 0;
   for (int i = 1; ; ++i) {
     stringstream ss;
-    ss << basename << i << ".fits";
+    ss << basename << std::setfill('0') << std::setw(3) << i << ".fits";
     struct stat sbuf;
 
     if ( stat(ss.str().c_str(), &sbuf) == -1 )
