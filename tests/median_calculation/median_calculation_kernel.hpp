@@ -28,10 +28,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define MEDIAN_CALCULATION_KERNEL_HPP
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <cmath>
 #include <cfenv>
+
+#define MEDIAN_CALCULATION_VERBOSE 1
+#define MEDIAN_CALCULATION_COLUMN_MAJOR 1
 
 namespace median
 {
@@ -73,11 +77,14 @@ inline size_t get_cube_size(const cube_t<pixel_type>& cube)
 template <typename pixel_type>
 inline size_t get_index(const cube_t<pixel_type>& cube, const size_t x, const size_t y, const size_t k)
 {
+#if MEDIAN_CALCULATION_COLUMN_MAJOR
+  return x + y * cube.size_x + k * get_frame_size(cube); // column major
+#else
   return x * cube.size_y + y + k * get_frame_size(cube); // row major
-  // return x + y * cube.size_x + k * get_frame_size(cube); // column major
+#endif
 }
 
-/// \brief Returns an index of a 3D coordinate
+/// \brief Returns an index of a 3D coordinate. vector version
 template <typename pixel_type>
 inline size_t get_index(const cube_t<pixel_type>& cube, const vector_t& vec, const size_t epoch)
 {
@@ -143,9 +150,14 @@ pixel_type torben(const cube_t<pixel_type>& cube, const vector_t& vector)
     for (size_t k = 0; k < cube.size_k; ++k) {
       const size_t pos = get_index(cube, vector, k);
       const pixel_type value = reverse_byte_order(cube.data[pos]);
-      // if (loop_cnt == 0)
-        // std::cout << value << std::endl;
-      
+#if MEDIAN_CALCULATION_VERBOSE
+      if (loop_cnt == 0) {
+        const size_t pos_x = std::round(vector.x_slope * k + vector.x_intercept);
+        const size_t pos_y = std::round(vector.y_slope * k + vector.y_intercept);
+        std::cout << std::fixed;
+        std::cout << std::setprecision(2) << pos_x << ", " << pos_y << " = " << value << std::endl;
+      }
+#endif
       if (value < guess) {
         less++;
         if (value > maxltguess) maxltguess = value;
