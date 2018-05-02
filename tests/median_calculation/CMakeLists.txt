@@ -18,8 +18,18 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 
+    add_executable(random_vector_median_calculation random_vector_median_calculation.cpp)
+    target_link_libraries(random_vector_median_calculation libumap_static)
+    target_link_libraries(random_vector_median_calculation libtestoptions_static)
+    target_link_libraries(random_vector_median_calculation libPerFits_static)
+    target_link_libraries(random_vector_median_calculation ${CFITS_LIBRARY} )
+    install(TARGETS random_vector_median_calculation
+            LIBRARY DESTINATION lib
+            ARCHIVE DESTINATION lib/static
+            RUNTIME DESTINATION bin )
+
 else()
-    message("Skpping simple_median_calculation, OpenMP required")
+    message("Skpping median_calculation, OpenMP required")
 endif()
 
 

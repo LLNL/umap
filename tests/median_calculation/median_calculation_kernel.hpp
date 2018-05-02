@@ -33,8 +33,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string>
 #include <cmath>
 #include <cfenv>
+#include <vector>
 
-#define MEDIAN_CALCULATION_VERBOSE 1
+#define MEDIAN_CALCULATION_VERBOSE 0
 #define MEDIAN_CALCULATION_COLUMN_MAJOR 1
 
 namespace median
@@ -113,16 +114,32 @@ inline T reverse_byte_order(const T x)
   return reversed_x;
 }
 
+/// \brief Data structure to store a read value
+template <typename pixel_type>
+struct read_value_t {
+  size_t pos_x;
+  size_t pos_y;
+  pixel_type value;
+
+  read_value_t(size_t _pos_x, size_t _pos_y, pixel_type _value)
+      : pos_x(_pos_x),
+        pos_y(_pos_y),
+        value(_value) {}
+};
 
 /// \example
 ///  cube = cube_t<float>{10, 10, 10, ptr_cube};
 ///  vector_t vector{10, 2.3, 10, 1.0};
-///  float median_value = median::torben(cube, vector);
+///  auto ret = median::torben(cube, vector);
+/// ret is a pair of pair of a calculated median value and an array of read pixel values
 template <typename pixel_type>
-pixel_type torben(const cube_t<pixel_type>& cube, const vector_t& vector)
+std::pair<pixel_type, std::vector<read_value_t<pixel_type>>>
+torben(const cube_t<pixel_type>& cube, const vector_t& vector)
 {
   pixel_type min;
   pixel_type max;
+
+  std::vector<read_value_t<pixel_type>> read_values;
 
   // get a value of the starting point
   min = max = reverse_byte_order(cube.data[get_index(cube, vector, 0)]);
@@ -150,14 +167,14 @@ pixel_type torben(const cube_t<pixel_type>& cube, const vector_t& vector)
     for (size_t k = 0; k < cube.size_k; ++k) {
       const size_t pos = get_index(cube, vector, k);
       const pixel_type value = reverse_byte_order(cube.data[pos]);
-#if MEDIAN_CALCULATION_VERBOSE
-      if (loop_cnt == 0) {
+      if (loop_cnt == 0) { // store data to return to the main function
         const size_t pos_x = std::round(vector.x_slope * k + vector.x_intercept);
         const size_t pos_y = std::round(vector.y_slope * k + vector.y_intercept);
-        std::cout << std::fixed;
-        std::cout << std::setprecision(2) << pos_x << ", " << pos_y << " = " << value << std::endl;
-      }
+        read_values.emplace_back(read_value_t<pixel_type>(pos_x, pos_y, value));
+#if MEDIAN_CALCULATION_VERBOSE
+        std::cout << pos_x << "\t" << pos_y << "\t" << value << std::endl;
 #endif
+      }
       if (value < guess) {
         less++;
         if (value > maxltguess) maxltguess = value;
@@ -184,13 +201,13 @@ pixel_type torben(const cube_t<pixel_type>& cube, const vector_t& vector)
   else if (less + equal >= half) min = guess;
   else min = mingtguess;
 
-  if (cube.size_k & 1) return min;
+  if (cube.size_k & 1) return std::make_pair(min, read_values);
 
   if (greater >= half) max = mingtguess;
   else if (greater + equal >= half) max = guess;
   else max = maxltguess;
 
-  return (min + max) / 2.0;
+  return std::make_pair((min + max) / 2.0, read_values);
 }
 } // namespace median
 

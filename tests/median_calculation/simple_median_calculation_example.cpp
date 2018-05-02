@@ -42,8 +42,8 @@ int main(int argc, char** argv)
 
   for (int i = 0; i < 6; ++i) {
     std::cout << "\nEpoch: " << i << std::endl;
-    const float median_value = median::torben(cube, {x_intercept[i], x_slope[i], y_intercept[i], y_slope[i]});
-    std::cout << "median value: " << median_value << std::endl;
+    const auto ret = median::torben(cube, {x_intercept[i], x_slope[i], y_intercept[i], y_slope[i]});
+    std::cout << "median value: " << ret.first << std::endl;
   }
 
   PerFits::PerFits_free_cube(cube.data);
