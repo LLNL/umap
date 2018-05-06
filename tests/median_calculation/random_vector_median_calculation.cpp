@@ -18,9 +18,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <algorithm>
 
-#ifdef _OPENMP
 #include <omp.h>
-#endif
 
 #include "median_calculation_kernel.hpp"
 #include "testoptions.h"
@@ -66,27 +64,28 @@ int main(int argc, char** argv)
   cube.size_y = yDim;
   cube.size_k = zDim; // tne number of frames
 
-  std::mt19937 rnd_engine(123);
-  std::uniform_int_distribution<int> x_start_dist(0.2 * cube.size_x, 0.8 * cube.size_x);
-  std::uniform_int_distribution<int> y_start_dist(0.2 * cube.size_y, 0.8 * cube.size_y);
-  beta_distribution x_beta_dist(3, 2);
-  beta_distribution y_beta_dist(3, 2);
-  std::discrete_distribution<int> plus_or_minus{-1, 1};
-
   using median_result_type = std::pair<pixel_type, std::vector<median::read_value_t<pixel_type>>>;
   std::vector<median_result_type> results(num_random_vector);
 
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
-  for (int i = 0; i < num_random_vector; ++i) {
-    double x_intercept = x_start_dist(rnd_engine);
-    double y_intercept = y_start_dist(rnd_engine);
+#pragma omp parallel
+  {
+    std::mt19937 rnd_engine(123 + omp_get_thread_num());
+    std::uniform_int_distribution<int> x_start_dist(0.2 * cube.size_x, 0.8 * cube.size_x);
+    std::uniform_int_distribution<int> y_start_dist(0.2 * cube.size_y, 0.8 * cube.size_y);
+    beta_distribution x_beta_dist(3, 2);
+    beta_distribution y_beta_dist(3, 2);
+    std::discrete_distribution<int> plus_or_minus{-1, 1};
 
-    double x_slope = x_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
-    double y_slope = y_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
+    #pragma omp for
+    for (int i = 0; i < num_random_vector; ++i) {
+      double x_intercept = x_start_dist(rnd_engine);
+      double y_intercept = y_start_dist(rnd_engine);
 
-    results[i] = median::torben(cube, {x_intercept, x_slope, y_intercept, y_slope});
+      double x_slope = x_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
+      double y_slope = y_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
+
+      results[i] = median::torben(cube, {x_intercept, x_slope, y_intercept, y_slope});
+    }
   }
 
   /// Sort the results by the descending order of median value
