@@ -30,7 +30,8 @@
 #include <omp.h>
 
 #include "umap.h"
-#include "umaptest.h"
+#include "testoptions.h"
+#include "PerFile.h"
 
 static const uint64_t IndexesSize = 20000000;
 static uint64_t* Indexes;
@@ -62,15 +63,14 @@ int main(int argc, char **argv)
   long pagesize;
   uint64_t totalbytes;
   void* base_addr;
-  void* maphandle;
 
   pagesize = umt_getpagesize();
   umt_getoptions(&options, argc, argv);
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
-  assert(maphandle != NULL);
+  base_addr = PerFile_openandmap(&options, totalbytes);
+  assert(base_addr != NULL);
  
   fprintf(stdout, "%lu GB %lu pages, %lu threads\n", totalbytes/1024/1024/1024, options.numpages, options.numthreads);
 
@@ -92,7 +92,7 @@ int main(int argc, char **argv)
       (double)IndexesSize / (double)((double)(end - start)/100000000.0)
       );
 
-  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
+  PerFile_closeandunmap(&options, totalbytes, base_addr);
 
   return 0;
 }

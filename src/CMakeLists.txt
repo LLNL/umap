@@ -8,7 +8,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 include_directories( 
   BEFORE "${CMAKE_CURRENT_SOURCE_DIR}"
-  "${PROJECT_BINARY_DIR}/../config"
+  "${PROJECT_BINARY_DIR}/../include"
   "${CMAKE_CURRENT_SOURCE_DIR}/../include"
   "${CMAKE_CURRENT_SOURCE_DIR}/../sysincludes"
   )

@@ -32,7 +32,8 @@
 #endif
 
 #include "umap.h"
-#include "umaptest.h"
+#include "testoptions.h"
+#include "PerFile.h"
 
 #define handle_error_en(en, msg) \
   do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -81,7 +82,6 @@ int main(int argc, char **argv)
   int64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
-  void* maphandle;
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> rnd_int(0, 39);
@@ -93,8 +93,8 @@ int main(int argc, char **argv)
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
-  assert(maphandle != NULL);
+  base_addr = PerFile_openandmap(&options, totalbytes);
+  assert(base_addr != NULL);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "test took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
+  PerFile_closeandunmap(&options, totalbytes, base_addr);
 
   return 0;
 }

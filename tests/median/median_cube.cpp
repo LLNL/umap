@@ -36,7 +36,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #endif
 
 #include "umap.h"
-#include "umaptest.h"
+#include "testoptions.h"
+#include "PerFile.h"
 
 #define NUMPAGES 10000000
 #define NUMTHREADS 2
@@ -139,15 +140,14 @@ int main(int argc, char **argv)
   int64_t arraysize;
   //uint64_t median;
   void* base_addr;
-  void* maphandle;
 
   pagesize = umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   totalbytes = options.numpages*pagesize;
-  maphandle = umt_openandmap(&options, totalbytes, &base_addr);
-  assert(maphandle != NULL);
+  base_addr = PerFile_openandmap(&options, totalbytes);
+  assert(base_addr != NULL);
 
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
@@ -180,7 +180,7 @@ int main(int argc, char **argv)
     }
   free(cube_median);
 
-  umt_closeandunmap(&options, totalbytes, base_addr, maphandle);
+  PerFile_closeandunmap(&options, totalbytes, base_addr);
 
   return 0;
 }
