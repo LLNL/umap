@@ -8,7 +8,8 @@ if(OPENMP_FOUND)
     add_executable(umapcpu umapcpu.cpp)
 
     target_link_libraries(umapcpu libumap_static)
-    target_link_libraries(umapcpu libumaptest_static)
+    target_link_libraries(umapcpu libtestoptions_static)
+    target_link_libraries(umapcpu libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

@@ -68,7 +68,7 @@ class UserFaultHandler;
 class _umap {
   friend UserFaultHandler;
   public:
-    _umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_file* backing_files);
+    _umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write);
     ~_umap();
 
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
@@ -79,9 +79,9 @@ class _umap {
   private:
     void* region;
     uint64_t region_size;
-    int backingfile_fd;
-    vector<umap_backing_file> bk_files;
     bool uffd_time_to_stop_working;
+    umap_pstore_read_f_t pstore_read;
+    umap_pstore_write_f_t pstore_write;
 };
 
 class UserFaultHandler {
@@ -213,28 +213,19 @@ static int check_uffd_compatibility( void )
   return 0;
 }
 
-void* umap(void* addr, uint64_t length, int prot, int flags, int fd, off_t offset)
+void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
 {
-  struct stat file;
-
   if (check_uffd_compatibility() < 0)
     return NULL;
 
-  fstat(fd,&file);
-  struct umap_backing_file file1={.fd = fd, .data_size = file.st_size, .data_offset = offset};
-  return umap_mf(addr, length, prot, flags, 1, &file1);
-}
-
-void* umap_mf(void* bass_addr, uint64_t region_size, int prot, int flags, int num_backing_file, umap_backing_file* backing_files)
-{
-  assert((region_size % page_size) == 0);
+  assert("UMAP: Region size must be multple of page_size" && (region_size % page_size) == 0);
 
   if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
     cerr << "umap: Invalid flags: " << hex << flags << endl;
     return UMAP_FAILED;
   }
 
-  void* region = mmap(bass_addr, region_size, prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
+  void* region = mmap(base_addr, region_size, prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
 
   if (region == MAP_FAILED) {
     perror("ERROR: mmap failed: ");
@@ -242,7 +233,7 @@ void* umap_mf(void* bass_addr, uint64_t region_size, int prot, int flags, int nu
   }
 
   try {
-    active_umaps[region] = new _umap{region, region_size, num_backing_file, backing_files};
+    active_umaps[region] = new _umap{region, region_size, _ps_read, _ps_write};
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
     return UMAP_FAILED;
@@ -352,24 +343,28 @@ void __attribute ((destructor)) fine_umap_lib( void )
 //
 // _umap class implementation
 //
-_umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_file* backing_files)
-    : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}
+_umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
+    : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}, pstore_read{_ps_read}, pstore_write{_ps_write}
 {
-  for (int i=0;i<num_backing_file;i++)
-    bk_files.push_back(backing_files[i]); 
-
   uint64_t pages_in_region = region_size / page_size;
   uint64_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
   uint64_t page_blocks = pages_in_region / pages_per_block;
-  uint64_t remainder_of_pages_in_last_block = pages_in_region % pages_per_block;
-
-  if (remainder_of_pages_in_last_block)
-    page_blocks++;          // Account for extra block
 
   uint64_t num_workers = page_blocks < uffd_threads ? page_blocks : uffd_threads;
   uint64_t page_blocks_per_worker = page_blocks / num_workers;
+  uint64_t additional_blocks_for_last_worker = page_blocks % num_workers;
 
-  // cout << "umap " << num_workers << " workers for: " << region << " - " << (void*)((char*)region+region_size) << endl;
+  stringstream ss;
+  ss << "umap(" 
+    << region << " - " << (void*)((char*)region+region_size) 
+    << ") " << pages_in_region << " region pages, "
+    << pages_per_block << " pages per block, "
+    << page_blocks  << " page blocks, "
+    << num_workers << " workers, " 
+    << page_blocks_per_worker << " page blocks per worker, "
+    << additional_blocks_for_last_worker << " additional pages blocks for last worker"
+    << endl;
+  umapdbg("%s\n", ss.str().c_str());
 
   try {
     for (uint64_t worker = 0; worker < num_workers; ++worker) {
@@ -379,8 +374,8 @@ _umap::_umap(void* _region, uint64_t _rsize, int num_backing_file, umap_backing_
       pb.length = page_blocks_per_worker * pages_per_block * page_size;
 
       // If I am the last worker and we have residual pages in last block
-      if ((worker == num_workers-1) && remainder_of_pages_in_last_block)
-        pb.length -= ((pages_per_block - remainder_of_pages_in_last_block)) * page_size;
+      if ((worker == num_workers-1) && additional_blocks_for_last_worker)
+        pb.length += (additional_blocks_for_last_worker * pages_per_block * page_size);
 
       vector<umap_PageBlock> segs{ pb };
 
@@ -461,7 +456,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
       .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
     };
 
-    umapdbg("Register %p\n", seg.base);
+    umapdbg("Register %p - %p\n", seg.base, (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
       perror("ERROR: ioctl/uffdio_register");
@@ -476,7 +471,6 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
     }
   }
 
-  _u->backingfile_fd=_u->bk_files[0].fd;
   uffd_worker = new thread{&UserFaultHandler::uffd_handler, this};
 }
 
@@ -660,14 +654,10 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   //
   // Page not in memory, read it in and (potentially) evict someone
   //
-  int file_id=0;
   off_t offset=(uint64_t)page_begin - (uint64_t)_u->region;
 
-  file_id = offset/_u->bk_files[0].data_size;   //find the file id and offset number
-  offset %= _u->bk_files[0].data_size;
-
-  if (pread(_u->bk_files[file_id].fd, tmppagebuf, page_size, offset+_u->bk_files[file_id].data_offset) == -1) {
-    perror("ERROR: pread failed");
+  if (_u->pstore_read(_u->region, tmppagebuf, page_size, offset) == -1) {
+    perror("ERROR: pstore_read failed");
     exit(1);
   }
 
@@ -736,8 +726,8 @@ void UserFaultHandler::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
-    if (pwrite(_u->backingfile_fd, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
-      perror("ERROR: pwrite failed");
+    if (_u->pstore_write(_u->region, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
+      perror("ERROR: pstore_write failed");
       assert(0);
     }
   }
@@ -870,6 +860,7 @@ void umap_page::set_page(void* _p)
 //
 void umap_stats::print_stats(void)
 {
+#ifdef UMAP_DISPLAY_STATS
   cerr << stat_faults << " Faults\n"
     << read_faults << " READ Faults" << endl
     << write_faults << " WRITE Faults" << endl
@@ -879,4 +870,5 @@ void umap_stats::print_stats(void)
     << sigbus << " SIGBUS Errors" << endl
     << stuck_wp << " Stuck WP Workarounds" << endl
     << dropped_dups << " Dropped Duplicates" << endl;
+#endif
 }

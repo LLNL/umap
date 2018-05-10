@@ -32,7 +32,8 @@
 #endif
 
 #include "umap.h"
-#include "umaptest.h"
+#include "testoptions.h"
+#include "PerFile.h"
 
 static inline uint64_t getns(void)
 {
@@ -91,7 +92,6 @@ int main(int argc, char **argv)
   int64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
-  void* umaphandle;
 
   pagesize = umt_getpagesize();
 
@@ -100,8 +100,8 @@ int main(int argc, char **argv)
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  umaphandle = umt_openandmap(&options, totalbytes, &base_addr);
-  assert(umaphandle != NULL);
+  base_addr = PerFile_openandmap(&options, totalbytes);
+  assert(base_addr != NULL);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
 
@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  umt_closeandunmap(&options, totalbytes, base_addr, umaphandle);
+  PerFile_closeandunmap(&options, totalbytes, base_addr);
 
   return 0;
 }

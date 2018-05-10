@@ -2,6 +2,7 @@
 #ifndef _OPTIONS_H
 #define _OPTIONS_H
 #include <stdint.h>
+#include "options.h"
 
 typedef struct {
   int iodirect;

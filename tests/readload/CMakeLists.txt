@@ -8,7 +8,8 @@ if(OPENMP_FOUND)
     add_executable(readload readload.cpp)
 
     target_link_libraries(readload libumap_static)
-    target_link_libraries(readload libumaptest_static)
+    target_link_libraries(readload libtestoptions_static)
+    target_link_libraries(readload libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
