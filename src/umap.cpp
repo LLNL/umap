@@ -349,6 +349,7 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
   uint64_t pages_in_region = region_size / page_size;
   uint64_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
   uint64_t page_blocks = pages_in_region / pages_per_block;
+  uint64_t additional_pages_for_last_block = pages_in_region % pages_per_block;
 
   uint64_t num_workers = page_blocks < uffd_threads ? page_blocks : uffd_threads;
   uint64_t page_blocks_per_worker = page_blocks / num_workers;
@@ -360,9 +361,10 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
     << ") " << pages_in_region << " region pages, "
     << pages_per_block << " pages per block, "
     << page_blocks  << " page blocks, "
+    << additional_pages_for_last_block << " additional pages for last block, "
     << num_workers << " workers, " 
     << page_blocks_per_worker << " page blocks per worker, "
-    << additional_blocks_for_last_worker << " additional pages blocks for last worker"
+    << additional_blocks_for_last_worker << " additional blocks for last worker"
     << endl;
   umapdbg("%s\n", ss.str().c_str());
 
@@ -373,9 +375,14 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
       pb.base = (void*)((uint64_t)region + (worker * page_blocks_per_worker * pages_per_block * page_size));
       pb.length = page_blocks_per_worker * pages_per_block * page_size;
 
-      // If I am the last worker and we have residual pages in last block
-      if ((worker == num_workers-1) && additional_blocks_for_last_worker)
-        pb.length += (additional_blocks_for_last_worker * pages_per_block * page_size);
+      // If I am the last worker, deal with any residual blocks and pages
+      if (worker == (num_workers-1)) {
+        if (additional_blocks_for_last_worker)
+          pb.length += (additional_blocks_for_last_worker * pages_per_block * page_size);
+
+        if (additional_pages_for_last_block)
+          pb.length += (additional_pages_for_last_block * page_size);
+      }
 
       vector<umap_PageBlock> segs{ pb };
 
