@@ -399,22 +399,40 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
 
 _umap::~_umap(void)
 {
-  umap_stats t;
+  umap_stats t1;
+  umap_stats t2;
+
+  for ( auto handler : ufault_handlers ) {
+    t1.stat_faults += handler->stat->stat_faults;
+    t1.dirty_evicts += handler->stat->dirty_evicts;
+    t1.clean_evicts += handler->stat->clean_evicts;
+    t1.wp_messages += handler->stat->wp_messages;
+    t1.read_faults += handler->stat->read_faults;
+    t1.write_faults += handler->stat->write_faults;
+    t1.sigbus += handler->stat->sigbus;
+    t1.stuck_wp += handler->stat->stuck_wp;
+    t1.dropped_dups += handler->stat->dropped_dups;
+  }
 
   for ( auto handler : ufault_handlers ) {
     handler->stop_uffd_worker();
-    t.stat_faults += handler->stat->stat_faults;
-    t.dirty_evicts += handler->stat->dirty_evicts;
-    t.clean_evicts += handler->stat->clean_evicts;
-    t.wp_messages += handler->stat->wp_messages;
-    t.read_faults += handler->stat->read_faults;
-    t.write_faults += handler->stat->write_faults;
-    t.sigbus += handler->stat->sigbus;
-    t.stuck_wp += handler->stat->stuck_wp;
-    t.dropped_dups += handler->stat->dropped_dups;
+    t2.stat_faults += handler->stat->stat_faults;
+    t2.dirty_evicts += handler->stat->dirty_evicts;
+    t2.clean_evicts += handler->stat->clean_evicts;
+    t2.wp_messages += handler->stat->wp_messages;
+    t2.read_faults += handler->stat->read_faults;
+    t2.write_faults += handler->stat->write_faults;
+    t2.sigbus += handler->stat->sigbus;
+    t2.stuck_wp += handler->stat->stuck_wp;
+    t2.dropped_dups += handler->stat->dropped_dups;
   }
 
-  t.print_stats();
+#ifdef UMAP_DISPLAY_STATS
+  cerr << "Stats before flush\n";
+  t1.print_stats();
+  cerr << "\nStats after flush\n";
+  t2.print_stats();
+#endif
 
   for ( auto handler : ufault_handlers )
     delete handler;
@@ -436,7 +454,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
   }
 
   if (tmppagebuf == nullptr) {
-    cerr << "Unable to allocate 512 bytes for temporary buffer\n";
+    cerr << "Unable to allocate " << page_size << " bytes for temporary buffer\n";
     exit(1);
   }
 
@@ -637,7 +655,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
         copy.src = (uint64_t)tmppagebuf;
         copy.dst = (uint64_t)page_begin;
         copy.len = page_size;
-        copy.mode = UFFDIO_COPY_MODE_WP;
+        copy.mode = 0;  // No WP
 
         stat->stuck_wp++;
 
@@ -647,12 +665,12 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
         memcpy(tmppagebuf, page_begin, page_size);   // Save our data
         evict_page(pm);                              // Evict ourselves
         pm->set_page(page_begin);                    // Bring ourselves back in
+        pm->mark_page_dirty();                       // Will be dirty when write retries
 
         if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-          perror("ERROR12: ioctl(UFFDIO_COPY nowake)");
+          perror("ERROR WP Workaround: ioctl(UFFDIO_COPY)");
           exit(1);
         }
-
       }
     }
     return;
@@ -747,12 +765,11 @@ void UserFaultHandler::evict_page(umap_page* pb)
     assert(0);
   }
 
-  disable_wp_on_pages((uint64_t)page, 1, true);
   pb->set_page(nullptr);
 }
 
 //
-// Enabling WP always wakes up any sleeping thread that may have been faulted in the specified range.
+// Enabling WP always wakes up blocked faulting threads that may have been faulted in the specified range.
 //
 // For reasons which are unknown, the kernel module interface for UFFDIO_WRITEPROTECT does not allow for the caller to submit
 // UFFDIO_WRITEPROTECT_MODE_DONTWAKE when enabling WP with UFFDIO_WRITEPROTECT_MODE_WP.  UFFDIO_WRITEPROTECT_MODE_DONTWAKE is only 
@@ -765,7 +782,7 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
   wp.range.len = num_pages * page_size;
   wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-  //umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
+  umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");

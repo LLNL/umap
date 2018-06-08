@@ -1,4 +1,15 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
+/* This file is part of UMAP.  For copyright information see the COPYRIGHT 
+ * file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT 
+ * This program is free software; you can redistribute it and/or modify it under 
+ * the terms of the GNU Lesser General Public License (as published by the Free 
+ * Software Foundation) version 2.1 dated February 1999.  This program is distributed in 
+ * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED 
+ * WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+ * See the terms and conditions of the GNU Lesser General Public License for more details.  
+ * You should have received a copy of the GNU Lesser General Public License along with 
+ * this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, 
+ * Suite 330, Boston, MA 02111-1307 USA 
+ */
 // uffd sort benchmark
 
 #ifndef _GNU_SOURCE
@@ -144,13 +155,12 @@ int main(int argc, char **argv)
   if ( !options.noinit ) {
     // init data
     initdata(arr, arraysize);
-    fprintf(stdout, "Init took %f us\n", (double)(getns() - start)/1000000.0);
+    fprintf(stdout, "Init took %f microseconds\n", (double)(getns() - start)/1000000.0);
   }
 
   if ( !options.initonly ) 
   {
     start = getns();
-    printf("%lu\n", arr[0]);
     sort_ascending = (arr[0] != 1);
     
     if (sort_ascending == true) {
@@ -162,11 +172,11 @@ int main(int argc, char **argv)
       __gnu_parallel::sort(arr, &arr[arraysize], std::greater<uint64_t>(), __gnu_parallel::quicksort_tag());
     }
 
-    fprintf(stdout, "Sort took %f us\n", (double)(getns() - start)/1000000.0);
+    fprintf(stdout, "Sort took %f microseconds\n", (double)(getns() - start)/1000000.0);
 
     start = getns();
     validatedata(arr, arraysize);
-    fprintf(stdout, "Validate took %f us\n", (double)(getns() - start)/1000000.0);
+    fprintf(stdout, "Validate took %f microseconds\n", (double)(getns() - start)/1000000.0);
   }
   
   PerFile_closeandunmap(&options, totalbytes, base_addr);
