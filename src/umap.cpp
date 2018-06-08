@@ -454,7 +454,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
   }
 
   if (tmppagebuf == nullptr) {
-    cerr << "Unable to allocate 512 bytes for temporary buffer\n";
+    cerr << "Unable to allocate " << page_size << " bytes for temporary buffer\n";
     exit(1);
   }
 
