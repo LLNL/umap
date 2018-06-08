@@ -84,8 +84,10 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
   if ( testops->iodirect ) 
     open_options |= O_DIRECT;
 
-  if ( !testops->noinit )
+  if ( !testops->noinit ) {
     open_options |= O_CREAT;
+    unlink(filename.c_str());   // Remove the file if it exists
+  }
 
   handle->range_size = numbytes;
   handle->filename = filename;
@@ -108,7 +110,7 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
       cerr << "posix_fallocate: " << e.what() << endl;
       return NULL;
     } catch(...) {
-      cerr << "posix_fallocate failed to instantiate _umap object\n";
+      cerr << "posix_fallocate failed to allocate backing store\n";
       return NULL;
     }
   }
