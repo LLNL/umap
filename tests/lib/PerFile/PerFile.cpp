@@ -41,6 +41,11 @@ typedef struct umt_map_handle {
 
 static unordered_map<void*, umt_map_handle*> mappings;
 
+static ssize_t pstore_noio(void* region, void* buf, size_t nbytes, off_t region_offset)
+{
+  return nbytes;
+}
+
 static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_offset)
 {
   ssize_t rval;
@@ -141,7 +146,10 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
   else {
     int flags = UMAP_PRIVATE;
 
-    region = umap(NULL, handle->range_size, prot, flags, pstore_read, pstore_write);
+    if (testops->noio)
+      region = umap(NULL, handle->range_size, prot, flags, pstore_noio, pstore_noio);
+    else
+      region = umap(NULL, handle->range_size, prot, flags, pstore_read, pstore_write);
     if ( region == UMAP_FAILED ) {
         ostringstream ss;
         ss << "umap_mf of " << handle->range_size << " bytes failed for " << handle->filename << ": ";

@@ -121,6 +121,7 @@ class umap_stats {
       stat_faults{0}, 
       dirty_evicts{0}, 
       clean_evicts{0}, 
+      evict_victims{0}, 
       wp_messages{0}, 
       read_faults{0}, 
       write_faults{0}, 
@@ -134,6 +135,7 @@ class umap_stats {
     uint64_t stat_faults;
     uint64_t dirty_evicts;
     uint64_t clean_evicts;
+    uint64_t evict_victims;
     uint64_t wp_messages;
     uint64_t read_faults;
     uint64_t write_faults;
@@ -406,6 +408,7 @@ _umap::~_umap(void)
     t1.stat_faults += handler->stat->stat_faults;
     t1.dirty_evicts += handler->stat->dirty_evicts;
     t1.clean_evicts += handler->stat->clean_evicts;
+    t1.evict_victims += handler->stat->evict_victims;
     t1.wp_messages += handler->stat->wp_messages;
     t1.read_faults += handler->stat->read_faults;
     t1.write_faults += handler->stat->write_faults;
@@ -419,6 +422,7 @@ _umap::~_umap(void)
     t2.stat_faults += handler->stat->stat_faults;
     t2.dirty_evicts += handler->stat->dirty_evicts;
     t2.clean_evicts += handler->stat->clean_evicts;
+    t2.evict_victims += handler->stat->evict_victims;
     t2.wp_messages += handler->stat->wp_messages;
     t2.read_faults += handler->stat->read_faults;
     t2.write_faults += handler->stat->write_faults;
@@ -697,6 +701,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
     assert(ep != nullptr);
 
     ss << " Evicting " << (ep->page_is_dirty() ? "Dirty" : "Clean") << "Page " << ep->get_page();
+    stat->evict_victims++;
     evict_page(ep);
     pagebuffer->dealloc_page_desc(ep);
   }
@@ -890,6 +895,7 @@ void umap_stats::print_stats(void)
     << write_faults << " WRITE Faults" << endl
     << wp_messages << " WP Messages" << endl
     << dirty_evicts << " Dirty Evictions" << endl
+    << evict_victims << " Victims" << endl
     << clean_evicts << " Clean Evictions" << endl
     << sigbus << " SIGBUS Errors" << endl
     << stuck_wp << " Stuck WP Workarounds" << endl

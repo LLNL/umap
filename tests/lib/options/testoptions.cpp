@@ -42,6 +42,7 @@ static void usage(char* pname)
   << " --noinit               - Use previously initialized file\n"
   << " --directio             - Use O_DIRECT for file IO\n"
   << " --usemmap              - Use mmap instead of umap\n"
+  << " --noio                 - Run test with no backing store\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -b page buffer size    - default: " << umap_cfg_get_bufsize() << " Pages\n"
@@ -58,6 +59,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->initonly = 0;
   testops->noinit = 0;
   testops->iodirect = 0;
+  testops->noio = 0;
   testops->usemmap = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
@@ -72,6 +74,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {"noinit",    no_argument,  &testops->noinit,   1 },
       {"directio",  no_argument,  &testops->iodirect, 1 },
       {"usemmap",   no_argument,  &testops->usemmap,  1 },
+      {"noio",      no_argument,  &testops->noio,     1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }
     };
