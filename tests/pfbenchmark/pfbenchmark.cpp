@@ -18,6 +18,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <omp.h>
 
 #include "umap.h"
 #include "testoptions.h"
@@ -28,18 +29,19 @@ using namespace chrono;
 
 void do_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages, uint64_t val)
 {
+#pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i)
     array[i * page_step] = val;
 }
 
-uint64_t do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
+void do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
 {
-  uint64_t sum = 0;
-
-  for (uint64_t i = 0; i < pages; ++i)
-    sum += array[i * page_step];
-
-  return sum;
+#pragma omp parallel for
+  for (uint64_t i = 0; i < pages; ++i) {
+    if (array[i * page_step] == 0x12345678) {
+      cout << "Hello!\n";
+    }
+  }
 }
 
 void run_write_test(umt_optstruct_t* options)
@@ -65,11 +67,11 @@ void run_read_test(umt_optstruct_t* options)
   uint64_t* array = (uint64_t*)PerFile_openandmap(options, pagesize * options->numpages);
  
   auto start_time = chrono::high_resolution_clock::now();
-  auto sum = do_read_pages(array, page_step, options->numpages);
+  do_read_pages(array, page_step, options->numpages);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
-        << " nanoseconds per Read Page Fault " << sum << endl;
+        << " nanoseconds per Read Page Fault " << endl;
 
   PerFile_closeandunmap(options, pagesize * options->numpages, array);
 }
@@ -80,10 +82,10 @@ void run_wp_test(umt_optstruct_t* options)
   uint64_t page_step = pagesize/sizeof(uint64_t);
   uint64_t* array = (uint64_t*)PerFile_openandmap(options, pagesize * options->numpages);
  
-  auto sum = do_read_pages(array, page_step, options->numpages);
+  do_read_pages(array, page_step, options->numpages);
 
   auto start_time = chrono::high_resolution_clock::now();
-  do_write_pages(array, page_step, options->numpages, sum);
+  do_write_pages(array, page_step, options->numpages, 0x33);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
@@ -98,11 +100,14 @@ int main(int argc, char **argv)
 
   umt_getoptions(&options, argc, argv);
 
-  run_write_test(&options);
+  omp_set_num_threads(options.numthreads);
+
+  cout << "Running with " << options.numthreads << " threads\n";
+  //run_write_test(&options);
 
   run_read_test(&options);
 
-  run_wp_test(&options);
+  // run_wp_test(&options);
 
   return 0;
 }
