@@ -69,6 +69,9 @@ int uunmap( void*  addr,    /* See mmap(2) */
 
 uint64_t umap_cfg_get_bufsize( void );
 void umap_cfg_set_bufsize( uint64_t page_bufsize );
+
+uint64_t umap_cfg_get_uffdthreads( void );
+void umap_cfg_set_uffdthreads( uint64_t numthreads );
 #ifdef __cplusplus
 }
 #endif

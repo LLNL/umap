@@ -270,6 +270,17 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize )
     umap_pages_per_uffd_handler = 1;
 }
 
+uint64_t umap_cfg_get_uffdthreads( void )
+{
+  return (uint64_t)uffd_threads;
+}
+
+void umap_cfg_set_uffdthreads( uint64_t numthreads )
+{
+  std::cout << "UMAP: Changing number of worker threads from " << uffd_threads << " --> " << numthreads << "\n";
+  uffd_threads = numthreads;
+}
+
 //
 // Signal Handlers
 //
@@ -388,6 +399,7 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
 
       vector<umap_PageBlock> segs{ pb };
 
+      // TODO - Find a way to more fairly distribute buffer to handlers
       ufault_handlers.push_back( new UserFaultHandler{this, segs, umap_pages_per_uffd_handler} );
     }
   } catch(const std::exception& e) {

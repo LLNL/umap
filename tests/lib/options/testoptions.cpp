@@ -24,7 +24,7 @@
 #include "testoptions.h"
 #include "umap.h"
 
-char const* DIRNAME = "./";
+char const* DIRNAME = "/mnt/intel/";
 char const* FILENAME = "abc";
 const uint64_t NUMPAGES = 10000000;
 const uint64_t NUMTHREADS = 2;
@@ -45,6 +45,7 @@ static void usage(char* pname)
   << " --noio                 - Run test with no backing store\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
+  << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
   << " -b page buffer size    - default: " << umap_cfg_get_bufsize() << " Pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
   << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n";
@@ -64,6 +65,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
+  testops->uffdthreads = umap_cfg_get_uffdthreads();
   testops->filename = FILENAME;
   testops->dirname = DIRNAME;
 
@@ -79,7 +81,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:d:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:d:u:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -103,6 +105,10 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
         if ((testops->bufsize = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
+      case 'u':
+        if ((testops->uffdthreads = strtoull(optarg, nullptr, 0)) > 0)
+          break;
+        else goto R0;
       case 'd':
         testops->dirname = optarg;
         break;
@@ -124,6 +130,9 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   }
 
   umap_cfg_set_bufsize(testops->bufsize);
+
+  if (testops->uffdthreads != umap_cfg_get_uffdthreads())
+    umap_cfg_set_uffdthreads(testops->uffdthreads);
 }
 
 long umt_getpagesize(void)

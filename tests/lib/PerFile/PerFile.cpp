@@ -57,7 +57,6 @@ static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_
     perror("ERROR: pread failed");
     exit(1);
   }
-
   return rval;
 }
 
@@ -89,7 +88,7 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
   if ( testops->iodirect ) 
     open_options |= O_DIRECT;
 
-  if ( !testops->noinit && !testops->noio ) {
+  if ( testops->initonly || ( !testops->noinit && !testops->noio) ) {
     open_options |= O_CREAT;
     unlink(filename.c_str());   // Remove the file if it exists
   }
@@ -147,6 +146,16 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
       ss << "mmap of " << handle->range_size << " bytes failed for " << handle->filename << ": ";
       perror(ss.str().c_str());
       return NULL;
+    }
+
+    // TODO: Determine whether it would be more fair to disable read-ahead for all mmap() usage
+    if ( testops->noio ) {
+      if (madvise(region, handle->range_size, MADV_RANDOM) < 0) {
+        ostringstream ss;
+        ss << "madvise(MADV_RANDOM) of " << handle->range_size << " bytes failed\n";
+        perror(ss.str().c_str());
+        return NULL;
+      }
     }
   }
   else {

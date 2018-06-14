@@ -26,6 +26,14 @@
 
 using namespace std;
 using namespace chrono;
+bool no_io = false;
+
+void do_init(uint64_t* array, uint64_t page_step, uint64_t pages)
+{
+#pragma omp parallel for
+  for (uint64_t i = 0; i < pages; ++i)
+    array[i * page_step] = (i * page_step);
+}
 
 void do_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages, uint64_t val)
 {
@@ -36,10 +44,11 @@ void do_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages, uint64_
 
 void do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
 {
+  cout << "do_read_pages(array=" << array << ", page_step=" << page_step << ", pages=" << pages << "\n";
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
-    if (array[i * page_step] == 0x12345678) {
-      cout << "Hello!\n";
+    if ( array[i * page_step] != (i * page_step) && no_io == false ) {
+      cout << "array[" << i * page_step << "]: (" << array[i*page_step] << ") != " << i * page_step << "\n";
     }
   }
 }
@@ -73,7 +82,12 @@ void run_read_test(umt_optstruct_t* options)
   cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
         << " nanoseconds per Read Page Fault " << endl;
 
+  start_time = chrono::high_resolution_clock::now();
   PerFile_closeandunmap(options, pagesize * options->numpages, array);
+  end_time = chrono::high_resolution_clock::now();
+
+  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
+        << " nanoseconds per Eviction" << endl;
 }
 
 void run_wp_test(umt_optstruct_t* options)
@@ -100,14 +114,25 @@ int main(int argc, char **argv)
 
   umt_getoptions(&options, argc, argv);
 
+  no_io = (options.noio == 1);
   omp_set_num_threads(options.numthreads);
 
-  cout << "Running with " << options.numthreads << " threads\n";
-  //run_write_test(&options);
+  if ( options.initonly ) {
+    uint64_t pagesize = (uint64_t)umt_getpagesize();
+    uint64_t page_step = pagesize/sizeof(uint64_t);
+    uint64_t* array = (uint64_t*)PerFile_openandmap(&options, pagesize * options.numpages);
 
-  run_read_test(&options);
+    do_init(array, page_step, options.numpages);
+    PerFile_closeandunmap(&options, pagesize * options.numpages, array);
+  }
+  else {
+    cout << "Running with " << options.numthreads << " threads\n";
+    //run_write_test(&options);
 
-  // run_wp_test(&options);
+    run_read_test(&options);
+
+    // run_wp_test(&options);
+  }
 
   return 0;
 }
