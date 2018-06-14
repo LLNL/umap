@@ -26,25 +26,21 @@
 
 using namespace std;
 using namespace chrono;
-bool no_io = false;
+static bool no_io = false;
+static bool usemmap = false;
+static uint64_t pagesize;
+static uint64_t page_step;
+static uint64_t* array;
 
-void do_init(uint64_t* array, uint64_t page_step, uint64_t pages)
+void do_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
 {
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i)
     array[i * page_step] = (i * page_step);
 }
 
-void do_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages, uint64_t val)
-{
-#pragma omp parallel for
-  for (uint64_t i = 0; i < pages; ++i)
-    array[i * page_step] = val;
-}
-
 void do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
 {
-  cout << "do_read_pages(array=" << array << ", page_step=" << page_step << ", pages=" << pages << "\n";
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
     if ( array[i * page_step] != (i * page_step) && no_io == false ) {
@@ -53,86 +49,90 @@ void do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
   }
 }
 
-void run_write_test(umt_optstruct_t* options)
+void print_stats( void )
 {
-  uint64_t pagesize = (uint64_t)umt_getpagesize();
-  uint64_t page_step = pagesize/sizeof(uint64_t);
-  uint64_t* array = (uint64_t*)PerFile_openandmap(options, pagesize * options->numpages);
- 
-  auto start_time = chrono::high_resolution_clock::now();
-  do_write_pages(array, page_step, options->numpages, 22);
-  auto end_time = chrono::high_resolution_clock::now();
+  if (!usemmap) {
+    struct umap_cfg_stats s;
+    umap_cfg_get_stats(array, &s);
 
-  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
-        << " nanoseconds per Write Page Fault\n";
-
-  PerFile_closeandunmap(options, pagesize * options->numpages, array);
-}
-
-void run_read_test(umt_optstruct_t* options)
-{
-  uint64_t pagesize = (uint64_t)umt_getpagesize();
-  uint64_t page_step = pagesize/sizeof(uint64_t);
-  uint64_t* array = (uint64_t*)PerFile_openandmap(options, pagesize * options->numpages);
- 
-  auto start_time = chrono::high_resolution_clock::now();
-  do_read_pages(array, page_step, options->numpages);
-  auto end_time = chrono::high_resolution_clock::now();
-
-  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
-        << " nanoseconds per Read Page Fault " << endl;
-
-  start_time = chrono::high_resolution_clock::now();
-  PerFile_closeandunmap(options, pagesize * options->numpages, array);
-  end_time = chrono::high_resolution_clock::now();
-
-  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
-        << " nanoseconds per Eviction" << endl;
-}
-
-void run_wp_test(umt_optstruct_t* options)
-{
-  uint64_t pagesize = (uint64_t)umt_getpagesize();
-  uint64_t page_step = pagesize/sizeof(uint64_t);
-  uint64_t* array = (uint64_t*)PerFile_openandmap(options, pagesize * options->numpages);
- 
-  do_read_pages(array, page_step, options->numpages);
-
-  auto start_time = chrono::high_resolution_clock::now();
-  do_write_pages(array, page_step, options->numpages, 0x33);
-  auto end_time = chrono::high_resolution_clock::now();
-
-  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options->numpages
-        << " nanoseconds per WP Page Fault\n";
-
-  PerFile_closeandunmap(options, pagesize * options->numpages, array);
+    cout << s.dirty_evicts << " Dirty Evictions\n";
+    cout << s.clean_evicts << " Clean Evictions\n";
+    cout << s.evict_victims << " Victims\n";
+    cout << s.wp_messages << " WP Faults\n";
+    cout << s.read_faults << " Read Faults\n";
+    cout << s.write_faults << " Write Faults\n";
+    cout << s.sigbus << " SIGBUS Signals\n";
+    cout << s.stuck_wp << " Stuck WP Workarounds\n";
+    cout << s.dropped_dups << " Dropped Duplicates\n";
+  }
 }
 
 int main(int argc, char **argv)
 {
+  auto start_time = chrono::high_resolution_clock::now();
+  auto end_time = chrono::high_resolution_clock::now();
   umt_optstruct_t options;
-
   umt_getoptions(&options, argc, argv);
 
+  options.noinit = 0;
+  options.initonly = 0;
   no_io = (options.noio == 1);
+  usemmap = (options.usemmap == 1);
+
   omp_set_num_threads(options.numthreads);
 
-  if ( options.initonly ) {
-    uint64_t pagesize = (uint64_t)umt_getpagesize();
-    uint64_t page_step = pagesize/sizeof(uint64_t);
-    uint64_t* array = (uint64_t*)PerFile_openandmap(&options, pagesize * options.numpages);
+  pagesize = (uint64_t)umt_getpagesize();
+  page_step = pagesize/sizeof(uint64_t);
+  array = (uint64_t*)PerFile_openandmap(&options, pagesize * options.numpages);
 
-    do_init(array, page_step, options.numpages);
-    PerFile_closeandunmap(&options, pagesize * options.numpages, array);
-  }
-  else {
-    cout << "Running with " << options.numthreads << " threads\n";
-    //run_write_test(&options);
+  cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
+      << ((options.noio == 1) ? "no" : "yes") << ","
+      << options.numthreads << ","
+      << options.uffdthreads << ",";
 
-    run_read_test(&options);
+  //
+  // Perform write test first.  This will also initialize the data
+  //
+  umap_cfg_flush_buffer(array);
+  umap_cfg_reset_stats(array);
 
-    // run_wp_test(&options);
-  }
+  start_time = chrono::high_resolution_clock::now();
+  do_write_pages(array, page_step, options.numpages);
+  end_time = chrono::high_resolution_clock::now();
+  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << ",";
+
+  start_time = chrono::high_resolution_clock::now();
+  umap_cfg_flush_buffer(array);
+  end_time = chrono::high_resolution_clock::now();
+  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << ",";
+
+  //print_stats();
+
+  //
+  // Perform WP test.  This will also initialize the data
+  //
+  umap_cfg_flush_buffer(array);
+  umap_cfg_reset_stats(array);
+
+  do_read_pages(array, page_step, options.numpages);
+
+  start_time = chrono::high_resolution_clock::now();
+  do_write_pages(array, page_step, options.numpages);
+  end_time = chrono::high_resolution_clock::now();
+  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << ",";
+  //print_stats();
+
+  umap_cfg_flush_buffer(array);
+  umap_cfg_reset_stats(array);
+
+  start_time = chrono::high_resolution_clock::now();
+  do_read_pages(array, page_step, options.numpages);
+  end_time = chrono::high_resolution_clock::now();
+
+  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+  //print_stats();
+
+  PerFile_closeandunmap(&options, pagesize * options.numpages, array);
 
   return 0;
 }
