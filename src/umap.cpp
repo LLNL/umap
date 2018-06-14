@@ -74,6 +74,9 @@ class _umap {
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
       return (void*)((uint64_t)a & ~(page_size-1));
     }
+
+    void flushbuffers( void );
+
     vector<UserFaultHandler*> ufault_handlers;
 
   private:
@@ -95,6 +98,7 @@ class UserFaultHandler {
     };
     bool page_is_in_umap(const void* page_begin);
     umap_page_buffer* get_pagebuffer() { return pagebuffer; }
+    void flushbuffers( void );
     
     umap_stats* stat;
   private:
@@ -281,6 +285,15 @@ void umap_cfg_set_uffdthreads( uint64_t numthreads )
   uffd_threads = numthreads;
 }
 
+void umap_cfg_flush_buffer( void* region )
+{
+  auto it = active_umaps.find(region);
+
+  assert("Invalid umap region for flush" && it != active_umaps.end());
+
+  it->second->flushbuffers();
+}
+
 //
 // Signal Handlers
 //
@@ -411,44 +424,31 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
   }
 }
 
+void _umap::flushbuffers( void )
+{
+  for ( auto handler : ufault_handlers )
+    handler->flushbuffers();
+}
+
 _umap::~_umap(void)
 {
-  umap_stats t1;
-  umap_stats t2;
-
-  for ( auto handler : ufault_handlers ) {
-    t1.stat_faults += handler->stat->stat_faults;
-    t1.dirty_evicts += handler->stat->dirty_evicts;
-    t1.clean_evicts += handler->stat->clean_evicts;
-    t1.evict_victims += handler->stat->evict_victims;
-    t1.wp_messages += handler->stat->wp_messages;
-    t1.read_faults += handler->stat->read_faults;
-    t1.write_faults += handler->stat->write_faults;
-    t1.sigbus += handler->stat->sigbus;
-    t1.stuck_wp += handler->stat->stuck_wp;
-    t1.dropped_dups += handler->stat->dropped_dups;
-  }
+  umap_stats t;
 
   for ( auto handler : ufault_handlers ) {
     handler->stop_uffd_worker();
-    t2.stat_faults += handler->stat->stat_faults;
-    t2.dirty_evicts += handler->stat->dirty_evicts;
-    t2.clean_evicts += handler->stat->clean_evicts;
-    t2.evict_victims += handler->stat->evict_victims;
-    t2.wp_messages += handler->stat->wp_messages;
-    t2.read_faults += handler->stat->read_faults;
-    t2.write_faults += handler->stat->write_faults;
-    t2.sigbus += handler->stat->sigbus;
-    t2.stuck_wp += handler->stat->stuck_wp;
-    t2.dropped_dups += handler->stat->dropped_dups;
+    t.stat_faults += handler->stat->stat_faults;
+    t.dirty_evicts += handler->stat->dirty_evicts;
+    t.clean_evicts += handler->stat->clean_evicts;
+    t.evict_victims += handler->stat->evict_victims;
+    t.wp_messages += handler->stat->wp_messages;
+    t.read_faults += handler->stat->read_faults;
+    t.write_faults += handler->stat->write_faults;
+    t.sigbus += handler->stat->sigbus;
+    t.stuck_wp += handler->stat->stuck_wp;
+    t.dropped_dups += handler->stat->dropped_dups;
   }
 
-#ifdef UMAP_DISPLAY_STATS
-  cerr << "Stats before flush\n";
-  t1.print_stats();
-  cerr << "\nStats after flush\n";
-  t2.print_stats();
-#endif
+  t.print_stats();
 
   for ( auto handler : ufault_handlers )
     delete handler;
@@ -571,13 +571,7 @@ void UserFaultHandler::uffd_handler(void)
     pollfd[0].events = POLLIN;
 
     if (_u->uffd_time_to_stop_working) {
-      //
-      // Flush the in-memory page buffer
-      // 
-      for (umap_page* ep = pagebuffer->get_page_desc_to_evict(); ep != nullptr; ep = pagebuffer->get_page_desc_to_evict()) {
-        evict_page(ep);
-        pagebuffer->dealloc_page_desc(ep);
-      }
+      flushbuffers();
       return;
     }
 
@@ -756,6 +750,15 @@ bool UserFaultHandler::page_is_in_umap(const void* page_begin)
     if (page_begin >= it.base && page_begin < (void*)((uint64_t)it.base + it.length))
       return true;
   return false;
+}
+
+// TODO: make this thread-safe (it isn't currently)
+void UserFaultHandler::flushbuffers( void )
+{
+  for (umap_page* ep = pagebuffer->get_page_desc_to_evict(); ep != nullptr; ep = pagebuffer->get_page_desc_to_evict()) {
+    evict_page(ep);
+    pagebuffer->dealloc_page_desc(ep);
+  }
 }
 
 void UserFaultHandler::evict_page(umap_page* pb)
