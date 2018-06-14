@@ -306,6 +306,8 @@ void sighandler(int signum, siginfo_t *info, void* buf)
     exit(1);
   }
 
+  assert("UMAP: SIGBUS Error Unexpected" && 0);
+
   void* page_begin = _umap::UMAP_PAGE_BEGIN(info->si_addr);
 
   for (auto it : active_umaps) {
