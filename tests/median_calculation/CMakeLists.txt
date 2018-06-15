@@ -5,19 +5,29 @@ if(OPENMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-    add_executable(median_calculation simple_median_calculation_example.cpp)
-
-    target_link_libraries(median_calculation libumap_static)
-    target_link_libraries(median_calculation libtestoptions_static)
-    target_link_libraries(median_calculation libPerFits_static)
-    target_link_libraries(median_calculation ${CFITS_LIBRARY} )
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
-    install(TARGETS median_calculation
+    add_executable(simple_median_calculation simple_median_calculation_example.cpp)
+    target_link_libraries(simple_median_calculation libumap_static)
+    target_link_libraries(simple_median_calculation libtestoptions_static)
+    target_link_libraries(simple_median_calculation libPerFits_static)
+    target_link_libraries(simple_median_calculation ${CFITS_LIBRARY} )
+    install(TARGETS simple_median_calculation
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
+
+    add_executable(random_vector_median_calculation random_vector_median_calculation.cpp)
+    target_link_libraries(random_vector_median_calculation libumap_static)
+    target_link_libraries(random_vector_median_calculation libtestoptions_static)
+    target_link_libraries(random_vector_median_calculation libPerFits_static)
+    target_link_libraries(random_vector_median_calculation ${CFITS_LIBRARY} )
+    install(TARGETS random_vector_median_calculation
+            LIBRARY DESTINATION lib
+            ARCHIVE DESTINATION lib/static
+            RUNTIME DESTINATION bin )
+
 else()
     message("Skpping median_calculation, OpenMP required")
 endif()
