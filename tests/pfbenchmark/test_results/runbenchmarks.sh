@@ -10,9 +10,9 @@ drop_page_cache
 buffersize=$((((256*1024*1024*1024)/4096)))
 numpages=$(((16*1024*1024*1024)/4096))
 
-for j in 1 #80
+for j in 1 80
 do
-  for i in 1 2 4 8 16 32 64 # 256 128 64 32 16 8 4 2 1
+  for i in 1 2 4 8 16 32 64 128 256
   do
     drop_page_cache
     echo pfbenchmark -b $buffersize -p $numpages --noio -t $i -u $j
