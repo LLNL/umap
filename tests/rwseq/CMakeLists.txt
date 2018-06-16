@@ -18,6 +18,6 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping rwseq, OpenMP required")
+  message("Skipping rwseq, OpenMP required")
 endif()
 

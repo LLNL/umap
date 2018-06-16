@@ -18,7 +18,7 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping pfbenchmark, OpenMP required")
+  message("Skipping pfbenchmark, OpenMP required")
 endif()
 
 

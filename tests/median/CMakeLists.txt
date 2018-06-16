@@ -23,5 +23,5 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping median, OpenMP required")
+  message("Skipping median, OpenMP required")
 endif()

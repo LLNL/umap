@@ -29,5 +29,5 @@ if(OPENMP_FOUND)
             RUNTIME DESTINATION bin )
 
 else()
-    message("Skpping median, OpenMP required")
+  message("Skipping median, OpenMP required")
 endif()
