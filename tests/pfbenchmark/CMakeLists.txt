@@ -9,16 +9,18 @@ if(OPENMP_FOUND)
     add_executable(pfbenchmark-read pfbenchmark.cpp)
     add_executable(pfbenchmark-write pfbenchmark.cpp)
     add_executable(pfbenchmark-readmodifywrite pfbenchmark.cpp)
-    add_executable(nvmebenchmark nvmebenchmark.cpp)
+    add_executable(nvmebenchmark-read nvmebenchmark.cpp)
+    add_executable(nvmebenchmark-write nvmebenchmark.cpp)
 
     target_link_libraries(pfbenchmark-read libumap_static libtestoptions_static libPerFile_static)
     target_link_libraries(pfbenchmark-write libumap_static libtestoptions_static libPerFile_static)
     target_link_libraries(pfbenchmark-readmodifywrite libumap_static libtestoptions_static libPerFile_static)
-    target_link_libraries(nvmebenchmark libumap_static libtestoptions_static libPerFile_static)
+    target_link_libraries(nvmebenchmark-read libumap_static libtestoptions_static libPerFile_static)
+    target_link_libraries(nvmebenchmark-write libumap_static libtestoptions_static libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
-    install(TARGETS pfbenchmark-read pfbenchmark-write pfbenchmark-readmodifywrite nvmebenchmark
+    install(TARGETS pfbenchmark-read pfbenchmark-write pfbenchmark-readmodifywrite nvmebenchmark-read nvmebenchmark-write
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )

@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include "umap.h"
 #include "testoptions.h"
@@ -32,6 +33,7 @@ using namespace chrono;
 static uint64_t pagesize;
 static char** tmppagebuf; // One per thread
 static int fd;
+static umt_optstruct_t options;
 
 void do_write_pages(uint64_t pages)
 {
@@ -62,13 +64,32 @@ void do_read_pages(uint64_t pages)
   }
 }
 
-int main(int argc, char **argv)
+int read_pages(int argc, char **argv)
 {
-  auto start_time = chrono::high_resolution_clock::now();
-  auto end_time = chrono::high_resolution_clock::now();
-  umt_optstruct_t options;
-  umt_getoptions(&options, argc, argv);
+  fd = open(options.filename, O_RDWR | O_LARGEFILE | O_DIRECT);
 
+  if (fd == -1) {
+    perror("open failed\n");
+    exit(1);
+  }
+
+  auto start_time = chrono::high_resolution_clock::now();
+  do_read_pages(options.numpages);
+  auto end_time = chrono::high_resolution_clock::now();
+
+  cout << "nvme,"
+      << "yes,"
+      << "read,"
+      << options.numthreads << ","
+      << 0 << ","
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+
+  close(fd);
+  return 0;
+}
+
+int write_pages(int argc, char **argv)
+{
   unlink(options.filename);
   fd = open(options.filename, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
 
@@ -77,8 +98,27 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  omp_set_num_threads(options.numthreads);
+  auto start_time = chrono::high_resolution_clock::now();
+  do_write_pages(options.numpages);
+  auto end_time = chrono::high_resolution_clock::now();
 
+  cout << "nvme,"
+      << "yes,"
+      << "write,"
+      << options.numthreads << ","
+      << 0 << ","
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+
+  close(fd);
+  return 0;
+}
+
+int main(int argc, char **argv)
+{
+  int rval = 0;
+  umt_getoptions(&options, argc, argv);
+
+  omp_set_num_threads(options.numthreads);
   pagesize = (uint64_t)umt_getpagesize();
 
   tmppagebuf = (char**)calloc(options.numthreads, sizeof(char*));
@@ -95,19 +135,10 @@ int main(int argc, char **argv)
     }
   }
 
-  //
-  // Perform write test first.  This will also initialize the data
-  //
-  start_time = chrono::high_resolution_clock::now();
-  do_write_pages(options.numpages);
-  end_time = chrono::high_resolution_clock::now();
-  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << ",";
+  if (strcmp(argv[0], "nvmebenchmark-write") == 0)
+    rval = write_pages(argc, argv);
+  else if (strcmp(argv[0], "nvmebenchmark-read") == 0)
+    rval = read_pages(argc, argv);
 
-  start_time = chrono::high_resolution_clock::now();
-  do_read_pages(options.numpages);
-  end_time = chrono::high_resolution_clock::now();
-
-  cout  << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
-
-  return 0;
+  return rval;
 }
