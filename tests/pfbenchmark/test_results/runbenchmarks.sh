@@ -9,7 +9,7 @@ drop_page_cache
 
 buffersize=$((((80*256))))
 # numpages=$(((1*1024*1024*1024)/4096))
-numpages=$(((1*1024*1024*1024)/4096))
+numpages=$(((16*1024*1024*1024)/4096))
 
 for j in 1 80
 do

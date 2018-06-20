@@ -23,6 +23,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <string>
+#include <sstream>
 
 #include "umap.h"
 #include "testoptions.h"
@@ -95,6 +97,22 @@ int write_pages(int argc, char **argv)
 
   if (fd == -1) {
     perror("open failed\n");
+    exit(1);
+  }
+
+  try {
+    int x;
+    if ( ( x = posix_fallocate(fd, 0, options.numpages * pagesize) != 0 ) ) {
+      ostringstream ss;
+      ss << "Failed to pre-allocate " << (options.numpages*pagesize) << " bytes in " << options.filename << ": ";
+      perror(ss.str().c_str());
+      exit(1);
+    }
+  } catch(const std::exception& e) {
+    cerr << "posix_fallocate: " << e.what() << endl;
+    exit(1);
+  } catch(...) {
+    cerr << "posix_fallocate failed to allocate backing store\n";
     exit(1);
   }
 
