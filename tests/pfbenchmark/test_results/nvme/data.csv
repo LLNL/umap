@@ -1,54 +1,10 @@
-nvmebenchmark -b 67108864 -p 4194304 -t 1 -f /mnt/intel/pfbench --directio -u 1
-39730,17197
-
-real	3m58.857s
-user	0m3.321s
-sys	2m38.057s
-nvmebenchmark -b 67108864 -p 4194304 -t 2 -f /mnt/intel/pfbench --directio -u 1
-33568,56350
-
-real	6m17.155s
-user	0m7.300s
-sys	5m40.889s
-nvmebenchmark -b 67108864 -p 4194304 -t 4 -f /mnt/intel/pfbench --directio -u 1
-71931,32307
-
-real	8m31.163s
-user	0m6.885s
-sys	9m31.007s
-nvmebenchmark -b 67108864 -p 4194304 -t 8 -f /mnt/intel/pfbench --directio -u 1
-156178,20739
-
-real	13m31.604s
-user	0m10.232s
-sys	15m4.822s
-nvmebenchmark -b 67108864 -p 4194304 -t 16 -f /mnt/intel/pfbench --directio -u 1
-163936,28430
-
-real	14m54.996s
-user	0m13.709s
-sys	18m45.710s
-nvmebenchmark -b 67108864 -p 4194304 -t 32 -f /mnt/intel/pfbench --directio -u 1
-162227,30221
-
-real	14m54.334s
-user	0m13.631s
-sys	19m5.274s
-nvmebenchmark -b 67108864 -p 4194304 -t 64 -f /mnt/intel/pfbench --directio -u 1
-142801,30687
-
-real	13m40.950s
-user	0m13.338s
-sys	19m31.466s
-nvmebenchmark -b 67108864 -p 4194304 -t 128 -f /mnt/intel/pfbench --directio -u 1
-142976,24215
-
-real	13m37.472s
-user	0m12.021s
-sys	19m25.482s
-nvmebenchmark -b 67108864 -p 4194304 -t 256 -f /mnt/intel/pfbench --directio -u 1
-142427,10670
-
-real	12m56.021s
-user	0m9.964s
-sys	19m48.968s
+athreads,write,read
+1,38009,17225
+2,33617,48172
+4,72546,28849
+8,150435,22400
+16,162289,22475
+32,161587,28307
+64,141803,29883
+128,142176,22546
+256,142153,13474

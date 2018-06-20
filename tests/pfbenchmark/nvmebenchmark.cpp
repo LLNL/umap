@@ -30,15 +30,16 @@
 using namespace std;
 using namespace chrono;
 static uint64_t pagesize;
-static char* tmppagebuf;
+static char** tmppagebuf; // One per thread
 static int fd;
 
 void do_write_pages(uint64_t pages)
 {
-  *(uint64_t*)(tmppagebuf) = 12345;
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
-    if (pwrite(fd, tmppagebuf, pagesize, i*pagesize) < 0) {
+    uint64_t* ptr = (uint64_t*)tmppagebuf[omp_get_thread_num()];
+    *ptr = i * pagesize/sizeof(uint64_t);
+    if (pwrite(fd, ptr, pagesize, i*pagesize) < 0) {
       perror("pwrite");
       exit(1);
     }
@@ -49,13 +50,13 @@ void do_read_pages(uint64_t pages)
 {
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
-    if (pread(fd, tmppagebuf, pagesize, i*pagesize) < 0) {
+    uint64_t* ptr = (uint64_t*)tmppagebuf[omp_get_thread_num()];
+    if (pread(fd, ptr, pagesize, i*pagesize) < 0) {
       perror("pread");
       exit(1);
     }
-
-    if ( *(uint64_t*)(tmppagebuf) != (uint64_t)12345 ) {
-      cout << i << " " << *(uint64_t*)(tmppagebuf) << " != " << (uint64_t)(12345) << "\n";
+    if ( *ptr != i * pagesize/sizeof(uint64_t) ) {
+      cout << i << " " << *ptr << " != " << (i * pagesize/sizeof(uint64_t)) << "\n";
       exit(1);
     }
   }
@@ -68,10 +69,6 @@ int main(int argc, char **argv)
   umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
 
-  omp_set_num_threads(options.numthreads);
-
-  pagesize = (uint64_t)umt_getpagesize();
-
   unlink(options.filename);
   fd = open(options.filename, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
 
@@ -80,16 +77,23 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  if (posix_memalign((void**)&tmppagebuf, (uint64_t)512, pagesize)) {
-    cerr << "ERROR: posix_memalign: failed\n";
-    exit(1);
-  }
+  omp_set_num_threads(options.numthreads);
 
-  if (tmppagebuf == nullptr) {
-    cerr << "Unable to allocate " << pagesize << " bytes for temporary buffer\n";
-    exit(1);
-  }
+  pagesize = (uint64_t)umt_getpagesize();
 
+  tmppagebuf = (char**)calloc(options.numthreads, sizeof(char*));
+
+  for (int i = 0; i < options.numthreads; ++i) {
+    if (posix_memalign((void**)&tmppagebuf[i], (uint64_t)512, pagesize)) {
+      cerr << "ERROR: posix_memalign: failed\n";
+      exit(1);
+    }
+
+    if (tmppagebuf[i] == nullptr) {
+      cerr << "Unable to allocate " << pagesize << " bytes for temporary buffer\n";
+      exit(1);
+    }
+  }
 
   //
   // Perform write test first.  This will also initialize the data
