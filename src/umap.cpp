@@ -336,11 +336,11 @@ static struct sigaction saved_sa;
 void sighandler(int signum, siginfo_t *info, void* buf)
 {
   if (signum != SIGBUS) {
-    cerr << "Unexpected signal: " << signum << " received\n";
+    umapdbg("Unexpected signal: %d received\n", signum);
     exit(1);
   }
 
-  assert("UMAP: SIGBUS Error Unexpected" && 0);
+  //assert("UMAP: SIGBUS Error Unexpected" && 0);
 
   void* page_begin = _umap::UMAP_PAGE_BEGIN(info->si_addr);
 
@@ -350,15 +350,15 @@ void sighandler(int signum, siginfo_t *info, void* buf)
         ufh->stat->sigbus++;
 
         if (ufh->get_pagebuffer()->find_inmem_page_desc(page_begin) != nullptr)
-          umapdbg("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE BUFFER!\n", info->si_addr, page_begin); 
+          umapdbg("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE_BUFFER\n", info->si_addr, page_begin);
         else
-          umapdbg("SIGBUS %p (page=%p) Not currently in umap page buffer\n", info->si_addr, page_begin); 
+          umapdbg("SIGBUS %p (page=%p) Not currently in umap buffer\n", info->si_addr, page_begin);
         return;
       }
     }
   }
-  umapdbg("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin); 
-  assert(0);
+  umapdbg("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin);
+  assert("UMAP: SIGBUS for out of range address" && 0);
 }
 
 void __attribute ((constructor)) init_umap_lib( void )
