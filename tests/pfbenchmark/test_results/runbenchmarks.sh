@@ -11,26 +11,55 @@ buffersize=$((((80*256))))
 # numpages=$(((1*1024*1024*1024)/4096))
 numpages=$(((16*1024*1024*1024)/4096))
 
-for j in 1 80
+for j in 1
 do
   for i in 1 2 4 8 16 32 64 128 256
   do
     drop_page_cache
     nvmebenchmark-write -b $buffersize -p $numpages -t $i -f /mnt/intel/pfbench --directio -u $j
+  done
+done
+
+for j in 1
+do
+  for i in 1 2 4 8 16 32 64 128 256
+  do
     drop_page_cache
     nvmebenchmark-read -b $buffersize -p $numpages -t $i -f /mnt/intel/pfbench --directio -u $j --noinit
+  done
+done
 
+for j in 1 80
+do
+  for i in 1 2 4 8 16 32 64 128 256
+  do
     drop_page_cache
     pfbenchmark-write -b $buffersize -p $numpages --noio -t $i -u $j
-    drop_page_cache
-    pfbenchmark-readmodifywrite -b $buffersize -p $numpages --noio -t $i -u $j
+  done
+done
+
+for j in 1 80
+do
+  for i in 1 2 4 8 16 32 64 128 256
+  do
     drop_page_cache
     pfbenchmark-read -b $buffersize -p $numpages --noio -t $i -u $j
+  done
+done
 
+for j in 1 80
+do
+  for i in 1 2 4 8 16 32 64 128 256
+  do
     drop_page_cache
     pfbenchmark-write -b $buffersize -p $numpages -t $i -f /mnt/intel/pfbench --directio -u $j
-    drop_page_cache
-    pfbenchmark-readmodifywrite -b $buffersize -p $numpages -t $i -f /mnt/intel/pfbench --directio -u $j --noinit
+  done
+done
+
+for j in 1 80
+do
+  for i in 1 2 4 8 16 32 64 128 256
+  do
     drop_page_cache
     pfbenchmark-read -b $buffersize -p $numpages -t $i -f /mnt/intel/pfbench --directio -u $j --noinit
 

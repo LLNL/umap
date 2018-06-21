@@ -41,27 +41,50 @@ void do_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
     array[i * page_step] = (i * page_step);
 }
 
-void do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
+uint64_t do_read_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
 {
+  uint64_t x;
+
+  // Weird logic to make sure that compiler doesn't optimize out our read of array[i]
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
-    if ( array[i * page_step] != (i * page_step) && no_io == false ) {
+    x = array[i * page_step];
+
+    if ( x != (i * page_step) && no_io == true ) {
+      x--;
+    }
+    else if (x != (i * page_step)) {
       cout << __FUNCTION__ << "array[" << i * page_step << "]: (" << array[i*page_step] << ") != " << i * page_step << "\n";
       exit(1);
     }
   }
+
+  return x;
 }
 
-void do_read_modify_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
+uint64_t do_read_modify_write_pages(uint64_t* array, uint64_t page_step, uint64_t pages)
 {
+  uint64_t x;
+
+  // Weird logic to make sure that compiler doesn't optimize out our read of array[i]
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
-    if ( array[i * page_step] != (i * page_step) && no_io == false ) {
-      cout << __FUNCTION__ << "array[" << i * page_step << "]: (" << array[i*page_step] << ") != " << i * page_step << "\n";
+    x = array[i * page_step];
+
+    if ( x != (i * page_step) && no_io == true ) {
+      array[i * page_step] = (i * page_step);
+      x--;
+    }
+    else if (x != (i * page_step)) {
+      cout << __FUNCTION__ << "array[" << i * page_step << "]: (" << x << ") != " << i * page_step << "\n";
       exit(1);
     }
-    array[i * page_step] = (i * page_step);
+    else {
+      array[i * page_step] = (i * page_step);
+      x++;
+    }
   }
+  return x;
 }
 
 void print_stats( void )

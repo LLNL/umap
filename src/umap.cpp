@@ -676,6 +676,9 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   if (pm != nullptr) {
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       if (!pm->page_is_dirty()) {
+        ss << "PF(" << msg.arg.pagefault.flags << " WP)    (DISABLE_WP)       @(" << page_begin << ")";
+        umapdbg("%s\n", ss.str().c_str());
+
         pm->mark_page_dirty();
         disable_wp_on_pages((uint64_t)page_begin, 1, false);
         stat->wp_messages++;
