@@ -38,9 +38,9 @@ static umt_optstruct_t options;
 
 void do_write_pages(uint64_t pages)
 {
-  char* buf;
-#pragma parallel private(buf)
+#pragma omp parallel
   {
+    uint64_t* buf;
     if (posix_memalign((void**)&buf, (uint64_t)512, pagesize)) {
       cerr << "ERROR: posix_memalign: failed\n";
       exit(1);
@@ -50,10 +50,10 @@ void do_write_pages(uint64_t pages)
       cerr << "Unable to allocate " << pagesize << " bytes for temporary buffer\n";
       exit(1);
     }
-
+#pragma omp barrier
 #pragma omp parallel for
     for (uint64_t i = 0; i < pages; ++i) {
-      *(uint64_t*)buf = i * pagesize/sizeof(uint64_t);
+      *buf = i * pagesize/sizeof(uint64_t);
       if (pwrite(fd, buf, pagesize, i*pagesize) < 0) {
         perror("pwrite");
         exit(1);
@@ -65,9 +65,9 @@ void do_write_pages(uint64_t pages)
 
 void do_read_pages(uint64_t pages)
 {
-  char* buf;
-#pragma parallel private(buf)
+#pragma omp parallel
   {
+    uint64_t* buf;
     if (posix_memalign((void**)&buf, (uint64_t)512, pagesize)) {
       cerr << "ERROR: posix_memalign: failed\n";
       exit(1);
@@ -78,14 +78,15 @@ void do_read_pages(uint64_t pages)
       exit(1);
     }
 
+#pragma omp barrier
 #pragma omp parallel for
     for (uint64_t i = 0; i < pages; ++i) {
       if (pread(fd, buf, pagesize, i*pagesize) < 0) {
         perror("pread");
         exit(1);
       }
-      if ( *(uint64_t*)buf != i * pagesize/sizeof(uint64_t) ) {
-        cout << i << " " << *(uint64_t*)buf << " != " << (i * pagesize/sizeof(uint64_t)) << "\n";
+      if ( *buf != i * pagesize/sizeof(uint64_t) ) {
+        cout << i << " " << *buf << " != " << (i * pagesize/sizeof(uint64_t)) << "\n";
         exit(1);
       }
     }
