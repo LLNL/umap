@@ -92,14 +92,22 @@ int read_pages(int argc, char **argv)
 
 int write_pages(int argc, char **argv)
 {
-  unlink(options.filename);
-  fd = open(options.filename, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
+  if ( !options.noinit ) {
+    cout << "Removing " << options.filename << "\n";
+    unlink(options.filename);
+    cout << "Creating " << options.filename << "\n";
+    fd = open(options.filename, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
+  }
+  else {
+    fd = open(options.filename, O_RDWR | O_LARGEFILE | O_DIRECT);
+  }
 
   if (fd == -1) {
     perror("open failed\n");
     exit(1);
   }
 
+#if 0
   try {
     int x;
     if ( ( x = posix_fallocate(fd, 0, options.numpages * pagesize) != 0 ) ) {
@@ -115,6 +123,7 @@ int write_pages(int argc, char **argv)
     cerr << "posix_fallocate failed to allocate backing store\n";
     exit(1);
   }
+#endif
 
   auto start_time = chrono::high_resolution_clock::now();
   do_write_pages(options.numpages);
