@@ -25,7 +25,10 @@
 #include <string.h>
 #include <string>
 #include <sstream>
-
+#include <vector>
+#include <random>
+#include <algorithm>
+#include <iterator>
 
 #include "umap.h"
 #include "testoptions.h"
@@ -37,14 +40,16 @@ static uint64_t pagesize;
 static char** tmppagebuf; // One per thread
 static int fd;
 static umt_optstruct_t options;
+vector<uint64_t> shuffled_indexes;
 
 void do_write_pages(uint64_t pages)
 {
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
+    uint64_t myidx = shuffled_indexes[i];
     uint64_t* ptr = (uint64_t*)tmppagebuf[omp_get_thread_num()];
-    *ptr = i * pagesize/sizeof(uint64_t);
-    if (pwrite(fd, ptr, pagesize, i*pagesize) < 0) {
+    *ptr = myidx * pagesize/sizeof(uint64_t);
+    if (pwrite(fd, ptr, pagesize, myidx*pagesize) < 0) {
       perror("pwrite");
       exit(1);
     }
@@ -55,13 +60,14 @@ void do_read_pages(uint64_t pages)
 {
 #pragma omp parallel for
   for (uint64_t i = 0; i < pages; ++i) {
+    uint64_t myidx = shuffled_indexes[i];
     uint64_t* ptr = (uint64_t*)tmppagebuf[omp_get_thread_num()];
-    if (pread(fd, ptr, pagesize, i*pagesize) < 0) {
+    if (pread(fd, ptr, pagesize, myidx*pagesize) < 0) {
       perror("pread");
       exit(1);
     }
-    if ( *ptr != i * pagesize/sizeof(uint64_t) ) {
-      cout << i << " " << *ptr << " != " << (i * pagesize/sizeof(uint64_t)) << "\n";
+    if ( *ptr != myidx * pagesize/sizeof(uint64_t) ) {
+      cout << i << " " << myidx << " " << *ptr << " != " << (myidx * pagesize/sizeof(uint64_t)) << "\n";
       exit(1);
     }
   }
@@ -82,6 +88,7 @@ int read_pages(int argc, char **argv)
 
   cout << "nvme,"
       << "yes,"
+      << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "read,"
       << options.numthreads << ","
       << 0 << ","
@@ -108,30 +115,13 @@ int write_pages(int argc, char **argv)
     exit(1);
   }
 
-#if 0
-  try {
-    int x;
-    if ( ( x = posix_fallocate(fd, 0, options.numpages * pagesize) != 0 ) ) {
-      ostringstream ss;
-      ss << "Failed to pre-allocate " << (options.numpages*pagesize) << " bytes in " << options.filename << ": ";
-      perror(ss.str().c_str());
-      exit(1);
-    }
-  } catch(const std::exception& e) {
-    cerr << "posix_fallocate: " << e.what() << endl;
-    exit(1);
-  } catch(...) {
-    cerr << "posix_fallocate failed to allocate backing store\n";
-    exit(1);
-  }
-#endif
-
   auto start_time = chrono::high_resolution_clock::now();
   do_write_pages(options.numpages);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << "nvme,"
       << "yes,"
+      << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "write,"
       << options.numthreads << ","
       << 0 << ","
@@ -144,7 +134,16 @@ int write_pages(int argc, char **argv)
 int main(int argc, char **argv)
 {
   int rval = 0;
+  std::random_device rd;
+  std::mt19937 g(rd());
+
   umt_getoptions(&options, argc, argv);
+
+  for (uint64_t i = 0; i < options.numpages; ++i)
+    shuffled_indexes.push_back(i);
+
+  if ( options.shuffle )
+    std::shuffle(shuffled_indexes.begin(), shuffled_indexes.end(), g);
 
   omp_set_num_threads(options.numthreads);
   pagesize = (uint64_t)umt_getpagesize();

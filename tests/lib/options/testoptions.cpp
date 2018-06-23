@@ -43,6 +43,7 @@ static void usage(char* pname)
   << " --directio             - Use O_DIRECT for file IO\n"
   << " --usemmap              - Use mmap instead of umap\n"
   << " --noio                 - Run test with no backing store\n"
+  << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
@@ -62,6 +63,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->iodirect = 0;
   testops->noio = 0;
   testops->usemmap = 0;
+  testops->shuffle = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
@@ -77,6 +79,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {"directio",  no_argument,  &testops->iodirect, 1 },
       {"usemmap",   no_argument,  &testops->usemmap,  1 },
       {"noio",      no_argument,  &testops->noio,     1 },
+      {"shuffle",   no_argument,  &testops->shuffle,  1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }
     };

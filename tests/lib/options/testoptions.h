@@ -22,6 +22,7 @@ typedef struct {
   int iodirect;
   int usemmap;
   int noio;
+  int shuffle;
 
   uint64_t numpages;
   uint64_t numthreads;
