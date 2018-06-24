@@ -10,7 +10,6 @@
  * this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, 
  * Suite 330, Boston, MA 02111-1307 USA 
  */
-// uffd sort benchmark
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -123,13 +122,12 @@ int read_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "no" : "yes") << ","
+      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "read,"
       << options.numthreads << ","
       << options.uffdthreads << ","
       << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
-  print_stats();
 
   return 0;
 }
@@ -141,13 +139,12 @@ int write_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "no" : "yes") << ","
+      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "write,"
       << options.numthreads << ","
       << options.uffdthreads << ","
       << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
-  print_stats();
 
   return 0;
 }
@@ -162,13 +159,12 @@ int read_modify_write_test(int argc, char **argv)
   end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "no" : "yes") << ","
+      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "rmw,"
       << options.numthreads << ","
       << options.uffdthreads << ","
       << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
-  print_stats();
 
   return 0;
 }

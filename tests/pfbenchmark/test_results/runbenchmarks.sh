@@ -22,17 +22,18 @@ do
       drop_page_cache
       nvmebenchmark-$test -b $buffersize -p $numpages -t $i -f $file --directio --noinit $mode
     done
-  done
 
-  for noio in " " "--noio"
-  do
-    for j in 1 80
+    for noio in " " "--noio"
     do
-      for i in 1 2 4 8 16 32 64 128 256
+      for j in 1 80
       do
-        drop_page_cache
-        pfbenchmark-$test -b $buffersize -p $numpages $noio -t $i -f $file -u $j --directio --noinit $mode
+        for i in 1 2 4 8 16 32 64 128 256
+        do
+          drop_page_cache
+          pfbenchmark-$test -b $buffersize -p $numpages $noio -t $i -f $file -u $j --directio --noinit $mode
+        done
       done
     done
   done
 done
+

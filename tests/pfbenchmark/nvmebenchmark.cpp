@@ -87,7 +87,7 @@ int read_pages(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << "nvme,"
-      << "yes,"
+      << "+IO,"
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "read,"
       << options.numthreads << ","
@@ -120,7 +120,7 @@ int write_pages(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << "nvme,"
-      << "yes,"
+      << "+IO,"
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "write,"
       << options.numthreads << ","
