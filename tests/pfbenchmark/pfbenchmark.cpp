@@ -9,6 +9,16 @@
  * You should have received a copy of the GNU Lesser General Public License along with 
  * this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, 
  * Suite 330, Boston, MA 02111-1307 USA 
+ *
+ * This program is a benchmark for UMAP page fault handling.  The specied backing file
+ * for UMAP is accessed a page at a time indirectly by accessing pages that have been
+ * mapped to the file.  Read accesses to memory will determine the average nanosecond
+ * cost for servicing a READ PAGE FAULT and write accesses to memory will determine
+ * the average cost of WRITE PAGE FAULTs.
+ *
+ * A number of threads may be specified on the command line to enable concurrent I/O
+ * access within the file.  Further, the file may be accessed sequentially (default)
+ * or randomly (if "--shuffle" command line option is specified).
  */
 
 #ifndef _GNU_SOURCE

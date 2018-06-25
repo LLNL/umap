@@ -9,8 +9,17 @@
  * You should have received a copy of the GNU Lesser General Public License along with 
  * this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, 
  * Suite 330, Boston, MA 02111-1307 USA 
+ *
+ * This program is a benchmark for NVME device I/O bandwidth which provides the average
+ * time in nanoseconds for performing the following I/O operations:
+ *
+ * 1) Page (4K) writes to a file on the NVME device
+ * 2) Page (4K) reads from a file on the NVME device
+ *
+ * A number of threads may be specified on the command line to enable concurrent I/O
+ * access within the file.  Further, the file may be accessed sequentially (default)
+ * or randomly (if "--shuffle" command line option is specified).
  */
-// uffd sort benchmark
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
