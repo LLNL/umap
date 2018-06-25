@@ -24,7 +24,7 @@
 #include "testoptions.h"
 #include "umap.h"
 
-char const* DIRNAME = "./";
+char const* DIRNAME = "/mnt/intel/";
 char const* FILENAME = "abc";
 const uint64_t NUMPAGES = 10000000;
 const uint64_t NUMTHREADS = 2;
@@ -42,8 +42,11 @@ static void usage(char* pname)
   << " --noinit               - Use previously initialized file\n"
   << " --directio             - Use O_DIRECT for file IO\n"
   << " --usemmap              - Use mmap instead of umap\n"
+  << " --noio                 - Run test with no backing store\n"
+  << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
+  << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
   << " -b page buffer size    - default: " << umap_cfg_get_bufsize() << " Pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
   << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n";
@@ -58,10 +61,13 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->initonly = 0;
   testops->noinit = 0;
   testops->iodirect = 0;
+  testops->noio = 0;
   testops->usemmap = 0;
+  testops->shuffle = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
+  testops->uffdthreads = umap_cfg_get_uffdthreads();
   testops->filename = FILENAME;
   testops->dirname = DIRNAME;
 
@@ -72,11 +78,13 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {"noinit",    no_argument,  &testops->noinit,   1 },
       {"directio",  no_argument,  &testops->iodirect, 1 },
       {"usemmap",   no_argument,  &testops->usemmap,  1 },
+      {"noio",      no_argument,  &testops->noio,     1 },
+      {"shuffle",   no_argument,  &testops->shuffle,  1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:d:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:d:u:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -100,6 +108,10 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
         if ((testops->bufsize = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
+      case 'u':
+        if ((testops->uffdthreads = strtoull(optarg, nullptr, 0)) > 0)
+          break;
+        else goto R0;
       case 'd':
         testops->dirname = optarg;
         break;
@@ -121,6 +133,9 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   }
 
   umap_cfg_set_bufsize(testops->bufsize);
+
+  if (testops->uffdthreads != umap_cfg_get_uffdthreads())
+    umap_cfg_set_uffdthreads(testops->uffdthreads);
 }
 
 long umt_getpagesize(void)

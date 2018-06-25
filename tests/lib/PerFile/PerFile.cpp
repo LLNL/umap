@@ -41,6 +41,11 @@ typedef struct umt_map_handle {
 
 static unordered_map<void*, umt_map_handle*> mappings;
 
+static ssize_t pstore_noio(void* region, void* buf, size_t nbytes, off_t region_offset)
+{
+  return nbytes;
+}
+
 static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_offset)
 {
   ssize_t rval;
@@ -52,7 +57,6 @@ static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_
     perror("ERROR: pread failed");
     exit(1);
   }
-
   return rval;
 }
 
@@ -84,64 +88,83 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
   if ( testops->iodirect ) 
     open_options |= O_DIRECT;
 
-  if ( !testops->noinit ) {
+  if ( testops->initonly || ( !testops->noinit && !testops->noio) ) {
     open_options |= O_CREAT;
     unlink(filename.c_str());   // Remove the file if it exists
   }
 
   handle->range_size = numbytes;
   handle->filename = filename;
-  if ( ( handle->fd = open(filename.c_str(), open_options, S_IRUSR | S_IWUSR) ) == -1 ) {
-    string estr = "Failed to open/create " + handle->filename + ": ";
-    perror(estr.c_str());
-    return NULL;
-  }
-
-  if ( open_options & O_CREAT ) { // If we are initializing, attempt to pre-allocate disk space for the file.
-    try {
-      int x;
-      if ( ( x = posix_fallocate(handle->fd, 0, handle->range_size) != 0 ) ) {
-        ostringstream ss;
-        ss << "Failed to pre-allocate " << handle->range_size << " bytes in " << handle->filename << ": ";
-        perror(ss.str().c_str());
-        return NULL;
-      }
-    } catch(const std::exception& e) {
-      cerr << "posix_fallocate: " << e.what() << endl;
-      return NULL;
-    } catch(...) {
-      cerr << "posix_fallocate failed to allocate backing store\n";
+  if ( !testops->noio ) {
+    if ( ( handle->fd = open(filename.c_str(), open_options, S_IRUSR | S_IWUSR) ) == -1 ) {
+      string estr = "Failed to open/create " + handle->filename + ": ";
+      perror(estr.c_str());
       return NULL;
     }
-  }
 
-  struct stat sbuf;
-  if (fstat(handle->fd, &sbuf) == -1) {
-    string estr = "Failed to get status (fstat) for " + filename + ": ";
-    perror(estr.c_str());
-    return NULL;
-  }
+    if ( open_options & O_CREAT ) { // If we are initializing, attempt to pre-allocate disk space for the file.
+      try {
+        int x;
+        if ( ( x = posix_fallocate(handle->fd, 0, handle->range_size) != 0 ) ) {
+          ostringstream ss;
+          ss << "Failed to pre-allocate " << handle->range_size << " bytes in " << handle->filename << ": ";
+          perror(ss.str().c_str());
+          return NULL;
+        }
+      } catch(const std::exception& e) {
+        cerr << "posix_fallocate: " << e.what() << endl;
+        return NULL;
+      } catch(...) {
+        cerr << "posix_fallocate failed to allocate backing store\n";
+        return NULL;
+      }
+    }
 
-  if ( (off_t)sbuf.st_size != (handle->range_size) ) {
-    cerr << filename << " size " << sbuf.st_size << " does not match specified data size of " << (handle->range_size) << endl;
-    return NULL;
+    struct stat sbuf;
+    if (fstat(handle->fd, &sbuf) == -1) {
+      string estr = "Failed to get status (fstat) for " + filename + ": ";
+      perror(estr.c_str());
+      return NULL;
+    }
+
+    if ( (off_t)sbuf.st_size != (handle->range_size) ) {
+      cerr << filename << " size " << sbuf.st_size << " does not match specified data size of " << (handle->range_size) << endl;
+      return NULL;
+    }
   }
 
   const int prot = PROT_READ|PROT_WRITE;
 
   if ( testops->usemmap ) {
-    region = mmap(NULL, handle->range_size, prot, MAP_SHARED | MAP_NORESERVE, handle->fd, 0);
+    if ( testops->noio ) {
+      region = mmap(NULL, handle->range_size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    } else {
+      region = mmap(NULL, handle->range_size, prot, MAP_SHARED | MAP_NORESERVE, handle->fd, 0);
+    }
     if (region == MAP_FAILED) {
       ostringstream ss;
       ss << "mmap of " << handle->range_size << " bytes failed for " << handle->filename << ": ";
       perror(ss.str().c_str());
       return NULL;
     }
+
+    // TODO: Determine whether it would be more fair to disable read-ahead for all mmap() usage
+    if ( testops->noio ) {
+      if (madvise(region, handle->range_size, MADV_RANDOM) < 0) {
+        ostringstream ss;
+        ss << "madvise(MADV_RANDOM) of " << handle->range_size << " bytes failed\n";
+        perror(ss.str().c_str());
+        return NULL;
+      }
+    }
   }
   else {
     int flags = UMAP_PRIVATE;
 
-    region = umap(NULL, handle->range_size, prot, flags, pstore_read, pstore_write);
+    if (testops->noio)
+      region = umap(NULL, handle->range_size, prot, flags, pstore_noio, pstore_noio);
+    else
+      region = umap(NULL, handle->range_size, prot, flags, pstore_read, pstore_write);
     if ( region == UMAP_FAILED ) {
         ostringstream ss;
         ss << "umap_mf of " << handle->range_size << " bytes failed for " << handle->filename << ": ";

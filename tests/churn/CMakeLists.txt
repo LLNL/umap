@@ -23,6 +23,6 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping churn, OpenMP required")
+  message("Skipping churn, OpenMP required")
 endif()
 

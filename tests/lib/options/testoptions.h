@@ -21,10 +21,13 @@ typedef struct {
   int noinit;
   int iodirect;
   int usemmap;
+  int noio;
+  int shuffle;
 
   uint64_t numpages;
   uint64_t numthreads;
   uint64_t bufsize;
+  uint64_t uffdthreads;
   char const* filename; // file name or basename
   char const* dirname; // dir name or basename
 } umt_optstruct_t;

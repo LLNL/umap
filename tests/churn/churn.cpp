@@ -63,6 +63,7 @@ public:
         umt_options.filename = options.fn;
         umt_options.noinit = options.noinit;
         umt_options.initonly = options.initonly;
+        umt_options.noio = false;
 
         num_rw_load_pages = num_read_load_pages = options.num_load_pages;
         num_churn_pages = options.num_churn_pages;

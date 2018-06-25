@@ -18,7 +18,7 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping umapmillions, OpenMP required")
+  message("Skipping umapmillions, OpenMP required")
 endif()
 
 

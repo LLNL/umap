@@ -28,7 +28,7 @@ if(OPENMP_FOUND)
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping umapsort, OpenMP required")
+  message("Skipping umapsort, OpenMP required")
 endif()
 
 
