@@ -46,6 +46,7 @@ static uint64_t pagesize;
 static uint64_t page_step;
 static uint64_t* glb_array;
 static umt_optstruct_t options;
+static uint64_t pages_to_access;
 vector<uint64_t> shuffled_indexes;
 
 void do_write_pages(uint64_t page_step, uint64_t pages)
@@ -128,7 +129,7 @@ void print_stats( void )
 int read_test(int argc, char **argv)
 {
   auto start_time = chrono::high_resolution_clock::now();
-  do_read_pages(page_step, options.numpages);
+  do_read_pages(page_step, pages_to_access);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
@@ -137,7 +138,7 @@ int read_test(int argc, char **argv)
       << "read,"
       << options.numthreads << ","
       << options.uffdthreads << ","
-      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / pages_to_access << "\n";
 
   return 0;
 }
@@ -145,7 +146,7 @@ int read_test(int argc, char **argv)
 int write_test(int argc, char **argv)
 {
   auto start_time = chrono::high_resolution_clock::now();
-  do_write_pages(page_step, options.numpages);
+  do_write_pages(page_step, pages_to_access);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
@@ -154,7 +155,7 @@ int write_test(int argc, char **argv)
       << "write,"
       << options.numthreads << ","
       << options.uffdthreads << ","
-      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / pages_to_access << "\n";
 
   return 0;
 }
@@ -165,7 +166,7 @@ int read_modify_write_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   start_time = chrono::high_resolution_clock::now();
-  do_read_modify_write_pages(page_step, options.numpages);
+  do_read_modify_write_pages(page_step, pages_to_access);
   end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
@@ -174,7 +175,7 @@ int read_modify_write_test(int argc, char **argv)
       << "rmw,"
       << options.numthreads << ","
       << options.uffdthreads << ","
-      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / pages_to_access << "\n";
 
   return 0;
 }
@@ -189,6 +190,8 @@ int main(int argc, char **argv)
 
   for (uint64_t i = 0; i < options.numpages; ++i)
     shuffled_indexes.push_back(i);
+
+  pages_to_access = options.pages_to_access ? options.pages_to_access : options.numpages;
 
   if ( options.shuffle )
     std::shuffle(shuffled_indexes.begin(), shuffled_indexes.end(), g);

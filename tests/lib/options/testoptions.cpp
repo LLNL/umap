@@ -47,7 +47,8 @@ static void usage(char* pname)
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
-  << " -b page buffer size    - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -b # page buffer size  - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
   << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n";
   exit(1);
@@ -64,6 +65,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->noio = 0;
   testops->usemmap = 0;
   testops->shuffle = 0;
+  testops->pages_to_access = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umap_cfg_get_bufsize();
@@ -84,7 +86,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:d:u:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:d:u:a:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -112,6 +114,10 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
         if ((testops->uffdthreads = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
+      case 'a':
+        if ((testops->pages_to_access = strtoull(optarg, nullptr, 0)) >= 0)
+          break;
+        else goto R0;
       case 'd':
         testops->dirname = optarg;
         break;
@@ -122,6 +128,11 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       R0:
         usage(pname);
     }
+  }
+
+  if (testops->numpages < testops->pages_to_access) {
+    cerr << "Invalid -a argument " << testops->pages_to_access << "\n";
+    usage(pname);
   }
 
   if (optind < argc) {

@@ -4,36 +4,36 @@ function drop_page_cache {
   echo 3 > /proc/sys/vm/drop_caches
 }
 
-export PATH=/home/martymcf/.session.behemoth-rhel/install/linux-rhel7-x86_64/install/bin:$PATH
-buffersize=$((((80*256))))
-numpages=$(((16*1024*1024*1024)/4096))
+export PATH=/home/martymcf/.sessions/dst-intel/install/linux-rhel7-x86_64/install/bin:$PATH
+buffersize=$((((128*256))))
+# numpages=$(((16*1024*1024*1024)/4096))
+numpages=$(((1*1024*1024*1024*1024)/4096))
+
+# numaccesspages=0
+numaccesspages=$(((32*1024*1024*1024)/4096))
 
 file=/mnt/xfs/pfbench
 
-drop_page_cache
-nvmebenchmark-write -b $buffersize -p $numpages -t 1 -f $file --directio -u 1
+# drop_page_cache
+# nvmebenchmark-write -b $buffersize -p $numpages -t 1 -f $file --directio -u 1
 
-for mode in " " "--shuffle"
+for test in "write" "read"
 do
-  for test in "write" "read"
+  for i in 16 32 64 128 256
   do
-    for i in 1 2 4 8 16 32 64 128 256
-    do
-      drop_page_cache
-      nvmebenchmark-$test -b $buffersize -p $numpages -t $i -f $file --directio --noinit $mode
-    done
+    drop_page_cache
+    nvmebenchmark-$test -b $buffersize -p $numpages -t $i -f $file --directio --noinit --shuffle -a $numaccesspages
+  done
 
-    for noio in " " "--noio"
+  for noio in " " "--noio"
+  do
+    for j in 32 64 128
     do
-      for j in 1 80
+      for i in 16 32 64 128 256
       do
-        for i in 1 2 4 8 16 32 64 128 256
-        do
-          drop_page_cache
-          pfbenchmark-$test -b $buffersize -p $numpages $noio -t $i -f $file -u $j --directio --noinit $mode
-        done
+        drop_page_cache
+        pfbenchmark-$test -b $buffersize -p $numpages $noio -t $i -f $file -u $j --directio --noinit --shuffle -a $numaccesspages
       done
     done
   done
 done
-

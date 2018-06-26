@@ -28,6 +28,7 @@ typedef struct {
   uint64_t numthreads;
   uint64_t bufsize;
   uint64_t uffdthreads;
+  uint64_t pages_to_access;  // 0 (default) - access all pages
   char const* filename; // file name or basename
   char const* dirname; // dir name or basename
 } umt_optstruct_t;
