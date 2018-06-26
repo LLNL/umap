@@ -59,6 +59,9 @@ int main(int argc, char** argv)
   median::cube_t<pixel_type> cube;
 
   cube.data = (pixel_type*)PerFits::PerFits_alloc_cube(&options, &BytesPerElement, &xDim, &yDim, &zDim);
+  if (cube.data == nullptr) {
+    return -1;
+  }
 
   cube.size_x = xDim;
   cube.size_y = yDim;
@@ -103,4 +106,6 @@ int main(int argc, char** argv)
   }
 
   PerFits::PerFits_free_cube(cube.data);
+
+  return 0;
 }

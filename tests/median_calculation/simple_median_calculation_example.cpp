@@ -36,6 +36,10 @@ int main(int argc, char** argv)
 
   cube.data = (float*)PerFits::PerFits_alloc_cube(&options, &BytesPerElement, &xDim, &yDim, &zDim);
 
+  if (cube.data == nullptr) {
+    return -1;
+  }
+
   cube.size_x = xDim;
   cube.size_y = yDim;
   cube.size_k = zDim; // tne number of frames
@@ -47,4 +51,6 @@ int main(int argc, char** argv)
   }
 
   PerFits::PerFits_free_cube(cube.data);
+
+  return 0;
 }

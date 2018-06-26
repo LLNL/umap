@@ -144,7 +144,8 @@ int main(int argc, char **argv)
 
   totalbytes = options.numpages*pagesize;
   base_addr = PerFile_openandmap(&options, totalbytes);
-  assert(base_addr != NULL);
+  if (base_addr == nullptr)
+    return -1;
  
   fprintf(stdout, "%lu pages, %llu bytes, %lu threads\n", options.numpages, totalbytes, options.numthreads);
 
