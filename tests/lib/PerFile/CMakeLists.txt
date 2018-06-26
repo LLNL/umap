@@ -3,6 +3,9 @@ project(umap_PerFile)
 add_library(libPerFile SHARED PerFile.cpp)
 add_library(libPerFile_static STATIC PerFile.cpp)
 
+add_dependencies(libPerFile libtestoptions)
+add_dependencies(libPerFile_static libtestoptions_static)
+
 target_link_libraries(libPerFile libumap)
 target_link_libraries(libPerFile_static libumap_static)
 
