@@ -3,6 +3,9 @@ project(umap_PerFits)
 add_library(libPerFits SHARED PerFits.cpp Tile.cpp )
 add_library(libPerFits_static STATIC PerFits.cpp Tile.cpp )
 
+add_dependencies(libPerFits libtestoptions)
+add_dependencies(libPerFits_static libtestoptions_static)
+
 target_link_libraries(libPerFits libumap)
 target_link_libraries(libPerFits_static libumap_static)
 
