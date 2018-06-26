@@ -52,32 +52,32 @@ Tile::Tile(const std::string& _fn)
 
   if ( fits_open_data(&fptr, file.fname.c_str(), READONLY, &status) ) {
     fits_report_error(stderr, status);
-    assert("NOT a FITS file" && 0);
+    exit(-1);
   }
 
   if ( fits_get_hduaddrll(fptr, &headstart, &datastart, &dataend, &status) ) {
     fits_report_error(stderr, status);
-    assert("FITs failed to read hduaddrll" && 0);
+    exit(-1);
   }
 
   if ( fits_get_img_type(fptr, &bitpix, &status) ) {
     fits_report_error(stderr, status);
-    assert("FITs failed to get image type" && 0);
+    exit(-1);
   }
 
   if ( fits_get_img_param(fptr, 2, &bitpix, &naxes, &naxis[0], &status) ) {
     fits_report_error(stderr, status);
-    assert("FITs failed to get image param" && 0);
+    exit(-1);
   }
 
   if ( fits_close_file(fptr, &status) ) {
     fits_report_error(stderr, status);
-    assert("FITs failed to close file" && 0);
+    exit(-1);
   }
 
   if ( ( file.fd = open(file.fname.c_str(), (O_RDONLY | O_LARGEFILE)) ) == -1 ) {
     perror(file.fname.c_str());
-    assert("Open failure" && 0);
+    exit(-1);
   }
 
   dim.xDim = (size_t)naxis[0];

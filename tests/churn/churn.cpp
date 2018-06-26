@@ -69,6 +69,10 @@ public:
         num_churn_pages = options.num_churn_pages;
 
         base_addr = PerFile_openandmap(&umt_options, (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
+        if ( base_addr == nullptr ) {
+          exit(1);
+        }
+
         assert(base_addr != NULL);
 
         read_load_pages = base_addr;
@@ -90,7 +94,7 @@ public:
             << options.fn << " Backing file\n\t"
             << options.testduration << " seconds for test duration.\n\n";
 
-        //check();
+        check();
     }
 
     ~pageiotest( void ) {
@@ -161,7 +165,7 @@ private:
           for (uint64_t i = 0; i < num_churn_pages * (pagesize/sizeof(*p)); i += (pagesize/sizeof(*p)))
               if (p[i] != i) {
                 cerr << "check(CHURN): *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (unsigned long long)i << endl;
-                return;
+                exit(1);
               }
         }
         cout << "Checking read load pages\n";
@@ -170,7 +174,7 @@ private:
           for (uint64_t i = 0; i < num_read_load_pages * (pagesize/sizeof(*p)); ++i)
               if (p[i] != i) {
                 cerr << "check(READER): *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (unsigned long long)i << endl;
-                break;
+                exit(1);
               }
         }
         cerr << "Check Complete\n";

@@ -104,8 +104,13 @@ void* PerFits_alloc_cube(
     ss << basename << std::setfill('0') << std::setw(3) << i << ".fits";
     struct stat sbuf;
 
-    if ( stat(ss.str().c_str(), &sbuf) == -1 )
+    if ( stat(ss.str().c_str(), &sbuf) == -1 ) {
+      if ( i == 1 ) {
+        cerr << "File: " << ss.str() << " does not exist\n";
+        return region;
+      }
       break;
+    }
 
     Fits::Tile T(ss.str());
 
@@ -127,6 +132,7 @@ void* PerFits_alloc_cube(
 
     cube->tiles.push_back(T);
   }
+
 
   const int prot = PROT_READ|PROT_WRITE;
   int flags = UMAP_PRIVATE;
