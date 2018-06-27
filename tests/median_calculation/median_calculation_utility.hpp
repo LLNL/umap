@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 /// k: time dimension
 /// A cube is a set of 'k' frames
 
-#ifndef MEDIAN_CALCULATION_KERNEL_HPP
-#define MEDIAN_CALCULATION_KERNEL_HPP
+#ifndef MEDIAN_CALCULATION_COMMON_HPP
+#define MEDIAN_CALCULATION_COMMON_HPP
 
 #include <iostream>
 #include <iomanip>
@@ -31,7 +31,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <cassert>
 
-#define MEDIAN_CALCULATION_VERBOSE 0
 #define MEDIAN_CALCULATION_COLUMN_MAJOR 1
 
 namespace median
@@ -112,4 +111,4 @@ inline T reverse_byte_order(const T x)
 
 } // namespace median
 
-#endif //MEDIAN_CALCULATION_KERNEL_HPP
+#endif //MEDIAN_CALCULATION_COMMON_HPP

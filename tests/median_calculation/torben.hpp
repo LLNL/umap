@@ -25,27 +25,68 @@ This implementation also contains the modification proposed in https://github.co
 #include <algorithm>
 #include <iterator>
 
-/// \brief STL like Torben algorithm implementation for median calculation
-/// Returns the median value from given elements that are accessible via a random access iterator
-/// \tparam iterator_type Type of the iterator
-/// \param iterator_begin Iterator for the first position
-/// \param iterator_end Iterator for the end position
-/// \return Calculated median value
-/// \example
-/// 1) STL container
-/// std::vector<int> vec;
-/// auto median = torben(vec.cbegin(), vec.cend());
-///
-/// 2) you can also use a normal array
-/// int array[10];
-/// auto median = torben(array, array + 10);
-///
-/// 3) use your own iterator
-/// own_iterator_class itr_begin;
-/// own_iterator_class itr_end;
-/// auto median = torben(itr_begin, itr_end);
-///
+/*
+STL-like Torben algorithm implementation for median calculation
+Returns the median value of given elements that are accessible via a random access iterator
 
+\tparam iterator_type Type of the iterator
+\param iterator_begin Iterator for the beginning position
+\param iterator_end Iterator for the end position
+\return Calculated median value
+
+\example
+1) STL container
+std::vector<int> vec;
+int median = torben(vec.cbegin(), vec.cend());
+
+2) you can also use a normal array
+int array[10];
+int median = torben(array, array + 10);
+
+3) use your own iterator
+own_iterator_class itr_begin;
+own_iterator_class itr_end;
+int median = torben(itr_begin, itr_end);
+
+
+class vector_iterator {
+ public:
+  // Required types to use some stl functions
+  using value_type = pixel_type;
+  using difference_type = ssize_t;
+  using iterator_category = std::random_access_iterator_tag;
+  using pointer = value_type *;
+  using reference = value_type &;
+
+  // Constructor
+  vector_iterator(const median::cube_t<pixel_type> &_cube,
+                         const median::vector_t &_vector,
+                         const size_t _start_pos)
+      : cube(_cube),
+        vector(_vector),
+        current_pos(_start_pos) {}
+
+  // Copy constructor
+  vector_iterator(const vector_iterator&) = default;
+
+  bool operator!=(const vector_iterator &);
+  difference_type operator-(const vector_iterator &);
+  value_type operator*();
+  value_type operator[](size_t);
+
+  // To support
+  // ++iterator
+  value_type operator++() {
+    size_t tmp = current_pos;
+    ++current_pos;
+    return (*this)[tmp];
+  }
+
+  median::cube_t<pixel_type> cube;
+  median::vector_t vector;
+  size_t current_pos;
+};
+ */
 template <typename iterator_type>
 typename iterator_type::value_type
 torben(iterator_type iterator_begin, iterator_type iterator_end) {

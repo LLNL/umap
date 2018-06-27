@@ -24,12 +24,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #endif
 
 #include "torben.hpp"
-#include "median_calculation_common.hpp"
+#include "median_calculation_utility.hpp"
 #include "testoptions.h"
 #include "PerFits.h"
 
 using pixel_type = float;
-const size_t num_random_vector = 100000;
+constexpr size_t num_random_vector = 100000;
 
 class beta_distribution {
  public:
@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
   assert(sizeof(pixel_type) == BytesPerElement);
 
   // Array to store results of the median calculation
-  std::vector<std::pair<pixel_type, median::vector_t>> result;
+  std::vector<std::pair<pixel_type, median::vector_t>> result(num_random_vector);
 
 #ifdef _OPENMP
 #pragma omp parallel
@@ -169,13 +169,15 @@ int main(int argc, char **argv) {
                     });
 
   // Print out the top 10 median values and corresponding pixel values
+  std::cout << "Top 10 median and corresponding pixel values" << std::endl;
   for (size_t i = 0; i < 10; ++i) {
     const pixel_type median = result[i].first;
     const median::vector_t vector = result[i].second;
-    std::cout << median << " : ";
+    std::cout << "[" << i << "] " << median << " : ";
     for (size_t k = 0; k < cube.size_k; ++k) {
       std::cout << cube.data[median::get_index(cube, vector, k)] << " ";
     }
+    std::cout << std::endl;
   }
 
   PerFits::PerFits_free_cube(cube.data);

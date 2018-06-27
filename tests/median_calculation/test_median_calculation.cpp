@@ -14,16 +14,22 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 
 #include <iostream>
+#include <cmath>
 
-#include "median_calculation_common.hpp"
 #include "torben.hpp"
+#include "median_calculation_utility.hpp"
 #include "testoptions.h"
 #include "PerFits.h"
 
-const float x_intercept[6] = {1058.2, 1325.606, 1010.564, 829.674, 1390.826, 1091.015};
-const float x_slope[6] = {3.5, 3.5, 3.5, 3.5, 3.5, 3.5};
-const float y_intercept[6] = {124, 424, 724, 1024, 1324, 1624};
-const float y_slope[6] = {0, 0, 0, 0, 0, 0};
+using pixel_type = float;
+
+constexpr size_t num_vectors = 6;
+const pixel_type x_intercept[num_vectors] = {1058.2, 1325.606, 1010.564, 829.674, 1390.826, 1091.015};
+const pixel_type x_slope[num_vectors] = {3.5, 3.5, 3.5, 3.5, 3.5, 3.5};
+const pixel_type y_intercept[num_vectors] = {124, 424, 724, 1024, 1324, 1624};
+const pixel_type y_slope[num_vectors] = {0, 0, 0, 0, 0, 0};
+const pixel_type correct_median[num_vectors] = {15003.20, 15175.20, 2350.31, 8754.78, 24897.66, 2599.63};
+
 
 // Iterator class to use torben function with vector model
 // This class is a minimum implementation of an iterator to use the torben function
@@ -94,16 +100,28 @@ int main(int argc, char** argv)
 
   cube.data = (float*)PerFits::PerFits_alloc_cube(&options, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
 
-  for (int i = 0; i < 6; ++i) {
-    std::cout << "\nEpoch: " << i << std::endl;
+  for (int i = 0; i < num_vectors; ++i) {
+    std::cout << "Vector " << i << std::endl;
+
     median::vector_t vector{x_intercept[i], x_slope[i], y_intercept[i], y_slope[i]};
     vector_iterator begin(cube, vector, 0);
     vector_iterator end(cube, vector, cube.size_k);
-    const auto median_val = median::torben(begin, end);
-    std::cout << "median value: " << median_val << std::endl;
+
+    // median calculation w/ Torben algorithm
+    const auto median_val = torben(begin, end);
+
+    // Check the result
+    if (std::fabs(median_val - correct_median[i]) < 0.01) {
+      std::cout << " Correct " <<  median_val << " == " << correct_median[i] << std::endl;
+    } else {
+      std::cerr << " Error " <<  median_val << " != " << correct_median[i] << std::endl;
+      std::abort();
+    }
   }
 
   PerFits::PerFits_free_cube(cube.data);
+
+  std::cout << "Passed all tests" << std::endl;
 
   return 0;
 }
