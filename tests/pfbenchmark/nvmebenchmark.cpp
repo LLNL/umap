@@ -46,6 +46,7 @@
 using namespace std;
 using namespace chrono;
 static uint64_t pagesize;
+static uint64_t pages_to_access;
 static char** tmppagebuf; // One per thread
 static int fd;
 static umt_optstruct_t options;
@@ -92,7 +93,7 @@ int read_pages(int argc, char **argv)
   }
 
   auto start_time = chrono::high_resolution_clock::now();
-  do_read_pages(options.numpages);
+  do_read_pages(pages_to_access);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << "nvme,"
@@ -101,7 +102,7 @@ int read_pages(int argc, char **argv)
       << "read,"
       << options.numthreads << ","
       << 0 << ","
-      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / pages_to_access << "\n";
 
   close(fd);
   return 0;
@@ -125,7 +126,7 @@ int write_pages(int argc, char **argv)
   }
 
   auto start_time = chrono::high_resolution_clock::now();
-  do_write_pages(options.numpages);
+  do_write_pages(pages_to_access);
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << "nvme,"
@@ -134,7 +135,7 @@ int write_pages(int argc, char **argv)
       << "write,"
       << options.numthreads << ","
       << 0 << ","
-      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / options.numpages << "\n";
+      << chrono::duration_cast<chrono::nanoseconds>(end_time - start_time).count() / pages_to_access << "\n";
 
   close(fd);
   return 0;
@@ -150,6 +151,8 @@ int main(int argc, char **argv)
 
   for (uint64_t i = 0; i < options.numpages; ++i)
     shuffled_indexes.push_back(i);
+
+  pages_to_access = options.pages_to_access ? options.pages_to_access : options.numpages;
 
   if ( options.shuffle )
     std::shuffle(shuffled_indexes.begin(), shuffled_indexes.end(), g);
