@@ -28,7 +28,7 @@ const pixel_type x_intercept[num_vectors] = {1058.2, 1325.606, 1010.564, 829.674
 const pixel_type x_slope[num_vectors] = {3.5, 3.5, 3.5, 3.5, 3.5, 3.5};
 const pixel_type y_intercept[num_vectors] = {124, 424, 724, 1024, 1324, 1624};
 const pixel_type y_slope[num_vectors] = {0, 0, 0, 0, 0, 0};
-const pixel_type correct_median[num_vectors] = {15003.20, 15175.20, 2350.31, 8754.78, 24897.66, 2599.63};
+const pixel_type correct_median[num_vectors] = {14913.25, 15223.21, 2284.29, 8939.15, 24899.55, 2395.80};
 
 
 // Iterator class to use torben function with vector model
@@ -111,6 +111,8 @@ int main(int argc, char** argv)
     const auto median_val = torben(begin, end);
 
     // Check the result
+    std::cout.setf(std::ios::fixed, std::ios::floatfield);
+    std::cout.precision(2);
     if (std::fabs(median_val - correct_median[i]) < 0.01) {
       std::cout << " Correct " <<  median_val << " == " << correct_median[i] << std::endl;
     } else {

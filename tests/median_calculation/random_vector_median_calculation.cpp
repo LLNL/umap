@@ -170,12 +170,14 @@ int main(int argc, char **argv) {
 
   // Print out the top 10 median values and corresponding pixel values
   std::cout << "Top 10 median and corresponding pixel values" << std::endl;
+  std::cout.setf(std::ios::fixed, std::ios::floatfield);
+  std::cout.precision(2);
   for (size_t i = 0; i < 10; ++i) {
     const pixel_type median = result[i].first;
     const median::vector_t vector = result[i].second;
     std::cout << "[" << i << "] " << median << " : ";
     for (size_t k = 0; k < cube.size_k; ++k) {
-      std::cout << cube.data[median::get_index(cube, vector, k)] << " ";
+      std::cout << median::reverse_byte_order(cube.data[median::get_index(cube, vector, k)]) << " ";
     }
     std::cout << std::endl;
   }
