@@ -8,12 +8,12 @@ if(OPENMP_FOUND)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
-    add_executable(simple_median_calculation simple_median_calculation_example.cpp)
-    target_link_libraries(simple_median_calculation libumap_static)
-    target_link_libraries(simple_median_calculation libtestoptions_static)
-    target_link_libraries(simple_median_calculation libPerFits_static)
-    target_link_libraries(simple_median_calculation ${CFITS_LIBRARY} )
-    install(TARGETS simple_median_calculation
+    add_executable(test_median_calculation test_median_calculation.cpp)
+    target_link_libraries(test_median_calculation libumap_static)
+    target_link_libraries(test_median_calculation libtestoptions_static)
+    target_link_libraries(test_median_calculation libPerFits_static)
+    target_link_libraries(test_median_calculation ${CFITS_LIBRARY} )
+    install(TARGETS test_median_calculation
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
