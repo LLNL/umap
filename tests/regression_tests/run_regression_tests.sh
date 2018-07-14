@@ -16,3 +16,8 @@ tar -xvf ../median_calculation/data/test_fits_files.tar.gz -C /tmp/
 test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch
 /bin/rm -f /tmp/test_fits_files/*
 /bin/rmdir  /tmp/test_fits_files
+
+# Test for BFS program
+ingest_edge_list -g /tmp/test_graph ../bfs/data/edge_list_rmat_s10_?_of_4
+test_bfs -n 1017 -m 32768 -g /tmp/test_graph -l ../bfs/data/bfs_level_reference
+/bin/rm -f /tmp/test_graph
