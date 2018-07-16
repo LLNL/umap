@@ -1,7 +1,17 @@
-//
-// Created by Iwabuchi, Keita on 6/22/18.
-//
-
+/*
+This file is part of UMAP.  For copyright information see the COPYRIGHT
+file in the top level directory, or at
+https://github.com/LLNL/umap/blob/master/COPYRIGHT
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License (as published by the Free
+Software Foundation) version 2.1 dated February 1999.  This program is
+distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the terms and conditions of the GNU Lesser General Public License
+for more details.  You should have received a copy of the GNU Lesser General
+Public License along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+*/
 #ifndef SIMPLE_BFS_MMAP_UTILITY_HPP
 #define SIMPLE_BFS_MMAP_UTILITY_HPP
 
@@ -31,7 +41,7 @@ ssize_t get_page_size() {
   return page_size;
 }
 
-/// \brief Map a file checking errors
+/// \brief Maps a file checking errors
 /// \param addr Same as mmap(2)
 /// \param length Same as mmap(2)
 /// \param protection Same as mmap(2)
@@ -76,12 +86,13 @@ void *map_file(void *const addr, const size_t length, const int protection, cons
   return mapped_addr;
 }
 
-/// \brief Map a file with read mode
+/// \brief Maps a file with read mode
 /// \param file_name The name of file to be mapped
-/// \param addr Normaly nullptr; if this is not nullptr the kernel takes it as a hint about where to place the mapping
-/// \param length The lenght of the map
+/// \param addr Normally nullptr; if this is not nullptr the kernel takes it as a hint about where to place the mapping
+/// \param length The length of the map
 /// \param offset The offset in the file
-/// \return A pair of the file descriptor of the file and the starting address for the map
+/// \return On Success, returns a pair of the file descriptor of the file and the starting address for the map.
+/// On error, retuns a pair of -1 and nullptr.
 std::pair<int, void *> map_file_read_mode(const std::string &file_name, void *const addr,
                                           const size_t length, const off_t offset,
                                           const int additional_flags = 0) {
@@ -103,12 +114,13 @@ std::pair<int, void *> map_file_read_mode(const std::string &file_name, void *co
   return std::make_pair(fd, mapped_addr);
 }
 
-/// \brief Map a file with write mode
-/// \param file_name The name of file to be mapped
-/// \param addr Normaly nullptr; if this is not nullptr the kernel takes it as a hint about where to place the mapping
-/// \param length The lenght of the map
+/// \brief Maps a file with write mode
+/// \param file_name The name of a file to be mapped
+/// \param addr Normally nullptr; if this is not nullptr the kernel takes it as a hint about where to place the mapping
+/// \param length The length of the map
 /// \param offset The offset in the file
-/// \return A pair of the file descriptor of the file and the starting address for the map
+/// \return On Success, returns a pair of the file descriptor of the file and the starting address for the map.
+/// On error, retuns a pair of -1 and nullptr.
 std::pair<int, void *> map_file_write_mode(const std::string &file_name, void *const addr,
                                            const size_t length, const off_t offset,
                                            const int additional_flags = 0) {

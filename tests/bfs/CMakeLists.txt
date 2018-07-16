@@ -39,7 +39,7 @@ if(OPENMP_FOUND)
             RUNTIME DESTINATION bin )
 
 else()
-  message("Skipping median_calculation, OpenMP required")
+  message("Skipping bfs, OpenMP required")
 endif()
 
 
