@@ -18,7 +18,12 @@ export BUILD_DIR=build-${SYS_TYPE}
 export COMPILER=${1:-gcc_8_8_5}
 export BUILD_TYPE=${2:-Release}
 
-echo ${SCIPTPATH} ${UMAP_DIR} ${BUILD_DIR} ${COMPILER} ${BUILD_TYPE}
+echo "SCRIPTPATH=${SCIPTPATH}"
+echo "UMAP_DIR=${UMAP_DIR}"
+echo "BUILD_DIR=${BUILD_DIR}"
+echo "COMPILER=${COMPILER}"
+echo "BUILD_TYPE=${BUILD_TYPE}"
+
 exit
 
 mkdir ${BUILD_DIR} 2> /dev/null
