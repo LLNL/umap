@@ -45,7 +45,9 @@ trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sor
 # Test for median calculation using fits files
 trycmd "tar -xvf $UMAP_DIR/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
 trycmd "./tests/median_calculation/test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch"
-/bin/rm -rf /tmp/test_fits_files
-trycmd "./tests/bfs/ingest_edge_list -g /tmp/test_graph ./tests/bfs/data/edge_list_rmat_s10_0_of_4 ./tests/bfs/data/edge_list_rmat_s10_1_of_4 ./tests/bfs/data/edge_list_rmat_s10_2_of_4  ./tests/bfs/data/edge_list_rmat_s10_3_of_4"
+
+trycmd "./tests/bfs/ingest_edge_list -g /tmp/test_graph /tmp/test_fits_file/edge_list_rmat_s10_0_of_4 /tmp/test_fits_file/edge_list_rmat_s10_1_of_4 /tmp/test_fits_file/edge_list_rmat_s10_2_of_4  /tmp/test_fits_file/edge_list_rmat_s10_3_of_4"
 trycmd "./tests/bfs/test_bfs -n 1017 -m 32768 -g /tmp/test_graph -l ./tests/bfs/data/bfs_level_reference"
+
+/bin/rm -rf /tmp/test_fits_files
 /bin/rm -f /tmp/test_graph
