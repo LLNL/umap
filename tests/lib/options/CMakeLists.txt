@@ -1,13 +1,12 @@
 project(umap_testoptions)
 
+add_dependencies( umap_testoptions libumap libumap_static )
+
 add_library(libtestoptions SHARED testoptions.cpp)
 add_library(libtestoptions_static STATIC testoptions.cpp)
 
 target_link_libraries(libtestoptions libumap)
 target_link_libraries(libtestoptions_static libumap_static)
-
-add_dependencies(libtestoptions libumap)
-add_dependencies(libtestoptions_static libumap_static)
 
 set_target_properties(libtestoptions_static PROPERTIES OUTPUT_NAME libtestoptions)
 
