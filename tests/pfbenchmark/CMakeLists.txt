@@ -12,6 +12,12 @@ if(OPENMP_FOUND)
     add_executable(nvmebenchmark-read nvmebenchmark.cpp)
     add_executable(nvmebenchmark-write nvmebenchmark.cpp)
 
+    add_dependencies(pfbenchmark-read libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(pfbenchmark-write libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(pfbenchmark-readmodifywrite libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(nvmebenchmark-read libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(nvmebenchmark-write libumap_static libtestoptions_static libPerFile_static)
+
     target_link_libraries(pfbenchmark-read libumap_static libtestoptions_static libPerFile_static)
     target_link_libraries(pfbenchmark-write libumap_static libtestoptions_static libPerFile_static)
     target_link_libraries(pfbenchmark-readmodifywrite libumap_static libtestoptions_static libPerFile_static)
