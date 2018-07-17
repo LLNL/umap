@@ -10,10 +10,11 @@
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
 
-function trycmd()
+cmd=""
+function trycmd
 {
-  echo $1
-  $1
+  echo $cmd
+  $cmd
 
   if [ $? -ne 0 ]; then
     echo "Error"
@@ -36,7 +37,7 @@ cd ${BUILD_DIR}
 echo "Configuring..."
 
 cmd="cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
-trycmd($cmd)
+trycmd
 
 echo "Building..."
 make -j
