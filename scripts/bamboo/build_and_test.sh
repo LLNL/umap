@@ -17,7 +17,7 @@ export BUILD_DIR=build-${SYS_TYPE}
 
 export COMPILER=${1:-gcc_4_8_5}
 export BUILD_TYPE=${2:-Release}
-export BUILD_OPTIONS=-DENABLE_STATS=On -DENABLE_CFITS=On -DENABLE_FITS_TESTS=On -DCFITS_LIBRARY_PATH=/g/g0/martymcf/.bin/cfitsio/lib -DCFITS_INCLUDE_PATH=/g/g0/martymcf/.bin/cfitsio/include ${BUILD_OPTIONS}
+export BUILD_OPTIONS="-DENABLE_STATS=On -DENABLE_CFITS=On -DENABLE_FITS_TESTS=On -DCFITS_LIBRARY_PATH=/g/g0/martymcf/.bin/cfitsio/lib -DCFITS_INCLUDE_PATH=/g/g0/martymcf/.bin/cfitsio/include ${BUILD_OPTIONS}"
 
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
