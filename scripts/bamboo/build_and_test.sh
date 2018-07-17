@@ -13,8 +13,8 @@
 cmd=""
 function trycmd
 {
-  echo $cmd
-  $cmd
+  echo $1
+  $1
 
   if [ $? -ne 0 ]; then
     echo "Error"
@@ -34,10 +34,8 @@ export BUILD_OPTIONS="-DENABLE_STATS=On -DENABLE_CFITS=On -DENABLE_FITS_TESTS=On
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
-echo "Configuring..."
-
-cmd="cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
-trycmd
+#cmd="cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
+trycmd "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 
 echo "Building..."
 make -j
