@@ -10,6 +10,8 @@
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
 
+dirname $0
+
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 export UMAP_DIR=$(git rev-parse --show-toplevel)
