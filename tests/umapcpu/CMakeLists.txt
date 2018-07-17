@@ -7,9 +7,8 @@ if(OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     add_executable(umapcpu umapcpu.cpp)
 
-    target_link_libraries(umapcpu libumap_static)
-    target_link_libraries(umapcpu libtestoptions_static)
-    target_link_libraries(umapcpu libPerFile_static)
+    add_dependencies(umapcpu libumap_static libtestoptions_static libPerFile_static)
+    target_link_libraries(umapcpu libumap_static libtestoptions_static libPerFile_static)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 

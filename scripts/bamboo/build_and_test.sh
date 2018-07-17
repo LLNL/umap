@@ -10,30 +10,44 @@
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+function trycmd
+{
+  echo $1
+  $1
+
+  if [ $? -ne 0 ]; then
+    echo "Error"
+    exit -1
+  fi
+}
+
+cd `dirname $0`
 
 export UMAP_DIR=$(git rev-parse --show-toplevel)
 export BUILD_DIR=build-${SYS_TYPE}
 
-export COMPILER=${1:-gcc_8_8_5}
+export COMPILER=${1:-gcc_4_8_5}
 export BUILD_TYPE=${2:-Release}
-
-echo ${UMAP_DIR} ${BUILD_DIR} ${COMPILER} ${BUILD_TYPE}
-exit
+export BUILD_OPTIONS="-DENABLE_STATS=On -DENABLE_CFITS=On -DENABLE_FITS_TESTS=On -DCFITS_LIBRARY_PATH=/g/g0/martymcf/.bin/cfitsio/lib -DCFITS_INCLUDE_PATH=/g/g0/martymcf/.bin/cfitsio/include ${BUILD_OPTIONS}"
 
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
-echo "Configuring..."
+#cmd="cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
+trycmd "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 
-cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ../
+trycmd "make -j"
 
-echo "Building..."
-make VERBOSE=1 -j
+trycmd "./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10"
+trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16"
+/bin/rm -f /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat
 
-echo "Testing..."
-# if [[ $HOSTNAME == *manta* ]]; then
-  # bsub -x -n 1 -G guests -Ip ctest -T Test
-# else
-  # srun -ppdebug -t 5 -N 1 ctest -T Test
-# fi
+# Test for median calculation using fits files
+trycmd "tar -xvf $UMAP_DIR/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
+trycmd "./tests/median_calculation/test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch"
+/bin/rm -rf /tmp/test_fits_files
+
+trycmd "./tests/bfs/ingest_edge_list -g /tmp/test_graph $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_0_of_4 $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_1_of_4 $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_2_of_4 $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_3_of_4"
+trycmd "./tests/bfs/test_bfs -n 1017 -m 32768 -g /tmp/test_graph -l $UMAP_DIR/tests/bfs/data/bfs_level_reference"
+
+/bin/rm -f /tmp/test_graph

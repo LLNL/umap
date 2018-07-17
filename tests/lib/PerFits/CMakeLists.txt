@@ -18,6 +18,12 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
 
 add_custom_command (
+  TARGET libPerFits_static
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/PerFits.h ${CMAKE_BINARY_DIR}/include/PerFits.h
+)
+
+add_custom_command (
   TARGET libPerFits
   POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/PerFits.h ${CMAKE_BINARY_DIR}/include/PerFits.h
