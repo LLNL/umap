@@ -6,6 +6,9 @@ add_library(libtestoptions_static STATIC testoptions.cpp)
 target_link_libraries(libtestoptions libumap)
 target_link_libraries(libtestoptions_static libumap_static)
 
+add_dependencies(libtestoptions libumap)
+add_dependencies(libtestoptions_static libumap_static)
+
 set_target_properties(libtestoptions_static PROPERTIES OUTPUT_NAME libtestoptions)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
