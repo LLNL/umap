@@ -10,7 +10,6 @@
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
 
-cmd=""
 function trycmd
 {
   echo $1
@@ -37,35 +36,14 @@ cd ${BUILD_DIR}
 #cmd="cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 trycmd "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 
-echo "Building..."
-make -j
-if [ $? -ne 0 ]; then
-  echo "Build Failed"
-  exit -1
-fi
+trycmd "make -j"
 
-echo "Testing..."
-./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10
-if [ $? -ne 0 ]; then
-  echo "./tests/churn/churn Failed"
-  exit -1
-fi
-
-./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16
-if [ $? -ne 0 ]; then
-  echo "./tests/churn/churn Failed"
-  exit -1
-fi
+trycmd "./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10"
+trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16"
 /bin/rm -f /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat
 
 # Test for median calculation using fits files
-tar -xvf $UMAP_DIR/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/
-test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch
-/bin/rm -f /tmp/test_fits_files/*
-/bin/rmdir  /tmp/test_fits_files
+trycmd "tar -xvf $UMAP_DIR/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
+trycmd "test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch"
+/bin/rm -rf /tmp/test_fits_files
 
-# if [[ $HOSTNAME == *manta* ]]; then
-  # bsub -x -n 1 -G guests -Ip ctest -T Test
-# else
-  # srun -ppdebug -t 5 -N 1 ctest -T Test
-# fi
