@@ -11,7 +11,6 @@
 ##############################################################################
 
 cd `dirname $0`
-SCRIPTPATH=`pwd -L`
 
 export UMAP_DIR=$(git rev-parse --show-toplevel)
 export BUILD_DIR=build-${SYS_TYPE}
@@ -19,19 +18,12 @@ export BUILD_DIR=build-${SYS_TYPE}
 export COMPILER=${1:-gcc_8_8_5}
 export BUILD_TYPE=${2:-Release}
 
-echo "SCRIPTPATH=${SCIPTPATH}"
-echo "UMAP_DIR=${UMAP_DIR}"
-echo "BUILD_DIR=${BUILD_DIR}"
-echo "COMPILER=${COMPILER}"
-echo "BUILD_TYPE=${BUILD_TYPE}"
-
-exit
-
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
 echo "Configuring..."
 
+echo "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ../"
 cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ../
 
 echo "Building..."
