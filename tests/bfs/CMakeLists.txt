@@ -9,30 +9,18 @@ if(OPENMP_FOUND)
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
     add_executable(ingest_edge_list ingest_edge_list.cpp)
-    target_link_libraries(ingest_edge_list)
-    target_link_libraries(ingest_edge_list)
-    target_link_libraries(ingest_edge_list)
-    target_link_libraries(ingest_edge_list)
     install(TARGETS ingest_edge_list
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 
     add_executable(run_bfs run_bfs.cpp)
-    target_link_libraries(run_bfs)
-    target_link_libraries(run_bfs)
-    target_link_libraries(run_bfs)
-    target_link_libraries(run_bfs)
     install(TARGETS run_bfs
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 
     add_executable(test_bfs test_bfs.cpp)
-    target_link_libraries(test_bfs)
-    target_link_libraries(test_bfs)
-    target_link_libraries(test_bfs)
-    target_link_libraries(test_bfs)
     install(TARGETS test_bfs
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
