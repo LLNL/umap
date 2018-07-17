@@ -31,6 +31,10 @@ echo "Building..."
 make VERBOSE=1 -j
 
 echo "Testing..."
+./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10
+./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 48
+/bin/rm -f /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat
+
 # if [[ $HOSTNAME == *manta* ]]; then
   # bsub -x -n 1 -G guests -Ip ctest -T Test
 # else
