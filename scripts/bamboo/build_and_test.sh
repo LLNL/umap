@@ -26,6 +26,10 @@ echo "Configuring..."
 
 echo "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}
+if [ $? -ne 0 ]; then
+  echo "Configuration Failed"
+  exit -1
+fi
 
 echo "Building..."
 make VERBOSE=1 -j
