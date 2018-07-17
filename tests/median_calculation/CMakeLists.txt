@@ -18,7 +18,7 @@ if(OPENMP_FOUND)
             RUNTIME DESTINATION bin )
 
     add_executable(random_vector_median_calculation random_vector_median_calculation.cpp)
-    add_dependencies(random_vector_median_calculation libumap_static libtestoptions_static libPerFits_static ${CFITS_LIBRARY} )
+    add_dependencies(random_vector_median_calculation libumap_static libtestoptions_static libPerFits_static )
     target_link_libraries(random_vector_median_calculation libumap_static libtestoptions_static libPerFits_static ${CFITS_LIBRARY} )
 
     install(TARGETS random_vector_median_calculation
