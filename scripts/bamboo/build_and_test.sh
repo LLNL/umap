@@ -32,7 +32,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Building..."
-make VERBOSE=1 -j
+make -j
 
 echo "Testing..."
 ./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10
