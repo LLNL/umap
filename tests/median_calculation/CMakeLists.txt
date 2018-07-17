@@ -11,7 +11,7 @@ if(OPENMP_FOUND)
     add_executable(test_median_calculation test_median_calculation.cpp)
 
     add_dependencies(test_median_calculation libtestoptions_static libumap_static libPerFile_static)
-    target_link_libraries(test_median_calculation libumap_static libtestoptions_static libPerFits_static ${CFITS_LIBRARY} )
+    target_link_libraries(test_median_calculation libumap_static libtestoptions_static libPerFits_static ${CFITS_LIBRARY} libcurl )
     install(TARGETS test_median_calculation
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
@@ -19,7 +19,7 @@ if(OPENMP_FOUND)
 
     add_executable(random_vector_median_calculation random_vector_median_calculation.cpp)
     add_dependencies(random_vector_median_calculation libumap_static libtestoptions_static libPerFits_static )
-    target_link_libraries(random_vector_median_calculation libumap_static libtestoptions_static libPerFits_static ${CFITS_LIBRARY} )
+    target_link_libraries(random_vector_median_calculation libumap_static libtestoptions_static libPerFits_static ${CFITS_LIBRARY} libcurl )
 
     install(TARGETS random_vector_median_calculation
             LIBRARY DESTINATION lib
