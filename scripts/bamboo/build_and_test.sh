@@ -28,12 +28,11 @@ export BUILD_DIR=build-${SYS_TYPE}
 
 export COMPILER=${1:-gcc_4_8_5}
 export BUILD_TYPE=${2:-Release}
-export BUILD_OPTIONS="-DENABLE_STATS=On -DENABLE_CFITS=On -DENABLE_FITS_TESTS=On -DCFITS_LIBRARY_PATH=/g/g0/martymcf/.bin/cfitsio/lib -DCFITS_INCLUDE_PATH=/g/g0/martymcf/.bin/cfitsio/include ${BUILD_OPTIONS}"
+export BUILD_OPTIONS="-DENABLE_STATS=On -DENABLE_CFITS=Off -DENABLE_FITS_TESTS=Off ${BUILD_OPTIONS}"
 
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
-#cmd="cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 trycmd "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ${BUILD_OPTIONS} ${UMAP_DIR}"
 
 trycmd "make -j"
@@ -42,12 +41,3 @@ trycmd "./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 1000
 trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16"
 /bin/rm -f /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat
 
-# Test for median calculation using fits files
-trycmd "tar -xvf $UMAP_DIR/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
-trycmd "./tests/median_calculation/test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch"
-/bin/rm -rf /tmp/test_fits_files
-
-trycmd "./tests/bfs/ingest_edge_list -g /tmp/test_graph $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_0_of_4 $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_1_of_4 $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_2_of_4 $UMAP_DIR/tests/bfs/data/edge_list_rmat_s10_3_of_4"
-trycmd "./tests/bfs/test_bfs -n 1017 -m 32768 -g /tmp/test_graph -l $UMAP_DIR/tests/bfs/data/bfs_level_reference"
-
-/bin/rm -f /tmp/test_graph
