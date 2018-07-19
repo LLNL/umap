@@ -112,11 +112,21 @@ int main(int argc, char **argv) {
   umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
 
+#ifdef _OPENMP
+  omp_set_num_threads(options.numthreads);
+#endif
+
   size_t BytesPerElement;
   median::cube_t<pixel_type> cube;
 
   // Alloc memory space and read data from fits files with umap
   cube.data = (pixel_type *)PerFits::PerFits_alloc_cube(&options, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
+
+  if (cube.data == nullptr) {
+    std::cerr << "Failed to allocate memory for cube\n";
+    return -1;
+  }
+
   assert(sizeof(pixel_type) == BytesPerElement);
 
   // Array to store results of the median calculation
@@ -145,8 +155,8 @@ int main(int argc, char **argv) {
       double x_intercept = x_start_dist(rnd_engine);
       double y_intercept = y_start_dist(rnd_engine);
 
-      double x_slope = x_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
-      double y_slope = y_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
+      double x_slope = x_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 2;
+      double y_slope = y_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 2;
 
       median::vector_t vector{x_intercept, x_slope, y_intercept, y_slope};
 

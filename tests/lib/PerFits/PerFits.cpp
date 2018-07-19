@@ -25,6 +25,7 @@
 #include <sstream>
 #include <cassert>
 #include <unordered_map>
+#include <algorithm>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -53,15 +54,26 @@ static ssize_t ps_read(void* region, void* buf, size_t nbytes, off_t region_offs
   assert( "ps_read: failed to find control object" && it != Cubes.end() );
   Cube* cube = it->second;
   ssize_t rval;
-  off_t tileno = region_offset / cube->tile_size;
-  off_t tileoffset = region_offset % cube->tile_size;
+  ssize_t bytesread = 0;
 
-  if ( ( rval = cube->tiles[tileno].pread(buf, nbytes, tileoffset) ) == -1) {
-    perror("ERROR: pread failed");
-    exit(1);
+  while ( nbytes ) {
+    off_t tileno = region_offset / cube->tile_size;
+    off_t tileoffset = region_offset % cube->tile_size;
+    size_t bytes_to_eof = cube->tile_size - tileoffset;
+    size_t bytes_to_read = std::min(bytes_to_eof, nbytes);
+
+    if ( ( rval = cube->tiles[tileno].pread(buf, bytes_to_read, tileoffset) ) == -1) {
+      perror("ERROR: pread failed");
+      exit(1);
+    }
+
+    bytesread += rval;
+    nbytes -= bytes_to_read;
+    buf = (void*)((char*)buf + bytes_to_read);
+    region_offset += bytes_to_read;
   }
 
-  return rval;
+  return bytesread;
 }
 
 static ssize_t ps_write(void* region, void* buf, size_t nbytes, off_t region_offset)
@@ -101,7 +113,8 @@ void* PerFits_alloc_cube(
   *xDim = *yDim = *BytesPerElement = 0;
   for (int i = 1; ; ++i) {
     stringstream ss;
-    ss << basename << std::setfill('0') << std::setw(3) << i << ".fits";
+    //ss << basename << std::setfill('0') << std::setw(3) << i << ".fits";
+    ss << basename << i << ".fits";
     struct stat sbuf;
 
     if ( stat(ss.str().c_str(), &sbuf) == -1 ) {
@@ -114,7 +127,7 @@ void* PerFits_alloc_cube(
 
     Fits::Tile T(ss.str());
 
-    // cout << T << endl;
+    //cout << T << endl;
 
     Fits::Tile_Dim dim = T.get_Dim();
     if ( *BytesPerElement == 0 ) {
@@ -133,6 +146,12 @@ void* PerFits_alloc_cube(
     cube->tiles.push_back(T);
   }
 
+  // Make sure that our cube is padded if necessary to be page aligned
+  
+  long psize = umt_getpagesize();
+  long remainder = cube->cube_size % psize;
+
+  cube->cube_size += remainder ? (psize - remainder) : 0;
 
   const int prot = PROT_READ|PROT_WRITE;
   int flags = UMAP_PRIVATE;

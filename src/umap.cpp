@@ -221,7 +221,10 @@ void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_psto
   if (check_uffd_compatibility() < 0)
     return NULL;
 
-  assert("UMAP: Region size must be multple of page_size" && (region_size % page_size) == 0);
+  if ( (region_size % page_size) ) {
+    cerr << "UMAP: Region size " << region_size << " is not a multple of page_size (" << page_size << ")\n";
+    return NULL;
+  }
 
   if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
     cerr << "umap: Invalid flags: " << hex << flags << endl;
@@ -724,7 +727,6 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   else
     ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")";
 
-  umapdbg("%s\n", ss.str().c_str());
   for (pm = pagebuffer->alloc_page_desc(page_begin); pm == nullptr; pm = pagebuffer->alloc_page_desc(page_begin)) {
     umap_page* ep = pagebuffer->get_page_desc_to_evict();
     assert(ep != nullptr);
