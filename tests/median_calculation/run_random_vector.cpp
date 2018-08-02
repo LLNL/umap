@@ -23,10 +23,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <omp.h>
 #endif
 
-#include "torben.hpp"
-#include "median_calculation_utility.hpp"
 #include "testoptions.h"
 #include "PerFits.h"
+#include "torben.hpp"
+#include "utility.hpp"
+#include "vector.hpp"
 
 using pixel_type = float;
 constexpr size_t num_random_vector = 100000;
@@ -49,65 +50,6 @@ class beta_distribution {
   std::gamma_distribution<> m_y_gamma;
 };
 
-// Iterator class to use torben function with vector model
-// This class is a minimum implementation of an iterator to use the torben function
-class vector_iterator {
- public:
-  // Required types to use some stl functions
-  using value_type = pixel_type;
-  using difference_type = ssize_t;
-  using iterator_category = std::random_access_iterator_tag;
-  using pointer = value_type *;
-  using reference = value_type &;
-
-  // Constructor
-  vector_iterator(const median::cube_t<pixel_type> &_cube,
-                         const median::vector_t &_vector,
-                         const size_t _start_pos)
-      : cube(_cube),
-        vector(_vector),
-        current_pos(_start_pos) {}
-
-  // Use default copy constructor
-  vector_iterator(const vector_iterator&) = default;
-
-  // To support
-  // iterator1 != iterator2
-  bool operator!=(const vector_iterator &other) {
-    return current_pos != other.current_pos;
-  }
-
-  // To support
-  // difference_type diff = iterator2 - iterator1
-  difference_type operator-(const vector_iterator &other) {
-    return current_pos - other.current_pos;
-  }
-
-  // To support
-  // value_type val = *iterator
-  value_type operator*() {
-    return median::reverse_byte_order(cube.data[median::get_index(cube, vector, current_pos)]);
-  }
-
-  // To support
-  // value_type val = iterator[1]
-  value_type operator[](size_t pos) {
-    return median::reverse_byte_order(cube.data[median::get_index(cube, vector, pos)]);
-  }
-
-  // To support
-  // ++iterator
-  value_type operator++() {
-    size_t tmp = current_pos;
-    ++current_pos;
-    return (*this)[tmp];
-  }
-
-  median::cube_t<pixel_type> cube;
-  median::vector_t vector;
-  size_t current_pos;
-};
-
 int main(int argc, char **argv) {
   umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
@@ -120,7 +62,7 @@ int main(int argc, char **argv) {
   assert(sizeof(pixel_type) == BytesPerElement);
 
   // Array to store results of the median calculation
-  std::vector<std::pair<pixel_type, median::vector_t>> result(num_random_vector);
+  std::vector<std::pair<pixel_type, vector_t>> result(num_random_vector);
 
 #ifdef _OPENMP
 #pragma omp parallel
@@ -148,10 +90,10 @@ int main(int argc, char **argv) {
       double x_slope = x_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
       double y_slope = y_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 25;
 
-      median::vector_t vector{x_intercept, x_slope, y_intercept, y_slope};
+      vector_t vector{x_intercept, x_slope, y_intercept, y_slope};
 
-      vector_iterator begin(cube, vector, 0);
-      vector_iterator end(cube, vector, cube.size_k);
+      vector_iterator<pixel_type> begin(cube, vector, 0);
+      vector_iterator<pixel_type> end(vector_iterator<pixel_type>::create_end(cube, vector));
 
       // median calculation w/ Torben algorithm
       result[i].first = torben(begin, end);
@@ -163,8 +105,8 @@ int main(int argc, char **argv) {
   std::partial_sort(result.begin(),
                     result.begin() + 10, // get only top 10 elements
                     result.end(),
-                    [](const std::pair<pixel_type, median::vector_t> &lhd,
-                       const std::pair<pixel_type, median::vector_t> &rhd) {
+                    [](const std::pair<pixel_type, vector_t> &lhd,
+                       const std::pair<pixel_type, vector_t> &rhd) {
                       return (lhd.first > rhd.first);
                     });
 
@@ -174,10 +116,10 @@ int main(int argc, char **argv) {
   std::cout.precision(2);
   for (size_t i = 0; i < 10; ++i) {
     const pixel_type median = result[i].first;
-    const median::vector_t vector = result[i].second;
+    const vector_t vector = result[i].second;
     std::cout << "[" << i << "] " << median << " : ";
     for (size_t k = 0; k < cube.size_k; ++k) {
-      std::cout << median::reverse_byte_order(cube.data[median::get_index(cube, vector, k)]) << " ";
+      std::cout << median::reverse_byte_order(cube.data[get_index(cube, vector, k)]) << " ";
     }
     std::cout << std::endl;
   }
