@@ -92,13 +92,9 @@ typename iterator_type::value_type
 torben(iterator_type iterator_begin, iterator_type iterator_end) {
   using value_type = typename std::iterator_traits<iterator_type>::value_type;
 
-  value_type min;
-  value_type max;
-
-  // get a value of the starting point
-  min = max = iterator_begin[0];
-
   // ---------- Find min and max value over time frame ---------- //
+  value_type min = *iterator_begin;
+  value_type max = *iterator_begin;
   for (auto iterator(iterator_begin); iterator != iterator_end; ++iterator) {
     const value_type value = *iterator;
     min = std::min(min, value);

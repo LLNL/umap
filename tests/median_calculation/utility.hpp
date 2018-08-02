@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <limits>
 
 #define MEDIAN_CALCULATION_COLUMN_MAJOR 1
-#define MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
+// #define MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
 
 namespace median
 {
@@ -78,7 +78,9 @@ inline ssize_t get_index(const cube_t<pixel_type>& cube, const size_t x, const s
 
   if (get_frame_size(cube) <= frame_index) {
 #ifdef MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
-    std::cerr << "Frame index is out-of-range: " << frame_index << std::endl;
+    std::cerr << "Frame index is out-of-range: "
+              << "(" << x << ", " << y << ") is out of "
+              << "(" << cube.size_x << ", " << cube.size_y << ")" << std::endl;
 #endif
     return -1;
   }
@@ -87,7 +89,9 @@ inline ssize_t get_index(const cube_t<pixel_type>& cube, const size_t x, const s
 
   if (get_cube_size(cube) <= cube_index) {
 #ifdef MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
-    std::cerr << "Cube index is out-of-range: " << cube_index << std::endl;
+    std::cerr << "Cube index is out-of-range: "
+              << "(" << x << ", " << y << ", " << k << ") is out of "
+              << "(" << cube.size_x << ", " << cube.size_y << ", " << cube.size_k << ")" << std::endl;
 #endif
     return -1;
   }

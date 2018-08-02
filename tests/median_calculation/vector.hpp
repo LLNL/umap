@@ -63,6 +63,9 @@ class vector_iterator {
       : cube(_cube),
         vector(_vector),
         current_pos(_start_pos) {
+    // Note that when 'end' iterator is given to copy-constructor and MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE is ON,
+    // this code will trigger the out-of-range error message in get_index() function
+    // although passing an 'end' iterator to copy-constructor is an expected behaivor
     if (is_out_of_range(current_pos)) {
       move_to_end();
     }
@@ -91,13 +94,6 @@ class vector_iterator {
   }
 
   // To support
-  // value_type val = iterator[1]
-  value_type operator[](size_t pos) {
-    assert(!is_out_of_range(pos)); // for sanitary check
-    return median::reverse_byte_order(cube.data[get_index(cube, vector, pos)]);
-  }
-
-  // To support
   // ++iterator
   vector_iterator& operator++() {
     increment_index();
@@ -112,27 +108,32 @@ class vector_iterator {
   }
 
  private:
-  // Increment index skipping 'nan' value.
-  // When the index is out-of-range, index points the 'end' position
+  // Increment position skipping 'nan' value.
   void increment_index() {
-    if (current_pos < cube.size_k) {
-      ++current_pos;
-    }
-    if (is_out_of_range(current_pos)) {
-      move_to_end();
-      return;
-    }
+    ++current_pos;
 
-    // Skip 'nan' value
-    while (current_pos < cube.size_k && (*this)[current_pos] == median::nan<pixel_type>::value) {
-      ++current_pos;
+    // Skip 'nan' values
+    // When vector points out side of the cube, set this iterator to 'end' position
+    while (true) {
+      if (cube.size_k <= current_pos) {
+        break;
+      }
+
       if (is_out_of_range(current_pos)) {
         move_to_end();
-        return;
+        break;
       }
+
+      const value_type current_value = *(*this);
+      if (current_value != median::nan<pixel_type>::value) {
+        break; // Found next non-'nan' value
+      }
+
+      ++current_pos;
     }
   }
 
+  // move position to the 'end' position
   void move_to_end() {
     current_pos = cube.size_k;
   }
