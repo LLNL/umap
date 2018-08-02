@@ -155,6 +155,10 @@ int main(int argc, char **argv) {
       double x_intercept = x_start_dist(rnd_engine);
       double y_intercept = y_start_dist(rnd_engine);
 
+      // Changed to the const value to 2 from 25 so that vectors won't access 
+      // out of range of the cube with a large number of frames
+      //
+      // This is a temporary measures
       double x_slope = x_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 2;
       double y_slope = y_beta_dist(rnd_engine) * plus_or_minus(rnd_engine) * 2;
 
