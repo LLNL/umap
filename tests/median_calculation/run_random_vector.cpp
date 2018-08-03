@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
       vector_iterator<pixel_type> begin(cube, vector, 0);
       vector_iterator<pixel_type> end(vector_iterator<pixel_type>::create_end(cube, vector));
 
-      // median calculation w/ Torben algorithm
+      // median calculation using Torben algorithm
       result[i].first = torben(begin, end);
       result[i].second = vector;
     }
@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
                     });
 
   // Print out the top 10 median values and corresponding pixel values
-  std::cout << "Top 10 median and corresponding pixel values" << std::endl;
+  std::cout << "Top 10 median and corresponding pixel values (nan values are not used in median calculation)" << std::endl;
   std::cout.setf(std::ios::fixed, std::ios::floatfield);
   std::cout.precision(2);
   for (size_t i = 0; i < 10; ++i) {
@@ -119,7 +119,11 @@ int main(int argc, char **argv) {
     const vector_t vector = result[i].second;
     std::cout << "[" << i << "] " << median << " : ";
     for (size_t k = 0; k < cube.size_k; ++k) {
-      std::cout << median::reverse_byte_order(cube.data[get_index(cube, vector, k)]) << " ";
+      const ssize_t index = get_index(cube, vector, k);
+      if (index == -1)
+        std::cout << median::reverse_byte_order(cube.data[index]) << " ";
+      else
+        std::cout << "nan ";
     }
     std::cout << std::endl;
   }

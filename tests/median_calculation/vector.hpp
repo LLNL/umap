@@ -108,7 +108,6 @@ class vector_iterator {
   }
 
  private:
-  // Increment position skipping 'nan' value.
   void increment_index() {
     ++current_pos;
 
