@@ -29,7 +29,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <cmath>
 #include <cfenv>
 #include <cassert>
-#include <limits>
 
 #define MEDIAN_CALCULATION_COLUMN_MAJOR 1
 // #define MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
@@ -38,9 +37,10 @@ namespace median
 {
 
 template <typename pixel_type>
-struct nan {
-  static constexpr pixel_type value = std::numeric_limits<pixel_type>::max();
-};
+bool is_nan(const pixel_type value)
+{
+  return std::isnan(value);
+}
 
 template <typename _pixel_type>
 struct cube_t {

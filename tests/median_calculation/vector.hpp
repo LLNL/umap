@@ -68,6 +68,12 @@ class vector_iterator {
     // although passing an 'end' iterator to copy-constructor is an expected behaivor
     if (is_out_of_range(current_pos)) {
       move_to_end();
+      return;
+    }
+
+    const value_type current_value = *(*this);
+    if (median::is_nan(current_value)) {
+      move_to_next_valid_position();
     }
   }
 
@@ -75,9 +81,15 @@ class vector_iterator {
   vector_iterator(const vector_iterator&) = default;
 
   // To support
+  // iterator1 == iterator2
+  bool operator==(const vector_iterator &other) {
+    return current_pos == other.current_pos;
+  }
+
+  // To support
   // iterator1 != iterator2
   bool operator!=(const vector_iterator &other) {
-    return current_pos != other.current_pos;
+    return !(*this == other);
   }
 
   // To support
@@ -96,7 +108,7 @@ class vector_iterator {
   // To support
   // ++iterator
   vector_iterator& operator++() {
-    increment_index();
+    move_to_next_valid_position();
     return (*this);
   }
 
@@ -108,13 +120,14 @@ class vector_iterator {
   }
 
  private:
-  void increment_index() {
+  void move_to_next_valid_position() {
     ++current_pos;
 
     // Skip 'nan' values
-    // When vector points out side of the cube, set this iterator to 'end' position
+    // When the vector is outside of the cube, move to the 'end' position
     while (true) {
       if (cube.size_k <= current_pos) {
+        move_to_end();
         break;
       }
 
@@ -124,7 +137,7 @@ class vector_iterator {
       }
 
       const value_type current_value = *(*this);
-      if (current_value != median::nan<pixel_type>::value) {
+      if (median::is_nan(current_value)) {
         break; // Found next non-'nan' value
       }
 

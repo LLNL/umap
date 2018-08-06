@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
                     });
 
   // Print out the top 10 median values and corresponding pixel values
-  std::cout << "Top 10 median and corresponding pixel values (nan values are not used in median calculation)" << std::endl;
+  std::cout << "Top 10 median and corresponding pixel values (NaN values are not used in median calculation)" << std::endl;
   std::cout.setf(std::ios::fixed, std::ios::floatfield);
   std::cout.precision(2);
   for (size_t i = 0; i < 10; ++i) {
@@ -134,10 +134,12 @@ int main(int argc, char **argv) {
     std::cout << "[" << i << "] " << median << " : ";
     for (size_t k = 0; k < cube.size_k; ++k) {
       const ssize_t index = get_index(cube, vector, k);
-      if (index == -1)
-        std::cout << median::reverse_byte_order(cube.data[index]) << " ";
+      if (index == -1) continue;
+      const pixel_type value = median::reverse_byte_order(cube.data[index]);
+      if (median::is_nan(value))
+        std::cout << "'NaN' ";
       else
-        std::cout << "nan ";
+        std::cout << median::reverse_byte_order(cube.data[index]) << " ";
     }
     std::cout << std::endl;
   }

@@ -32,7 +32,7 @@ Returns the median value of given elements that are accessible via a random acce
 \tparam iterator_type Type of the iterator
 \param iterator_begin Iterator for the beginning position
 \param iterator_end Iterator for the end position
-\return Calculated median value
+\return Calculated median value. If the size of the array is 0, returns 0.
 
 \example
 1) STL container
@@ -91,6 +91,9 @@ template <typename iterator_type>
 typename iterator_type::value_type
 torben(iterator_type iterator_begin, iterator_type iterator_end) {
   using value_type = typename std::iterator_traits<iterator_type>::value_type;
+
+  if (iterator_begin == iterator_end)
+    return 0;
 
   // ---------- Find min and max value over time frame ---------- //
   value_type min = *iterator_begin;
