@@ -137,7 +137,7 @@ class vector_iterator {
       }
 
       const value_type current_value = *(*this);
-      if (median::is_nan(current_value)) {
+      if (!median::is_nan(current_value)) {
         break; // Found next non-'nan' value
       }
 
