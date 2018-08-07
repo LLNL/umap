@@ -1,4 +1,16 @@
 /*
+This file was taken from Spindle and made part of Umpire.  The Spindle and
+umpire boilerplate is included below.
+
+This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at
+https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or 
+modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) 
+version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY 
+WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms 
+and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the 
+GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 
+59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+
 This file is part of Spindle.  For copyright information see the COPYRIGHT 
 file in the top level directory, or at 
 https://github.com/hpc/Spindle/blob/master/COPYRIGHT
@@ -15,6 +27,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #define _GNU_SOURCE
 
+#include "spindle_debug.h"
 #include "spindle_logc.h"
 #include "config.h"
 
@@ -32,26 +45,26 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <errno.h>
 #include <execinfo.h>
 
+#if 0
 #if !defined(LIBEXEC)
 #error Expected to have LIBEXEC defined
 #endif
 #if !defined(DAEMON_NAME)
 #error Expected to have DAEMON_NAME defined
 #endif
-
 static char spindle_log_daemon_name[] = LIBEXEC "/" DAEMON_NAME;
 
+#else
+static char spindle_log_daemon_name[] = "../libexec/umap_logd";
+#endif
+
 static int debug_fd = -1;
-static int test_fd = -1;
 static char *tempdir;
 static char *debug_location;
-static char *test_location;
 
-FILE *spindle_test_output_f;
 FILE *spindle_debug_output_f;
 char *spindle_debug_name = "UNKNOWN";
 int spindle_debug_prints;
-int run_tests;
 
 //Timeout in tenths of a second
 #define SPAWN_TIMEOUT 300
@@ -67,41 +80,67 @@ int fileExists(char *name)
 
 void spawnLogDaemon(char *tempdir)
 {
-#if !defined(SPINDLECLIENT) || !defined(os_bluegene)
-   int result = fork();
-   if (result == 0) {
-      result = fork();
-      if (result == 0) {
-         char *params[7];
-         int cur = 0;
-         params[cur++] = spindle_log_daemon_name;
-         params[cur++] = tempdir;
-         if (spindle_debug_prints) {
-            params[cur++] = "-debug";
-            params[cur++] = "spindle_output";
-         }
-         if (run_tests) {
-            params[cur++] = "-test";
-            params[cur++] = "spindle_test";
-         }
-         params[cur++] = NULL;
-         
-         execv(spindle_log_daemon_name, params);
-         fprintf(stderr, "Error executing %s: %s\n", spindle_log_daemon_name, strerror(errno));
-         exit(0);
-      }
-      else {
-         exit(0);
-      }
-   }
-   else 
-   {
-      int status;
-      do {
-         waitpid(result, &status, 0);
-      } while (!WIFEXITED(status));
-   }
-#endif
+    int result = fork();
+
+    if (result == 0) {
+        result = fork();
+        if (result == 0) {
+            char *params[7];
+            int cur = 0;
+            char* linkname;
+            char* pname;
+            char* p;
+            ssize_t r;
+            linkname = malloc(1024+1);
+            if ( linkname == NULL ) {
+                fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
+                exit(0);
+            }
+
+            r = readlink("/proc/self/exe", linkname, 1024+1);
+
+            if ( r == -1 ) {
+                fprintf(stderr, "readlink failed: %s\n", strerror(errno));
+                exit(0);
+            }
+
+            linkname[r] = '\0';
+
+            p = strrchr(linkname, '/');
+            *p = '\0';
+
+            pname = malloc(strlen(linkname) + strlen(spindle_log_daemon_name) + 1);
+            if ( pname == NULL ) {
+                fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
+                exit(0);
+            }
+            pname[0] = '\0';
+
+            sprintf(pname, "%s/%s", linkname, spindle_log_daemon_name);
+
+            params[cur++] = pname;
+            params[cur++] = tempdir;
+            if (spindle_debug_prints) {
+                params[cur++] = "-debug";
+                params[cur++] = "umap_output";
+            }
+            params[cur++] = NULL;
+
+            execv(pname, params);
+            fprintf(stderr, "Error executing %s: %s\n", pname, strerror(errno));
+            exit(0);
+        }
+        else {
+            exit(0);
+        }
+    }
+    else 
+    {
+    int status;
+    do {
+    waitpid(result, &status, 0);
+    } while (!WIFEXITED(status));
+    }
 }
 
 int clearDaemon(char *tmpdir)
@@ -110,7 +149,6 @@ int clearDaemon(char *tmpdir)
    char reset_buffer[512];
    char lock_buffer[512];
    char log_buffer[512];
-   char test_buffer[512];
    int pid;
 
    /* Only one process can reset the daemon */
@@ -122,7 +160,6 @@ int clearDaemon(char *tmpdir)
 
    snprintf(lock_buffer, 512, "%s/spindle_log_lock", tmpdir);
    snprintf(log_buffer, 512, "%s/spindle_log", tmpdir);
-   snprintf(test_buffer, 512, "%s/spindle_test", tmpdir);
 
    fd = open(lock_buffer, O_RDONLY);
    if (fd != -1) {
@@ -137,7 +174,6 @@ int clearDaemon(char *tmpdir)
    }
 
    unlink(log_buffer);
-   unlink(test_buffer);
    unlink(lock_buffer);
    unlink(reset_buffer);
 
@@ -189,7 +225,7 @@ static void setConnectionSurvival(int fd, int survive_exec)
       if (fdflags < 0)
          fdflags = 0;
       fcntl(fd, F_SETFD, fdflags | O_CLOEXEC);
-      unsetenv("SPINDLE_DEBUG_SOCKET");
+      unsetenv("UMAP_SPINDLE_DEBUG_SOCKET");
    }
    else {
       int fdflags = fcntl(fd, F_GETFD, 0);
@@ -197,8 +233,8 @@ static void setConnectionSurvival(int fd, int survive_exec)
          fdflags = 0;
       fcntl(fd, F_SETFD, fdflags & ~O_CLOEXEC);
       char fd_str[32];
-      snprintf(fd_str, 32, "%d %d", debug_fd, test_fd);
-      setenv("SPINDLE_DEBUG_SOCKET", fd_str, 1);
+      snprintf(fd_str, 32, "%d", debug_fd);
+      setenv("UMAP_SPINDLE_DEBUG_SOCKET", fd_str, 1);
    }
 }
 
@@ -253,7 +289,6 @@ static int setup_connection(char *connection_name)
 void reset_spindle_debugging()
 {
    spindle_debug_prints = 0;
-   run_tests = 0;
    init_spindle_debugging(spindle_debug_name, 0);
 }
 
@@ -264,16 +299,14 @@ void init_spindle_debugging(char *name, int survive_exec)
 
    spindle_debug_name = name;
 
-   if (spindle_debug_prints || run_tests)
+   if (spindle_debug_prints)
       return;
 
-   run_tests = (getenv("SPINDLE_TEST") != NULL);
-
-   log_level_str = getenv("SPINDLE_DEBUG");
+   log_level_str = getenv("UMAP_SPINDLE_DEBUG");
    if (log_level_str)
       log_level = atoi(log_level_str);
    spindle_debug_prints = log_level;
-   if (!log_level && !run_tests)
+   if (!log_level)
       return;
 
    /* Setup locations for temp and output files */
@@ -286,28 +319,22 @@ void init_spindle_debugging(char *name, int survive_exec)
       spindle_mkdir(tempdir);
    }
 
-   debug_location = log_level ? "./spindle_output" : NULL;
-   test_location  = run_tests ? "./spindle_test" : NULL;
+   debug_location = log_level ? "./umap_output" : NULL;
 
-   already_setup = getenv("SPINDLE_DEBUG_SOCKET");
+   already_setup = getenv("UMAP_SPINDLE_DEBUG_SOCKET");
    if (already_setup) {
-      sscanf(already_setup, "%d %d", &debug_fd, &test_fd);
+      sscanf(already_setup, "%d", &debug_fd);
    }
    else {
       if (log_level)
          debug_fd = setup_connection("spindle_log");
-      if (run_tests)
-         test_fd = setup_connection("spindle_test");
    }
 
    setConnectionSurvival(debug_fd, survive_exec);
-   setConnectionSurvival(test_fd, survive_exec);
 
    /* Setup the variables */
    if (debug_fd != -1)
       spindle_debug_output_f = fdopen(debug_fd, "w");
-   if (test_fd != -1)
-      spindle_test_output_f = fdopen(test_fd, "w");      
 }
 
 void spindle_dump_on_error()
@@ -333,16 +360,3 @@ void spindle_dump_on_error()
       free(syms);
 }
 
-void fini_spindle_debugging()
-{
-   static unsigned char exitcode[8] = { 0x01, 0xff, 0x03, 0xdf, 0x05, 0xbf, 0x07, '\n' };
-   if (debug_fd != -1)
-      write(debug_fd, &exitcode, sizeof(exitcode));
-   if (test_fd != -1)
-      write(test_fd, &exitcode, sizeof(exitcode));
-}
-
-int is_debug_fd(int fd)
-{
-   return (fd == debug_fd || fd == test_fd);
-}

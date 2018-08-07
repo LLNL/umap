@@ -1,4 +1,16 @@
 /*
+This file was taken from Spindle and made part of Umpire.  The Spindle and
+umpire boilerplate is included below.
+
+This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at
+https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or 
+modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) 
+version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY 
+WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms 
+and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the 
+GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 
+59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+
 This file is part of Spindle.  For copyright information see the COPYRIGHT 
 file in the top level directory, or at 
 https://github.com/hpc/Spindle/blob/master/COPYRIGHT
@@ -42,8 +54,6 @@ using namespace std;
 
 string tmpdir;
 string debug_fname;
-string test_fname;
-
 
 void clean();
 void cleanFiles();
@@ -51,15 +61,11 @@ void cleanFiles();
 class UniqueProcess;
 class OutputLog;
 class MsgReader;
-class TestLog;
 
 UniqueProcess *lockProcess;
 OutputLog *debug_log;
 MsgReader *debug_reader;
-TestLog *test_log;
-MsgReader *test_reader;
 
-bool runTests = false;
 bool runDebug = false;
 
 static unsigned char exitcode[8] = { 0x01, 0xff, 0x03, 0xdf, 0x05, 0xbf, 0x07, '\n' };
@@ -166,6 +172,7 @@ public:
       output_file += string(".");
       output_file += string(pid);
       
+      printf("OutputLog: Opening %s\n", output_file.c_str());
       fd = creat(output_file.c_str(), 0660);
       if (fd == -1) {
          fprintf(stderr, "[%s:%u] - Error opening output file %s: %s\n",
@@ -191,178 +198,6 @@ public:
       write(fd, msg1, msg1_size);
       if (msg2)
          write(fd, msg2, msg2_size);
-   }
-};
-
-class TestVerifier
-{
-private:
-   vector<string> err_strings;
-   set<pair<int, string> > target_libs;
-   set<pair<int, string> > libs_loaded;
-   string tmp_dir;
-
-   void logerror(string s)
-   {
-      if (debug_log)
-         debug_log->writeMessage(0, s.c_str(), s.size(), "\n", 1);
-      err_strings.push_back(s);
-   }
-   
-   void checkLoadedVsTarget() {
-      set<pair<int, string> >::iterator i, j;
-      for (i = target_libs.begin(); i != target_libs.end(); i++) {
-         const string &target = i->second;
-         if (strstr(target.c_str(), "libnoexist.so") != NULL)
-            continue;
-         bool found = false;
-         for (j = libs_loaded.begin(); j != libs_loaded.end(); j++) {
-            if (i->first != j->first)
-               continue;
-            const string &loaded = j->second;
-            if (strstr(loaded.c_str(), target.c_str()) != NULL) {
-               found = true;
-               break;
-            }
-         }
-         if (!found) {
-            char proc_s[16];
-            snprintf(proc_s, 16, "%d", i->first);
-            logerror(string("Error: Didn't load target: ") + i->second + string(" on proc ") + string(proc_s));
-         }
-      }
-   }
-
-public:
-   TestVerifier()
-   {
-      const char *tmp_s = getenv("TMPDIR");
-      if (!tmp_s)
-         tmp_s = getenv("TEMPDIR");
-      if (!tmp_s)
-         tmp_s = getenv("/tmp");
-      tmp_dir = tmp_s;
-   }
-
-   ~TestVerifier()
-   {
-   }
-
-   bool parseOpenNotice(int proc, char *filename)
-   {
-      target_libs.insert(make_pair(proc, string(filename))).second;
-      return true;
-   }
-
-   bool parseOpen(int proc, char *filename, int ret_code)
-   {
-      if (strstr(filename, ".so") == NULL &&
-          strstr(filename, "retzero") == NULL &&
-          strstr(filename, ".py") == NULL)
-         return true;
-      bool is_from_temp = (strstr(filename, tmp_dir.c_str()) != NULL);
-
-      if (is_from_temp && ret_code == -1) {
-         string msg = string("Error: Failed to load from ramdisk: ") + string(filename);
-         logerror(msg);
-         return false;
-      }
-      
-      if (!is_from_temp && ret_code != -1 && strstr(filename, "libc.so") == NULL) {
-         string msg = string("Error: Read shared object from non-ramdisk: ") + string(filename);
-         logerror(msg);
-         return false;
-      }
-
-      if (ret_code != -1 || strstr(filename, "retzero_x")) {
-         libs_loaded.insert(make_pair(proc, string(filename)));
-      }
-
-      return true;
-   }
-
-   bool parseLine(int proc, const char *s) {
-      char buffer[4096];
-      int ret;
-
-      if (strstr(s, "open(") == s) {
-         const char *first_quote, *last_quote, *equals;
-         int len;
-
-         first_quote = strchr(s, '"');
-         last_quote = strrchr(s, '"');
-         if (!first_quote || !last_quote || first_quote == last_quote) {assert(0); return false; }
-         len = last_quote - first_quote;
-         if (len > 4096) len = 4096;
-         strncpy(buffer, first_quote+1, len-1);
-         buffer[len-1] = '\0';
-
-         equals = strrchr(s, '=');
-         if (!equals || equals[1] != ' ') {assert(0); return false; }
-         ret = atoi(equals+2);
-         
-         parseOpen(proc, buffer, ret);
-         if (debug_log)
-            debug_log->writeMessage(proc, s, strlen(s), NULL, 0);
-         return true;
-      }
-      const char *spindle_open = strstr(s, "dlstart");
-      if (spindle_open) {
-         sscanf(spindle_open, "dlstart %s\n", buffer);
-         if (debug_log)
-            debug_log->writeMessage(proc, s, strlen(s), NULL, 0);
-         return parseOpenNotice(proc, buffer);
-      }
-      if (strcmp(s, "done\n") == 0) {
-         checkLoadedVsTarget();
-         string fname;
-         if (err_strings.empty())
-            fname = tmpdir + string("/spindle_test_passed");
-         else
-            fname = tmpdir + string("/spindle_test_failed");
-         int result = creat(fname.c_str(), 0600);
-         if (result == -1) {
-            fprintf(stderr, "Error created test result file %s: %s\n", fname.c_str(), strerror(errno));
-            return false;
-         }
-         write(result, "0", 1);
-         close(result);
-         return true;
-      }
-
-      if (debug_log)
-         debug_log->writeMessage(0, s, strlen(s), NULL, 0);
-      return true;
-   }
-};
-
-class TestLog : public OutputInterface
-{
-private:
-   TestVerifier *test_verifier;   
-public:
-   TestLog()
-   {
-      test_verifier = new TestVerifier();
-   }
-
-   virtual ~TestLog()
-   {
-      delete test_verifier;
-   }
-
-   virtual void writeMessage(int proc, const char *msg1, int msg1_size, const char *msg2, int msg2_size)
-   {
-      if (isExitCode(msg1, msg1_size, msg2, msg2_size)) {
-         /* We've received the exitcode */
-         cleanFiles();
-         return;
-      }
-      
-      string s(msg1, msg1_size);
-      if (msg2)
-         s += string(msg2, msg2_size);
-      test_verifier->parseLine(proc, s.c_str());
    }
 };
 
@@ -624,11 +459,6 @@ void parseArgs(int argc, char *argv[])
          debug_fname = argv[i];
          runDebug = true;
       }
-      else if (strcmp(argv[i], "-test") == 0) {
-         i++;
-         test_fname = argv[i];
-         runTests = true;
-      }
    }
 }
 
@@ -640,9 +470,6 @@ void clean()
    if (debug_log)
       delete debug_log;
    debug_log = NULL;
-   if (test_log)
-      delete test_log;
-   test_log = NULL;
    if (debug_reader)
       delete debug_reader;
    debug_reader = NULL;
@@ -654,8 +481,6 @@ void cleanFiles()
       lockProcess->cleanFile();
    if (debug_reader)
       debug_reader->cleanFile();
-   if (test_reader)
-      test_reader->cleanFile();
 }
 
 void on_sig(int)
@@ -676,8 +501,9 @@ int main(int argc, char *argv[])
    parseArgs(argc, argv);
 
    lockProcess = new UniqueProcess();
-   if (!lockProcess->isUnique())
+   if (!lockProcess->isUnique()) {
       return 0;
+   }
 
    //When running a spindle session we need all stdout closed
    // or a backtick'd `spindle --start-session` may not return.
@@ -696,24 +522,11 @@ int main(int argc, char *argv[])
          return -1;
       }
    }
-   if (runTests) {
-      test_log = new TestLog();
-      test_reader = new MsgReader(string("test"), test_log);
-      if (test_reader->hadError()) {
-         fprintf(stderr, "Test reader error termination\n");
-         return -1;
-      }      
-   }
 
    if (runDebug)
       debug_reader->run();
-   if (runTests)
-      test_reader->run();
-
    if (runDebug)
       debug_reader->join();
-   if (runTests)
-      test_reader->join();
 
    clean();
    return 0;

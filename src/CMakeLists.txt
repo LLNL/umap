@@ -1,5 +1,7 @@
 project(umap_libraries)
 
+add_subdirectory(logging)
+
 add_library(libumap SHARED umap.cpp umaplog.cpp)
 add_library(libumap_static STATIC umap.cpp umaplog.cpp)
 set_target_properties(libumap_static PROPERTIES OUTPUT_NAME libumap)
@@ -10,6 +12,7 @@ include_directories(
   BEFORE "${CMAKE_CURRENT_SOURCE_DIR}"
   "${PROJECT_BINARY_DIR}/../include"
   "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+  "${CMAKE_SOURCE_DIR}/src/logging"
   "${CMAKE_CURRENT_SOURCE_DIR}/../sysincludes"
   )
 

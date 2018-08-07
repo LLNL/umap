@@ -17,10 +17,14 @@ if(OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     add_executable(umapsort umapsort.cpp)
 
-    add_dependencies(umapsort libumap_static libtestoptions_static libPerFile_static)
-    target_link_libraries(umapsort libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(umapsort libumap_static libtestoptions_static libPerFile_static umap_logging_static)
+    target_link_libraries(umapsort libumap_static libtestoptions_static libPerFile_static umap_logging_static)
 
-    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
+    include_directories( 
+      "${CMAKE_CURRENT_SOURCE_DIR}"
+      "${CMAKE_BINARY_DIR}/include"
+      "${CMAKE_SOURCE_DIR}/src/logging"
+      )
 
     install(TARGETS umapsort
             LIBRARY DESTINATION lib
@@ -29,5 +33,4 @@ if(OPENMP_FOUND)
 else()
   message("Skipping umapsort, OpenMP required")
 endif()
-
 

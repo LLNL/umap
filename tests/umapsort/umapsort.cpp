@@ -45,6 +45,7 @@
 #include "umap.h"
 #include "testoptions.h"
 #include "PerFile.h"
+#include "spindle_debug.h"
 
 bool sort_ascending = true;
 
@@ -136,9 +137,15 @@ int main(int argc, char **argv)
   uint64_t arraysize;
   void* base_addr;
 
+  LOGGING_INIT(const_cast<char *>("Client"));
+
+  debug_printf("Well Hello there!!!\n");
+
   pagesize = (uint64_t)umt_getpagesize();
 
+  debug_printf("Page size is %d\n", pagesize);
   umt_getoptions(&options, argc, argv);
+  exit(0);
 
   omp_set_num_threads(options.numthreads);
 
