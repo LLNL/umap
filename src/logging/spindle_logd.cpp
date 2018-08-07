@@ -80,7 +80,7 @@ public:
    UniqueProcess()
    {
       unique = false;
-      logFileLock = tmpdir + string("/spindle_log_lock");
+      logFileLock = tmpdir + string("/umap_log_lock");
       fd = open(logFileLock.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
       if (fd != -1) {
          char pid_str[32];
@@ -379,7 +379,7 @@ public:
       struct sockaddr_un saddr;
       bzero(&saddr, sizeof(saddr));
       int pathsize = sizeof(saddr.sun_path);
-      socket_path = tmpdir + string("/spindle_") + socket_suffix;
+      socket_path = tmpdir + string("/umap_") + socket_suffix;
       saddr.sun_family = AF_UNIX;
       if (socket_path.length() > (unsigned) pathsize-1) {
          fprintf(stderr, "[%s:%u] - Socket path overflows AF_UNIX size (%d): %s\n",
@@ -448,7 +448,7 @@ public:
 void parseArgs(int argc, char *argv[])
 {
    if (argc < 3) {
-      fprintf(stderr, "spindle_logd cannot be directly invoked\n");
+      fprintf(stderr, "umap_logd cannot be directly invoked\n");
       exit(-1);
    }
 

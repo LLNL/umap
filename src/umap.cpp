@@ -32,8 +32,8 @@
 #include <cstring>
 #include <sys/prctl.h>
 #include "umap.h"               // API to library
-#include "umaplog.h"            // umap_log()
 #include "config.h"
+#include "spindle_debug.h"
 
 using namespace std;
 
@@ -339,7 +339,7 @@ static struct sigaction saved_sa;
 void sighandler(int signum, siginfo_t *info, void* buf)
 {
   if (signum != SIGBUS) {
-    umapdbg("Unexpected signal: %d received\n", signum);
+    err_printf("Unexpected signal: %d received\n", signum);
     exit(1);
   }
 
@@ -353,14 +353,14 @@ void sighandler(int signum, siginfo_t *info, void* buf)
         ufh->stat->sigbus++;
 
         if (ufh->get_pagebuffer()->find_inmem_page_desc(page_begin) != nullptr)
-          umapdbg("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE_BUFFER\n", info->si_addr, page_begin);
+          err_printf("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE_BUFFER\n", info->si_addr, page_begin);
         else
-          umapdbg("SIGBUS %p (page=%p) Not currently in umap buffer\n", info->si_addr, page_begin);
+          err_printf("SIGBUS %p (page=%p) Not currently in umap buffer\n", info->si_addr, page_begin);
         return;
       }
     }
   }
-  umapdbg("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin);
+  err_printf("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin);
   assert("UMAP: SIGBUS for out of range address" && 0);
 }
 
@@ -368,7 +368,7 @@ void __attribute ((constructor)) init_umap_lib( void )
 {
   struct sigaction act;
 
-  umaplog_init();
+  LOGGING_INIT;
 
   if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
     perror("ERROR: sysconf(_SC_PAGESIZE)");
@@ -391,6 +391,7 @@ void __attribute ((constructor)) init_umap_lib( void )
     perror("ERROR: sigaction: ");
     exit(1);
   }
+  LOGGING_FINI;
 }
 
 void __attribute ((destructor)) fine_umap_lib( void )
@@ -431,7 +432,7 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
     << page_blocks_per_worker << " page blocks per worker, "
     << additional_blocks_for_last_worker << " additional blocks for last worker"
     << endl;
-  umapdbg("%s\n", ss.str().c_str());
+  debug_printf("%s\n", ss.str().c_str());
 
   try {
     for (uint64_t worker = 0; worker < num_workers; ++worker) {
@@ -521,7 +522,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
       .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
     };
 
-    umapdbg("Register %p - %p\n", seg.base, (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
+    debug_printf("Register %p - %p\n", seg.base, (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
       perror("ERROR: ioctl/uffdio_register");
@@ -649,7 +650,7 @@ void UserFaultHandler::uffd_handler(void)
     for (int i = 0; i < msgs; ++i) {
       ss << "    " << uffd_pf_reason(umessages[i]) << endl;
     }
-    umapdbg("%s\n", ss.str().c_str());
+    debug_printf3("%s\n", ss.str().c_str());
 #endif
 
     uint64_t last_addr = 0;
@@ -680,7 +681,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       if (!pm->page_is_dirty()) {
         ss << "PF(" << msg.arg.pagefault.flags << " WP)    (DISABLE_WP)       @(" << page_begin << ")";
-        umapdbg("%s\n", ss.str().c_str());
+        debug_printf3("%s\n", ss.str().c_str());
 
         pm->mark_page_dirty();
         disable_wp_on_pages((uint64_t)page_begin, 1, false);
@@ -695,7 +696,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 
         stat->stuck_wp++;
 
-        umapdbg("EVICT WORKAROUND FOR %p\n", page_begin);
+        debug_printf3("EVICT WORKAROUND FOR %p\n", page_begin);
 
         pm->mark_page_clean();
         memcpy(tmppagebuf, page_begin, page_size);   // Save our data
@@ -738,7 +739,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   }
   pagebuffer->add_page_desc_to_inmem(pm);
 
-  umapdbg("%s\n", ss.str().c_str());
+  debug_printf3("%s\n", ss.str().c_str());
 
   struct uffdio_copy copy;
   copy.src = (uint64_t)tmppagebuf;
@@ -840,7 +841,7 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
   wp.range.len = num_pages * page_size;
   wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-  umapdbg("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
+  debug_printf3("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");
@@ -859,7 +860,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
   //wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
   wp.mode = do_not_awaken ? UFFDIO_WRITEPROTECT_MODE_DONTWAKE : 0;
 
-  //umapdbg("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
+  //debug_printf3("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Disable)");

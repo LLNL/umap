@@ -78,6 +78,41 @@ int fileExists(char *name)
    return (stat(name, &buf) != -1);
 }
 
+#include <inttypes.h>
+#define MAX_EXE_PATH_STR_SIZE 4096 + 1
+static void getProgramAndPath( char** fpath, char** ppath, char**  pname)
+{
+  static char* fullPath = NULL;
+  static char* pathPrefix = NULL;
+  static char* programName = NULL;
+  char* p, tmp;
+  ssize_t r;
+
+  if ( fullPath == NULL ) {
+    fullPath = malloc(MAX_EXE_PATH_STR_SIZE);
+    if ( fullPath == NULL ) {
+      fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
+      exit(0);
+    }
+
+    r = readlink("/proc/self/exe", fullPath, MAX_EXE_PATH_STR_SIZE);
+
+    if ( r == -1 ) {
+      fprintf(stderr, "readlink failed: %s\n", strerror(errno));
+      exit(0);
+    }
+
+    fullPath[r] = '\0';
+    p = strrchr(fullPath, '/'); tmp = *p; *p = '\0';
+    pathPrefix = strdup(fullPath);
+    programName = p+1;
+    *p = tmp;
+  }
+  if (fpath != NULL) *fpath = fullPath;
+  if (ppath != NULL) *ppath = pathPrefix;
+  if (pname != NULL) *pname = programName;
+}
+
 void spawnLogDaemon(char *tempdir)
 {
     int result = fork();
@@ -87,36 +122,19 @@ void spawnLogDaemon(char *tempdir)
         if (result == 0) {
             char *params[7];
             int cur = 0;
-            char* linkname;
+            char* path_prefix;
             char* pname;
-            char* p;
-            ssize_t r;
-            linkname = malloc(1024+1);
-            if ( linkname == NULL ) {
-                fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
-                exit(0);
-            }
 
-            r = readlink("/proc/self/exe", linkname, 1024+1);
+            getProgramAndPath( NULL, &path_prefix, NULL);
 
-            if ( r == -1 ) {
-                fprintf(stderr, "readlink failed: %s\n", strerror(errno));
-                exit(0);
-            }
-
-            linkname[r] = '\0';
-
-            p = strrchr(linkname, '/');
-            *p = '\0';
-
-            pname = malloc(strlen(linkname) + strlen(spindle_log_daemon_name) + 1);
+            pname = malloc(strlen(path_prefix) + strlen(spindle_log_daemon_name) + 1);
             if ( pname == NULL ) {
                 fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
                 exit(0);
             }
             pname[0] = '\0';
 
-            sprintf(pname, "%s/%s", linkname, spindle_log_daemon_name);
+            sprintf(pname, "%s/%s", path_prefix, spindle_log_daemon_name);
 
             params[cur++] = pname;
             params[cur++] = tempdir;
@@ -136,10 +154,10 @@ void spawnLogDaemon(char *tempdir)
     }
     else 
     {
-    int status;
-    do {
-    waitpid(result, &status, 0);
-    } while (!WIFEXITED(status));
+      int status;
+      do {
+        waitpid(result, &status, 0);
+      } while (!WIFEXITED(status));
     }
 }
 
@@ -152,14 +170,14 @@ int clearDaemon(char *tmpdir)
    int pid;
 
    /* Only one process can reset the daemon */
-   snprintf(reset_buffer, 512, "%s/spindle_log_reset", tmpdir);
+   snprintf(reset_buffer, 512, "%s/umap_log_reset", tmpdir);
    fd = open(reset_buffer, O_WRONLY | O_CREAT | O_EXCL, 0600);
    if (fd == -1)
       return 0;
    close(fd);
 
-   snprintf(lock_buffer, 512, "%s/spindle_log_lock", tmpdir);
-   snprintf(log_buffer, 512, "%s/spindle_log", tmpdir);
+   snprintf(lock_buffer, 512, "%s/umap_log_lock", tmpdir);
+   snprintf(log_buffer, 512, "%s/umap_log", tmpdir);
 
    fd = open(lock_buffer, O_RDONLY);
    if (fd != -1) {
@@ -225,7 +243,7 @@ static void setConnectionSurvival(int fd, int survive_exec)
       if (fdflags < 0)
          fdflags = 0;
       fcntl(fd, F_SETFD, fdflags | O_CLOEXEC);
-      unsetenv("UMAP_SPINDLE_DEBUG_SOCKET");
+      unsetenv("UMAP_LOGGING_SOCKET");
    }
    else {
       int fdflags = fcntl(fd, F_GETFD, 0);
@@ -234,7 +252,7 @@ static void setConnectionSurvival(int fd, int survive_exec)
       fcntl(fd, F_SETFD, fdflags & ~O_CLOEXEC);
       char fd_str[32];
       snprintf(fd_str, 32, "%d", debug_fd);
-      setenv("UMAP_SPINDLE_DEBUG_SOCKET", fd_str, 1);
+      setenv("UMAP_LOGGING_SOCKET", fd_str, 1);
    }
 }
 
@@ -289,20 +307,22 @@ static int setup_connection(char *connection_name)
 void reset_spindle_debugging()
 {
    spindle_debug_prints = 0;
-   init_spindle_debugging(spindle_debug_name, 0);
+   init_spindle_debugging(0);
 }
 
-void init_spindle_debugging(char *name, int survive_exec)
+void init_spindle_debugging(int survive_exec)
 {
    char *already_setup, *log_level_str;
    int log_level = 0;
 
-   spindle_debug_name = name;
+   //spindle_debug_name = name;
+
+   getProgramAndPath( NULL, NULL, &spindle_debug_name);
 
    if (spindle_debug_prints)
       return;
 
-   log_level_str = getenv("UMAP_SPINDLE_DEBUG");
+   log_level_str = getenv("UMAP_LOGGING");
    if (log_level_str)
       log_level = atoi(log_level_str);
    spindle_debug_prints = log_level;
@@ -321,13 +341,13 @@ void init_spindle_debugging(char *name, int survive_exec)
 
    debug_location = log_level ? "./umap_output" : NULL;
 
-   already_setup = getenv("UMAP_SPINDLE_DEBUG_SOCKET");
+   already_setup = getenv("UMAP_LOGGING_SOCKET");
    if (already_setup) {
       sscanf(already_setup, "%d", &debug_fd);
    }
    else {
       if (log_level)
-         debug_fd = setup_connection("spindle_log");
+         debug_fd = setup_connection("umap_log");
    }
 
    setConnectionSurvival(debug_fd, survive_exec);
@@ -343,9 +363,11 @@ void spindle_dump_on_error()
    char **syms;
    int size, i;
 
+#if 0
    if (strstr(spindle_debug_name, "Client")) {
       return;
    }
+#endif
 
    size = backtrace(stacktrace, 256);
    if (size <= 0)
@@ -360,3 +382,14 @@ void spindle_dump_on_error()
       free(syms);
 }
 
+void fini_spindle_debugging()
+{
+   static unsigned char exitcode[8] = { 0x01, 0xff, 0x03, 0xdf, 0x05, 0xbf, 0x07, '\n' };
+   if (debug_fd != -1)
+      write(debug_fd, &exitcode, sizeof(exitcode));
+}
+
+int is_debug_fd(int fd)
+{
+   return (fd == debug_fd);
+}

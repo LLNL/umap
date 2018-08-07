@@ -61,12 +61,12 @@ extern "C" {
 #endif
 
 #if defined(LOGD_DEBUG)
-#define LOGGING_INIT(S) init_spindle_debugging(S, 0)
-#define LOGGING_INIT_PREEXEC(S) init_spindle_debugging(S, 1)
+#define LOGGING_INIT init_spindle_debugging(0)
+#define LOGGING_INIT_PREEXEC init_spindle_debugging(1)
 #define LOGGING_FINI fini_spindle_debugging()
 #else
-#define LOGGING_INIT(S)
-#define LOGGING_INIT_PREEXEC(S)
+#define LOGGING_INIT
+#define LOGGING_INIT_PREEXEC
 #define LOGGING_FINI
 #define debug_printf2(S, ...) debug_printf(S, ## __VA_ARGS__)
 #define debug_printf3(S, ...) debug_printf(S, ## __VA_ARGS__)

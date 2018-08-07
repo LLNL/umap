@@ -1,9 +1,7 @@
 project(umap_libraries)
 
-add_subdirectory(logging)
-
-add_library(libumap SHARED umap.cpp umaplog.cpp)
-add_library(libumap_static STATIC umap.cpp umaplog.cpp)
+add_library(libumap SHARED umap.cpp logging/spindle_logc.c logging/spindle_mkdir.c)
+add_library(libumap_static STATIC umap.cpp logging/spindle_logc.c logging/spindle_mkdir.c)
 set_target_properties(libumap_static PROPERTIES OUTPUT_NAME libumap)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -30,3 +28,12 @@ install(TARGETS libumap libumap_static
         RUNTIME DESTINATION bin )
 
 install(FILES ${CMAKE_BINARY_DIR}/include/umap.h DESTINATION include)
+
+find_package (Threads)
+add_executable(umap_logd logging/spindle_logd.cpp)
+target_link_libraries (umap_logd ${CMAKE_THREAD_LIBS_INIT})
+
+install(FILES ${PROJECT_BINARY_DIR}/umap_logd 
+  DESTINATION libexec
+  PERMISSIONS OWNER_EXECUTE OWNER_READ GROUP_EXECUTE GROUP_READ
+  )
