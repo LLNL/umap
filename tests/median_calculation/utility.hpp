@@ -36,12 +36,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 namespace median
 {
 
-template <typename pixel_type>
-bool is_nan(const pixel_type value)
-{
-  return std::isnan(value);
-}
-
 template <typename _pixel_type>
 struct cube_t {
   using pixel_type = _pixel_type;
@@ -116,6 +110,12 @@ inline T reverse_byte_order(const T x)
   p2[3] = p1[0];
 
   return reversed_x;
+}
+
+template <typename pixel_type>
+bool is_nan(const pixel_type value)
+{
+  return std::isnan(value);
 }
 
 } // namespace median

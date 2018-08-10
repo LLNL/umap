@@ -131,15 +131,19 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < 10; ++i) {
     const pixel_type median = result[i].first;
     const vector_t vector = result[i].second;
-    std::cout << "[" << i << "] " << median << " : ";
+    std::cout << "[" << i << "]"
+              << "\n Median: " << median
+              << "\n Vector: " << vector.x_slope << " " << vector.x_intercept
+              << " " << vector.y_slope << " " << vector.y_intercept << std::endl;
+
     for (size_t k = 0; k < cube.size_k; ++k) {
       const ssize_t index = get_index(cube, vector, k);
       if (index == -1) continue;
       const pixel_type value = median::reverse_byte_order(cube.data[index]);
       if (median::is_nan(value))
-        std::cout << "'NaN' ";
+        std::cout << " 'NaN'";
       else
-        std::cout << median::reverse_byte_order(cube.data[index]) << " ";
+        std::cout << " " << median::reverse_byte_order(cube.data[index]);
     }
     std::cout << std::endl;
   }
