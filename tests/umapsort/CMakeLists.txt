@@ -20,7 +20,11 @@ if(OPENMP_FOUND)
     add_dependencies(umapsort libumap_static libtestoptions_static libPerFile_static)
     target_link_libraries(umapsort libumap_static libtestoptions_static libPerFile_static)
 
-    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
+    include_directories( 
+      "${CMAKE_CURRENT_SOURCE_DIR}"
+      "${CMAKE_BINARY_DIR}/include"
+      "${CMAKE_SOURCE_DIR}/src/logging"
+      )
 
     install(TARGETS umapsort
             LIBRARY DESTINATION lib
@@ -29,5 +33,4 @@ if(OPENMP_FOUND)
 else()
   message("Skipping umapsort, OpenMP required")
 endif()
-
 
