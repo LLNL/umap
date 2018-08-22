@@ -4,13 +4,16 @@ add_library(libumap SHARED umap.cpp ../logging/spindle_logc.c ../logging/spindle
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
 #
 # TODO: This needs to change to "AFTER" when we have code in place to
 # dynamically check for existence of WP functionality
 #
-include_directories( BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/../sysincludes )
+include_directories( BEFORE 
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${UMAPINCLUDEDIRS} 
+  ${CMAKE_SOURCE_DIR}/sysincludes
+)
 
 install(TARGETS libumap
         LIBRARY DESTINATION lib
