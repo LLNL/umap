@@ -12,10 +12,10 @@ if(OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     add_executable(churn churn.cpp options.cpp)
 
-    add_dependencies(churn libtestoptions_static libumap_static libPerFile_static)
-    target_link_libraries(churn libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(churn libtestoptions libumap libPerFile)
+    target_link_libraries(churn libumap libtestoptions libPerFile)
 
-    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
+    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
     install(TARGETS churn
             LIBRARY DESTINATION lib

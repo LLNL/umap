@@ -22,6 +22,15 @@ configure_file(
   ${PROJECT_SOURCE_DIR}/config/config.h.in
   ${PROJECT_BINARY_DIR}/include/config.h)
 
+set (UMAPINCLUDEDIRS 
+    "${CMAKE_BINARY_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/src/logging"
+    "${CMAKE_SOURCE_DIR}/tests/lib/options"
+    "${CMAKE_SOURCE_DIR}/tests/lib/PerFile"
+    "${CMAKE_SOURCE_DIR}/tests/lib/PerFits"
+    )
+
 add_subdirectory(src)
 
 if ( ENABLE_TESTS )
