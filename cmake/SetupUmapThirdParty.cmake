@@ -1,4 +1,19 @@
 if ( ENABLE_CFITS )
+  find_library( T curl )
+  if ( T )
+    set (CFITS_CURL_LIB "curl")
+  endif()
+
+  find_library( T nsl )
+  if ( T )
+    set (CFITS_NSL_LIB "nsl")
+  endif()
+
+  find_library( T m )
+  if ( T )
+    set (CFITS_M_LIB "m")
+  endif()
+
   find_library( CFITS_LIBRARY
     libcfitsio.a
     PATHS ${CFITS_LIBRARY_PATH}
