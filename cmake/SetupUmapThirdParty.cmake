@@ -18,4 +18,5 @@ if ( ENABLE_CFITS )
   endif()
 
   include_directories( ${CFITS_INCLUDE_DIR} )
+
 endif()
