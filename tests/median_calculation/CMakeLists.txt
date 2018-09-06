@@ -20,8 +20,8 @@ if(OPENMP_FOUND)
 
     add_dependencies(random_vector_median_calculation libumap libtestoptions libPerFits )
 
-    target_link_libraries(random_vector_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARY} ${CFITS_M_LIB} ${CFITS_NSL_LIB} ${CFITS_CURL_LIB} )
-    target_link_libraries(test_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARY} ${CFITS_M_LIB} ${CFITS_NSL_LIB} ${CFITS_CURL_LIB} )
+    target_link_libraries(random_vector_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARIES})
+    target_link_libraries(test_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARIES})
 
     install(TARGETS random_vector_median_calculation
             LIBRARY DESTINATION lib
