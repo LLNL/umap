@@ -12,19 +12,19 @@ if(OPENMP_FOUND)
     add_executable(nvmebenchmark-read nvmebenchmark.cpp)
     add_executable(nvmebenchmark-write nvmebenchmark.cpp)
 
-    add_dependencies(pfbenchmark-read libumap_static libtestoptions_static libPerFile_static)
-    add_dependencies(pfbenchmark-write libumap_static libtestoptions_static libPerFile_static)
-    add_dependencies(pfbenchmark-readmodifywrite libumap_static libtestoptions_static libPerFile_static)
-    add_dependencies(nvmebenchmark-read libumap_static libtestoptions_static libPerFile_static)
-    add_dependencies(nvmebenchmark-write libumap_static libtestoptions_static libPerFile_static)
+    add_dependencies(pfbenchmark-read libumap libtestoptions libPerFile)
+    add_dependencies(pfbenchmark-write libumap libtestoptions libPerFile)
+    add_dependencies(pfbenchmark-readmodifywrite libumap libtestoptions libPerFile)
+    add_dependencies(nvmebenchmark-read libumap libtestoptions libPerFile)
+    add_dependencies(nvmebenchmark-write libumap libtestoptions libPerFile)
 
-    target_link_libraries(pfbenchmark-read libumap_static libtestoptions_static libPerFile_static)
-    target_link_libraries(pfbenchmark-write libumap_static libtestoptions_static libPerFile_static)
-    target_link_libraries(pfbenchmark-readmodifywrite libumap_static libtestoptions_static libPerFile_static)
-    target_link_libraries(nvmebenchmark-read libumap_static libtestoptions_static libPerFile_static)
-    target_link_libraries(nvmebenchmark-write libumap_static libtestoptions_static libPerFile_static)
+    target_link_libraries(pfbenchmark-read libumap libtestoptions libPerFile)
+    target_link_libraries(pfbenchmark-write libumap libtestoptions libPerFile)
+    target_link_libraries(pfbenchmark-readmodifywrite libumap libtestoptions libPerFile)
+    target_link_libraries(nvmebenchmark-read libumap libtestoptions libPerFile)
+    target_link_libraries(nvmebenchmark-write libumap libtestoptions libPerFile)
 
-    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
+    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
     install(TARGETS pfbenchmark-read pfbenchmark-write pfbenchmark-readmodifywrite nvmebenchmark-read nvmebenchmark-write
             LIBRARY DESTINATION lib
