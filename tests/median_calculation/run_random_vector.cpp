@@ -18,6 +18,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -28,9 +29,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "torben.hpp"
 #include "utility.hpp"
 #include "vector.hpp"
+#include "../lib/utility/time.hpp"
 
 using pixel_type = float;
-constexpr size_t num_random_vector = 100000;
+constexpr size_t default_num_random_vector = 100000;
 
 class beta_distribution {
  public:
@@ -50,29 +52,12 @@ class beta_distribution {
   std::gamma_distribution<> m_y_gamma;
 };
 
-int main(int argc, char **argv) {
-  umt_optstruct_t options;
-  umt_getoptions(&options, argc, argv);
-
-#ifdef _OPENMP
-  omp_set_num_threads(options.numthreads);
-#endif
-
-  size_t BytesPerElement;
-  median::cube_t<pixel_type> cube;
-
-  // Alloc memory space and read data from fits files with umap
-  cube.data = (pixel_type *)PerFits::PerFits_alloc_cube(&options, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
-
-  if (cube.data == nullptr) {
-    std::cerr << "Failed to allocate memory for cube\n";
-    return -1;
-  }
-
-  assert(sizeof(pixel_type) == BytesPerElement);
-
+std::pair<double, std::vector<std::pair<pixel_type, vector_t>>>
+shoot_vector(const median::cube_t<pixel_type> &cube, const std::size_t num_random_vector) {
   // Array to store results of the median calculation
   std::vector<std::pair<pixel_type, vector_t>> result(num_random_vector);
+
+  double total_execution_time = 0.0;
 
 #ifdef _OPENMP
 #pragma omp parallel
@@ -97,7 +82,7 @@ int main(int argc, char **argv) {
       double x_intercept = x_start_dist(rnd_engine);
       double y_intercept = y_start_dist(rnd_engine);
 
-      // Changed to the const value to 2 from 25 so that vectors won't access 
+      // Changed to the const value to 2 from 25 so that vectors won't access
       // out of range of the cube with a large number of frames
       //
       // This is a temporary measures
@@ -110,11 +95,17 @@ int main(int argc, char **argv) {
       vector_iterator<pixel_type> end(vector_iterator<pixel_type>::create_end(cube, vector));
 
       // median calculation using Torben algorithm
+      const auto start = utility::elapsed_time_sec();
       result[i].first = torben(begin, end);
+      total_execution_time += utility::elapsed_time_sec(start);
       result[i].second = vector;
     }
   }
 
+  return std::make_pair(total_execution_time, result);
+}
+
+void print_top_median(const median::cube_t<pixel_type> &cube, std::vector<std::pair<pixel_type, vector_t>> &result) {
   // Sort the results by the descending order of median value
   std::partial_sort(result.begin(),
                     result.begin() + 10, // get only top 10 elements
@@ -125,7 +116,8 @@ int main(int argc, char **argv) {
                     });
 
   // Print out the top 10 median values and corresponding pixel values
-  std::cout << "Top 10 median and corresponding pixel values (NaN values are not used in median calculation)" << std::endl;
+  std::cout << "Top 10 median and corresponding pixel values (NaN values are not used in median calculation)"
+            << std::endl;
   std::cout.setf(std::ios::fixed, std::ios::floatfield);
   std::cout.precision(2);
   for (size_t i = 0; i < 10; ++i) {
@@ -147,6 +139,47 @@ int main(int argc, char **argv) {
     }
     std::cout << std::endl;
   }
+}
+
+int main(int argc, char **argv) {
+  umt_optstruct_t options;
+  umt_getoptions(&options, argc, argv);
+
+#ifdef _OPENMP
+  omp_set_num_threads(options.numthreads);
+#endif
+
+  size_t BytesPerElement;
+  median::cube_t<pixel_type> cube;
+
+  // Alloc memory space and read data from fits files with umap
+  cube.data = (pixel_type *)PerFits::PerFits_alloc_cube(&options,
+                                                        &BytesPerElement,
+                                                        &cube.size_x,
+                                                        &cube.size_y,
+                                                        &cube.size_k);
+
+  if (cube.data == nullptr) {
+    std::cerr << "Failed to allocate memory for cube\n";
+    std::abort();
+  }
+
+  if (sizeof(pixel_type) != BytesPerElement) {
+    std::cerr << "Wrong pixel type" << std::endl;
+    std::abort();
+  }
+
+  const char* buf = std::getenv("NUM_VECTORS");
+  std::size_t num_random_vector = default_num_random_vector;
+  if (buf != nullptr) {
+    num_random_vector = std::stoll(buf);
+  }
+
+  auto result = shoot_vector(cube, num_random_vector);
+  std::cout << "#of vectors = " << num_random_vector
+            << "\nexecution time (sec) = " << result.first
+            << "\nvectors/sec = " << static_cast<double>(num_random_vector) / result.first << std::endl;
+  print_top_median(cube, result.second);
 
   PerFits::PerFits_free_cube(cube.data);
 
