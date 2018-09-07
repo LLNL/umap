@@ -9,6 +9,7 @@ if(OPENMP_FOUND)
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
     add_executable(ingest_edge_list ingest_edge_list.cpp)
+
     install(TARGETS ingest_edge_list
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static

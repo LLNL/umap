@@ -1,4 +1,20 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
+/* This file is part of UMAP.  
+ *
+ * For copyright information see the COPYRIGHT file in the top level directory,
+ * or at https://github.com/LLNL/umap/blob/master/COPYRIGHT.
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License (as published by the Free
+ * Software Foundation) version 2.1 dated February 1999.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU
+ * Lesser General Public License for more details.  You should have received a
+ * copy of the GNU Lesser General Public License along with this program;
+ * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite
+ * 330, Boston, MA 02111-1307 USA
+ */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
@@ -34,6 +50,10 @@
 #include "umap.h"               // API to library
 #include "config.h"
 #include "spindle_debug.h"
+
+#ifndef UFFDIO_COPY_MODE_WP
+#define UMAP_RO_MODE
+#endif
 
 using namespace std;
 
@@ -116,8 +136,10 @@ class UserFaultHandler {
     void evict_page(umap_page* page);
     void uffd_handler(void);
     void pagefault_event(const struct uffd_msg& msg);
+#ifndef UMAP_RO_MODE
     void enable_wp_on_pages_and_wake(uint64_t, int64_t);
     void disable_wp_on_pages(uint64_t, int64_t, bool);
+#endif
 };
 
 class umap_stats {
@@ -199,17 +221,26 @@ static int check_uffd_compatibility( void )
     exit(1);
   }
 
-  struct uffdio_api uffdio_api = { .api = UFFD_API, .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP };
+  struct uffdio_api uffdio_api = {
+    .api = UFFD_API,
+#ifdef UMAP_RO_MODE
+    .features = 0
+#else
+    .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
+#endif
+  };
 
   if (ioctl(fd, UFFDIO_API, &uffdio_api) == -1) {
-    cerr << "UFFD Compatibilty Check - userfaultfd WP Not Available\n";
+    perror("ERROR: UFFDIO_API Failed: ");
     exit(1);
   }
 
-  if (!(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP)) {
+#ifndef UMAP_RO_MODE
+  if ( !(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) ) {
     cerr << "UFFD Compatibilty Check - unsupported userfaultfd WP\n";
     exit(1);
   }
+#endif
 
   close(fd);
 
@@ -504,22 +535,35 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
     throw -1;
   }
 
-  struct uffdio_api uffdio_api = { .api = UFFD_API, .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP };
+  struct uffdio_api uffdio_api = {
+    .api = UFFD_API,
+#ifndef UMAP_RO_MODE
+    .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
+#else
+    .features = 0
+#endif
+  };
 
   if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
     perror("ERROR: UFFDIO_API Failed: ");
     exit(1);
   }
 
+#ifndef UMAP_RO_MODE
   if (!(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP)) {
     perror("ERROR: userfaultfd WP: ");
     exit(1);
   }
+#endif
 
   for ( auto seg : PageBlocks ) {
     struct uffdio_register uffdio_register = {
       .range = {.start = (uint64_t)seg.base, .len = seg.length},
+#ifndef UMAP_RO_MODE
       .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
+#else
+      .mode = UFFDIO_REGISTER_MODE_MISSING
+#endif
     };
 
     debug_printf("Register %p - %p\n", seg.base, (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
@@ -561,20 +605,6 @@ UserFaultHandler::~UserFaultHandler(void)
   delete stat;
   delete uffd_worker;
 }
-
-#if 0
-static string uffd_pf_reason(const struct uffd_msg& msg)
-{
-  if ((msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE))
-    return "UFFD_PAGEFAULT_FLAG_WP UFFD_PAGEFAULT_FLAG_WRITE";
-  else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP)
-    return "UFFD_PAGEFAULT_FLAG_WP";
-  else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
-    return "UFFD_PAGEFAULT_FLAG_WRITE";
-  else
-    return "UFFD_PAGEFAULT_READ";
-}
-#endif
 
 struct less_than_key
 {
@@ -621,7 +651,7 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
-    if (!pollfd[0].revents & POLLIN)
+    if ( !(pollfd[0].revents & POLLIN) )
       continue;
 
     int readres = read(userfault_fd, &umessages[0], UMAP_UFFD_MAX_MESSAGES * sizeof(struct uffd_msg));
@@ -678,6 +708,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   stringstream ss;
 
   if (pm != nullptr) {
+#ifndef UMAP_RO_MODE
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       if (!pm->page_is_dirty()) {
         ss << "PF(" << msg.arg.pagefault.flags << " WP)    (DISABLE_WP)       @(" << page_begin << ")";
@@ -710,6 +741,11 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
         }
       }
     }
+#else
+    if ( msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE ) {
+      assert("Write operation not allowed without WP support" && 0);
+    }
+#endif
     return;
   }
 
@@ -723,10 +759,17 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
     exit(1);
   }
 
+#ifndef UMAP_RO_MODE
   if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE))
     ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")";
   else
     ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")";
+#else
+  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
+    ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")";
+  else
+    ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")";
+#endif
 
   for (pm = pagebuffer->alloc_page_desc(page_begin); pm == nullptr; pm = pagebuffer->alloc_page_desc(page_begin)) {
     umap_page* ep = pagebuffer->get_page_desc_to_evict();
@@ -747,6 +790,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   copy.len = page_size;
   copy.mode = 0;
 
+#ifndef UMAP_RO_MODE
   if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
     stat->write_faults++;
     pm->mark_page_dirty();
@@ -756,11 +800,20 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       exit(1);
     }
   }
+#else
+  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
+    assert("Write operation not allowed without WP support" && 0);
+  }
+#endif
   else {
     stat->read_faults++;
     pm->mark_page_clean();
 
+#ifndef UMAP_RO_MODE
     copy.mode = UFFDIO_COPY_MODE_WP;
+#else
+    copy.mode = 0;
+#endif
     if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
       perror("ERROR: ioctl(UFFDIO_COPY nowake)");
       exit(1);
@@ -805,6 +858,9 @@ void UserFaultHandler::evict_page(umap_page* pb)
   uint64_t* page = (uint64_t*)pb->get_page();
 
   if (pb->page_is_dirty()) {
+#ifdef UMAP_RO_MODE
+    assert("Dirty page found when running in RO mode" && 0);
+#else
     stat->dirty_evicts++;
 
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
@@ -814,6 +870,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
       perror("ERROR: pstore_write failed");
       assert(0);
     }
+#endif
   }
   else {
     stat->clean_evicts++;
@@ -827,6 +884,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
   pb->set_page(nullptr);
 }
 
+#ifndef UMAP_RO_MODE
 //
 // Enabling WP always wakes up blocked faulting threads that may have been faulted in the specified range.
 //
@@ -867,6 +925,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
     exit(1);
   }
 }
+#endif
 
 //
 // umap_page_buffer class implementation
