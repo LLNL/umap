@@ -209,6 +209,32 @@ class umap_page {
 
 static unordered_map<void*, _umap*> active_umaps;
 
+static inline bool required_uffd_features_present(int fd)
+{
+  struct uffdio_api uffdio_api = {
+    .api = UFFD_API,
+#ifdef UMAP_RO_MODE
+    .features = 0
+#else
+    .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
+#endif
+  };
+
+  if (ioctl(fd, UFFDIO_API, &uffdio_api) == -1) {
+    perror("ERROR: UFFDIO_API Failed: ");
+    return false;
+  }
+
+#ifndef UMAP_RO_MODE
+  if ( !(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) ) {
+    cerr << "UFFD Compatibilty Check - unsupported userfaultfd WP\n";
+    return false;
+  }
+#endif
+
+  return true;
+}
+
 //
 // Library Interface Entry
 //
@@ -221,26 +247,8 @@ static int check_uffd_compatibility( void )
     exit(1);
   }
 
-  struct uffdio_api uffdio_api = {
-    .api = UFFD_API,
-#ifdef UMAP_RO_MODE
-    .features = 0
-#else
-    .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
-#endif
-  };
-
-  if (ioctl(fd, UFFDIO_API, &uffdio_api) == -1) {
-    perror("ERROR: UFFDIO_API Failed: ");
+  if ( ! required_uffd_features_present(fd) )
     exit(1);
-  }
-
-#ifndef UMAP_RO_MODE
-  if ( !(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) ) {
-    cerr << "UFFD Compatibilty Check - unsupported userfaultfd WP\n";
-    exit(1);
-  }
-#endif
 
   close(fd);
 
@@ -535,26 +543,8 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
     throw -1;
   }
 
-  struct uffdio_api uffdio_api = {
-    .api = UFFD_API,
-#ifndef UMAP_RO_MODE
-    .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
-#else
-    .features = 0
-#endif
-  };
-
-  if (ioctl(userfault_fd, UFFDIO_API, &uffdio_api) == -1) {
-    perror("ERROR: UFFDIO_API Failed: ");
+  if ( ! required_uffd_features_present(userfault_fd) )
     exit(1);
-  }
-
-#ifndef UMAP_RO_MODE
-  if (!(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP)) {
-    perror("ERROR: userfaultfd WP: ");
-    exit(1);
-  }
-#endif
 
   for ( auto seg : PageBlocks ) {
     struct uffdio_register uffdio_register = {
