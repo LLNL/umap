@@ -130,8 +130,7 @@ class UserFaultHandler {
     vector<struct uffd_msg> umessages;
 
     int userfault_fd;
-    char* tmppagebuf;
-    char* alignedpagebuf;
+    char* copyin_buf;
     thread* uffd_worker;
 
     void evict_page(umap_page* page);
@@ -521,23 +520,13 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
 {
   umessages.resize(UMAP_UFFD_MAX_MESSAGES);
 
-  if (posix_memalign((void**)&tmppagebuf, (uint64_t)512, page_size)) {
+  if (posix_memalign((void**)&copyin_buf, (uint64_t)page_size, (page_size * 2))) {
     cerr << "ERROR: posix_memalign: failed\n";
     exit(1);
   }
 
-  if (tmppagebuf == nullptr) {
+  if (copyin_buf == nullptr) {
     cerr << "Unable to allocate " << page_size << " bytes for temporary buffer\n";
-    exit(1);
-  }
-
-  if (posix_memalign((void**)&alignedpagebuf, (uint64_t)512, page_size)) {
-    cerr << "ERROR: posix_memalign: failed\n";
-    exit(1);
-  }
-
-  if (alignedpagebuf == nullptr) {
-    cerr << "Unable to allocate " << page_size << " bytes for temporary page buffer\n";
     exit(1);
   }
 
@@ -611,8 +600,7 @@ UserFaultHandler::~UserFaultHandler(void)
     }
   }
 
-  free(tmppagebuf);
-  free(alignedpagebuf);
+  free(copyin_buf);
   delete pagebuffer;
   delete stat;
   delete uffd_worker;
@@ -732,7 +720,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       }
       else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
         struct uffdio_copy copy;
-        copy.src = (uint64_t)tmppagebuf;
+        copy.src = (uint64_t)copyin_buf;
         copy.dst = (uint64_t)page_begin;
         copy.len = page_size;
         copy.mode = 0;  // No WP
@@ -742,7 +730,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
         debug_printf3("EVICT WORKAROUND FOR %p\n", page_begin);
 
         pm->mark_page_clean();
-        memcpy(tmppagebuf, page_begin, page_size);   // Save our data
+        memcpy(copyin_buf, page_begin, page_size);   // Save our data
         evict_page(pm);                              // Evict ourselves
         pm->set_page(page_begin);                    // Bring ourselves back in
         pm->mark_page_dirty();                       // Will be dirty when write retries
@@ -766,7 +754,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   //
   off_t offset=(uint64_t)page_begin - (uint64_t)_u->region;
 
-  if (_u->pstore_read(alignedpagebuf, page_size, _u->region, tmppagebuf, page_size, offset) == -1) {
+  if (_u->pstore_read(_u->region, copyin_buf, page_size, offset) == -1) {
     perror("ERROR: pstore_read failed");
     exit(1);
   }
@@ -797,7 +785,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   debug_printf3("%s\n", ss.str().c_str());
 
   struct uffdio_copy copy;
-  copy.src = (uint64_t)tmppagebuf;
+  copy.src = (uint64_t)copyin_buf;
   copy.dst = (uint64_t)page_begin;
   copy.len = page_size;
   copy.mode = 0;
@@ -831,7 +819,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       exit(1);
     }
 
-    assert(memcmp(tmppagebuf, page_begin, page_size) == 0);
+    assert(memcmp(copyin_buf, page_begin, page_size) == 0);
   }
 }
 
@@ -878,7 +866,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
-    if (_u->pstore_write(alignedpagebuf, page_size, _u->region, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
+    if (_u->pstore_write(_u->region, (char*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
       perror("ERROR: pstore_write failed");
       assert(0);
     }

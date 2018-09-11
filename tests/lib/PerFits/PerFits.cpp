@@ -50,13 +50,14 @@ struct Cube {
 
 static std::unordered_map<void*, Cube*> Cubes;
 
-static ssize_t ps_read(void* pagebuf, size_t pagebufsz, void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t ps_read(void* region, char* dblbuf, size_t nbytes, off_t region_offset)
 {
   auto it = Cubes.find(region);
   assert( "ps_read: failed to find control object" && it != Cubes.end() );
   Cube* cube = it->second;
   ssize_t rval;
   ssize_t bytesread = 0;
+  char* direct_io_buf = &dblbuf[nbytes];
 
   //
   // Now read in remaining bytes
@@ -67,22 +68,22 @@ static ssize_t ps_read(void* pagebuf, size_t pagebufsz, void* region, void* buf,
     size_t bytes_to_eof = cube->tile_size - tileoffset;
     size_t bytes_to_read = std::min(bytes_to_eof, nbytes);
 
-    debug_printf("buf=%p, bytes_to_read=%zu, offset=%zu\n", buf, bytes_to_read, tileoffset);
-    if ( ( rval = cube->tiles[tileno].pread(cube->page_size, pagebuf, buf, bytes_to_read, tileoffset) ) == -1) {
+    debug_printf("dblbuf=%p, bytes_to_read=%zu, offset=%zu\n", dblbuf, bytes_to_read, tileoffset);
+    if ( ( rval = cube->tiles[tileno].pread(cube->page_size, direct_io_buf, dblbuf, bytes_to_read, tileoffset) ) == -1) {
       perror("ERROR: pread failed");
       exit(1);
     }
 
     bytesread += rval;
     nbytes -= rval;
-    buf = (void*)((char*)buf + rval);
+    dblbuf += rval;
     region_offset += rval;
   }
 
   return bytesread;
 }
 
-static ssize_t ps_write(void* pagebuf, size_t pagebufsz, void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t ps_write(void* region, char* buf, size_t nbytes, off_t region_offset)
 {
   assert("FITS write not supported" && 0);
   return 0;

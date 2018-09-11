@@ -44,7 +44,7 @@ class Tile {
 friend std::ostream &operator<<(std::ostream &os, Fits::Tile const &ft);
 public:
   Tile(const std::string& _fn, bool use_direct_io);
-  ssize_t pread(std::size_t alignment, void* cpy_buf, void *buf, std::size_t nbytes, off_t offset);
+  ssize_t pread(std::size_t alignment, void* cpy_buf, void* buf, std::size_t nbytes, off_t offset);
   Tile_Dim get_Dim() { return dim; }
 private:
   Tile_File file;
