@@ -1,6 +1,6 @@
 /*
  * This file is part of UMAP.
- *
+ 
  * For copyright information see the COPYRIGHT file in the top level
  * directory or at https://github.com/LLNL/umap/blob/master/COPYRIGHT.
  *
@@ -23,15 +23,17 @@
 #include <ostream>
 #include <string>
 #include <cassert>
+#include <cstring>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include "Tile.hpp"
 #include "fitsio.h"
+#include "spindle_debug.h"
 
 namespace Fits {
-Tile::Tile(const std::string& _fn)
+Tile::Tile(const std::string& _fn, bool use_direct_io)
 {
   fitsfile* fptr = NULL;
   int status = 0;
@@ -41,6 +43,10 @@ Tile::Tile(const std::string& _fn)
   int bitpix;
   long naxis[2];
   int naxes;
+  int open_flags = (O_RDONLY | O_LARGEFILE);
+
+  if (use_direct_io)
+    open_flags |= O_DIRECT;
 
   file.fname = _fn;
   file.tile_start = (size_t)0;
@@ -75,7 +81,7 @@ Tile::Tile(const std::string& _fn)
     exit(-1);
   }
 
-  if ( ( file.fd = open(file.fname.c_str(), (O_RDONLY | O_LARGEFILE)) ) == -1 ) {
+  if ( ( file.fd = open(file.fname.c_str(), open_flags) ) == -1 ) {
     perror(file.fname.c_str());
     exit(-1);
   }
@@ -89,24 +95,26 @@ Tile::Tile(const std::string& _fn)
   assert( (dataend - datastart) >= (dim.xDim * dim.yDim * dim.elem_size) );
 }
 
-ssize_t Tile::pread(void *buf, std::size_t nbytes, off_t offset)
+ssize_t Tile::pread(std::size_t alignment, void* cpy_buf, void* buf, std::size_t nbytes, off_t offset)
 {
   std::size_t rval;
 
-  assert("File not large enough" && (offset + nbytes) <= (dim.xDim * dim.yDim * dim.elem_size));
-
-  //if ( nbytes < 4096 ) {
-    //std::cerr << "PARTIAL read(" << file.fname << ", buf=" << buf << ", nbytes=" << nbytes << ", offset=" << offset << ")\n";
-  //}
-
   offset += file.tile_start;  // Skip to data portion of file
+  off_t unaligned_amount = offset & (alignment - 1);
+  offset -= unaligned_amount;
+  char* tbuf = (char*)cpy_buf;
 
-  if ( ( rval = ::pread(file.fd, buf, nbytes, offset) ) == -1) {
+  debug_printf("%zu bytes into %p from offset %zu\n", alignment, buf, offset);
+  if ( ( rval = ::pread(file.fd, tbuf, alignment, offset) ) == -1) {
     perror("ERROR: pread failed");
     exit(1);
   }
 
-  return rval;
+  ssize_t amount_to_copy = std::min(rval, nbytes) - unaligned_amount;
+
+  std::memcpy(buf, &tbuf[unaligned_amount], amount_to_copy);
+
+  return amount_to_copy;
 }
 
 std::ostream &operator<<(std::ostream &os, Tile const &ft)

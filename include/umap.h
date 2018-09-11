@@ -31,6 +31,8 @@ extern "C" {
  * implementations that are thread-unsafe may not function correctly.
  */
 typedef ssize_t (*umap_pstore_read_f_t)(
+    void* pagebuf,
+    size_t pagebufsz,
     void* region,
     void* buf,
     size_t nbytes,
@@ -38,6 +40,8 @@ typedef ssize_t (*umap_pstore_read_f_t)(
     );
 
 typedef ssize_t (*umap_pstore_write_f_t)(
+    void* pagebuf,
+    size_t pagebufsz,
     void* region,
     void* buf,
     size_t nbytes,

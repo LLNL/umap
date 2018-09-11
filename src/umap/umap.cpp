@@ -131,6 +131,7 @@ class UserFaultHandler {
 
     int userfault_fd;
     char* tmppagebuf;
+    char* alignedpagebuf;
     thread* uffd_worker;
 
     void evict_page(umap_page* page);
@@ -530,6 +531,16 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
     exit(1);
   }
 
+  if (posix_memalign((void**)&alignedpagebuf, (uint64_t)512, page_size)) {
+    cerr << "ERROR: posix_memalign: failed\n";
+    exit(1);
+  }
+
+  if (alignedpagebuf == nullptr) {
+    cerr << "Unable to allocate " << page_size << " bytes for temporary page buffer\n";
+    exit(1);
+  }
+
   if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
     perror("ERROR: userfaultfd syscall not available in this kernel");
     throw -1;
@@ -601,6 +612,7 @@ UserFaultHandler::~UserFaultHandler(void)
   }
 
   free(tmppagebuf);
+  free(alignedpagebuf);
   delete pagebuffer;
   delete stat;
   delete uffd_worker;
@@ -754,7 +766,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   //
   off_t offset=(uint64_t)page_begin - (uint64_t)_u->region;
 
-  if (_u->pstore_read(_u->region, tmppagebuf, page_size, offset) == -1) {
+  if (_u->pstore_read(alignedpagebuf, page_size, _u->region, tmppagebuf, page_size, offset) == -1) {
     perror("ERROR: pstore_read failed");
     exit(1);
   }
@@ -866,7 +878,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
-    if (_u->pstore_write(_u->region, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
+    if (_u->pstore_write(alignedpagebuf, page_size, _u->region, (void*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
       perror("ERROR: pstore_write failed");
       assert(0);
     }

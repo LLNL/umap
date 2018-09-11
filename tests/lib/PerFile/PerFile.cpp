@@ -41,12 +41,12 @@ typedef struct umt_map_handle {
 
 static unordered_map<void*, umt_map_handle*> mappings;
 
-static ssize_t pstore_noio(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t pstore_noio(void* pagebuf, size_t pagebufsz, void* region, void* buf, size_t nbytes, off_t region_offset)
 {
   return nbytes;
 }
 
-static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t pstore_read(void* pagebuf, size_t pagebufsz, void* region, void* buf, size_t nbytes, off_t region_offset)
 {
   ssize_t rval;
   auto it = mappings.find(region);
@@ -60,7 +60,7 @@ static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_
   return rval;
 }
 
-static ssize_t pstore_write(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t pstore_write(void* pagebuf, size_t pagebufsz, void* region, void* buf, size_t nbytes, off_t region_offset)
 {
   ssize_t rval;
   auto it = mappings.find(region);
