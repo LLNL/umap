@@ -41,37 +41,37 @@ typedef struct umt_map_handle {
 
 static unordered_map<void*, umt_map_handle*> mappings;
 
-static ssize_t pstore_noio(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t pstore_noio(void* region, char* dblbuf, size_t nbytes, off_t region_offset)
 {
   return nbytes;
 }
 
-static ssize_t pstore_read(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t pstore_read(void* region, char* dblbuf, size_t nbytes, off_t region_offset)
 {
   ssize_t rval;
   auto it = mappings.find(region);
   assert( it != mappings.end() );
   umt_map_handle* handle = it->second;
 
-  if ( ( rval = pread(handle->fd, buf, nbytes, region_offset) ) == -1) {
+  if ( ( rval = pread(handle->fd, dblbuf, nbytes, region_offset) ) == -1) {
     perror("ERROR: pread failed");
     exit(1);
   }
   return rval;
 }
 
-static ssize_t pstore_write(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t pstore_write(void* region, char* dblbuf, size_t nbytes, off_t region_offset)
 {
   ssize_t rval;
   auto it = mappings.find(region);
 
   if ( it == mappings.end() ) {
-    cerr << __FUNCTION__ << "(region=" << region << ", buf=" << buf << ", nbytes=" << nbytes << ", offset=" << region_offset << ")\n";
+    cerr << __FUNCTION__ << "(region=" << region << ", dblbuf=" << dblbuf << ", nbytes=" << nbytes << ", offset=" << region_offset << ")\n";
     assert( "Unable to find region in map" && it != mappings.end() );
   }
   umt_map_handle* handle = it->second;
 
-  if ( ( rval = pwrite(handle->fd, buf, nbytes, region_offset) ) == -1) {
+  if ( ( rval = pwrite(handle->fd, dblbuf, nbytes, region_offset) ) == -1) {
     perror("ERROR: pwrite failed");
     assert(0);
   }

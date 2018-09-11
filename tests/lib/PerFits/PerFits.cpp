@@ -34,6 +34,7 @@
 #include "testoptions.h"
 #include "Tile.hpp"
 #include "PerFits.h"
+#include "spindle_debug.h"
 
 using namespace std;
 
@@ -43,40 +44,46 @@ struct Cube {
   const umt_optstruct_t test_options;
   size_t tile_size;  // Size of each tile (assumed to be the same for each tile)
   size_t cube_size;  // Total bytes in cube
+  off_t page_size;
   vector<Fits::Tile> tiles;  // Just one column for now
 };
 
 static std::unordered_map<void*, Cube*> Cubes;
 
-static ssize_t ps_read(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t ps_read(void* region, char* dblbuf, size_t nbytes, off_t region_offset)
 {
   auto it = Cubes.find(region);
   assert( "ps_read: failed to find control object" && it != Cubes.end() );
   Cube* cube = it->second;
   ssize_t rval;
   ssize_t bytesread = 0;
+  char* direct_io_buf = &dblbuf[nbytes];
 
+  //
+  // Now read in remaining bytes
+  //
   while ( nbytes ) {
     off_t tileno = region_offset / cube->tile_size;
     off_t tileoffset = region_offset % cube->tile_size;
     size_t bytes_to_eof = cube->tile_size - tileoffset;
     size_t bytes_to_read = std::min(bytes_to_eof, nbytes);
 
-    if ( ( rval = cube->tiles[tileno].pread(buf, bytes_to_read, tileoffset) ) == -1) {
+    debug_printf("dblbuf=%p, bytes_to_read=%zu, offset=%zu\n", dblbuf, bytes_to_read, tileoffset);
+    if ( ( rval = cube->tiles[tileno].pread(cube->page_size, direct_io_buf, dblbuf, bytes_to_read, tileoffset) ) == -1) {
       perror("ERROR: pread failed");
       exit(1);
     }
 
     bytesread += rval;
-    nbytes -= bytes_to_read;
-    buf = (void*)((char*)buf + bytes_to_read);
-    region_offset += bytes_to_read;
+    nbytes -= rval;
+    dblbuf += rval;
+    region_offset += rval;
   }
 
   return bytesread;
 }
 
-static ssize_t ps_write(void* region, void* buf, size_t nbytes, off_t region_offset)
+static ssize_t ps_write(void* region, char* buf, size_t nbytes, off_t region_offset)
 {
   assert("FITS write not supported" && 0);
   return 0;
@@ -97,17 +104,13 @@ void* PerFits_alloc_cube(
     return nullptr;
   }
 
-  if ( TestOptions->iodirect ) {
-    cerr << "DIRECT_IO is not supported for FITS files\n";
-    return nullptr;
-  }
-
   if ( TestOptions->initonly ) {
     cerr << "INIT/Creation of FITS files is not supported\n";
     return nullptr;
   }
 
   Cube* cube = new Cube{.test_options = *TestOptions, .tile_size = 0, .cube_size = 0};
+  cube->page_size = sysconf(_SC_PAGESIZE);
   string basename(TestOptions->filename);
 
   *xDim = *yDim = *BytesPerElement = 0;
@@ -125,7 +128,7 @@ void* PerFits_alloc_cube(
       break;
     }
 
-    Fits::Tile T(ss.str());
+    Fits::Tile T( ss.str(), (TestOptions->iodirect != 0) );
 
     //cout << T << endl;
 

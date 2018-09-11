@@ -183,7 +183,7 @@ int clearDaemon(char *tmpdir)
    if (fd != -1) {
       char pids[32], *cur = pids;
       while (read(fd, cur++, 1) == 1 && (cur - pids) < 32);
-      cur = '\0';
+      *cur = '\0';
       pid = atoi(pids);
       if (pid && kill(pid, 0) != -1) {
          /* The process exists, someone else likely re-created it */
