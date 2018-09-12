@@ -50,7 +50,8 @@ static void usage(char* pname)
   << " -b # page buffer size  - default: " << umap_cfg_get_bufsize() << " Pages\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
-  << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n";
+  << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n"
+  << " -P # page size         - default: " << umap_cfg_get_pagesize() << endl;
   exit(1);
 }
 
@@ -72,6 +73,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
   testops->uffdthreads = umap_cfg_get_uffdthreads();
   testops->filename = FILENAME;
   testops->dirname = DIRNAME;
+  testops->pagesize = umap_cfg_get_pagesize();
 
   while (1) {
     int option_index = 0;
@@ -86,7 +88,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:d:u:a:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:d:u:a:P:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -98,6 +100,14 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
         usage(pname);
         break;
 
+      case 'P':
+        if ((testops->pagesize = strtol(optarg, nullptr, 0)) > 0) {
+          if (umap_cfg_set_pagesize(testops->pagesize) < 0) {
+            goto R0;
+          }
+          break;
+        }
+        goto R0;
       case 'p':
         if ((testops->numpages = strtoull(optarg, nullptr, 0)) > 0)
           break;
@@ -151,11 +161,5 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
 
 long umt_getpagesize(void)
 {
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (page_size == -1) {
-        perror("sysconf/page_size");
-        exit(1);
-    }
-    return page_size;
+  return umap_cfg_get_pagesize();
 }
-

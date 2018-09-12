@@ -76,6 +76,8 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize );
 uint64_t umap_cfg_get_uffdthreads( void );
 void umap_cfg_set_uffdthreads( uint64_t numthreads );
 void umap_cfg_flush_buffer( void* region );
+int umap_cfg_get_pagesize( void );
+int umap_cfg_set_pagesize( long psize );
 
 struct umap_cfg_stats {
     uint64_t dirty_evicts;

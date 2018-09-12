@@ -331,6 +331,28 @@ void umap_cfg_flush_buffer( void* region )
     it->second->flushbuffers();
 }
 
+int umap_cfg_get_pagesize()
+{
+  return page_size;
+}
+
+int umap_cfg_set_pagesize( long psize )
+{
+  long sys_psize = sysconf(_SC_PAGESIZE);
+
+  /*
+   * Must be multiple of system page size
+   */
+  if ( psize % sys_psize ) {
+    cerr << "Specified page size (" << psize << ") must be a multiple of system page size (" << sys_psize << ")\n";
+    return -1;
+  }
+
+  debug_printf("Adjusting page size from %d to %d\n", page_size, psize);
+
+  page_size = psize;
+}
+
 void umap_cfg_get_stats(void* region, struct umap_cfg_stats* stats)
 {
   auto it = active_umaps.find(region);
