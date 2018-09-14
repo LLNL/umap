@@ -188,21 +188,18 @@ class umap_page_buffer {
 
   private:
     uint64_t page_buffer_size;
-    deque<umap_page*> free_page_descriptors;
+    vector<umap_page*> free_page_descriptors;
     deque<umap_page*> inmem_page_descriptors;
     unordered_map<void*, umap_page*> inmem_page_map;
+    umap_page* page_descriptor_array;
 };
 
-class umap_page {
-  public:
-    umap_page(): page{nullptr}, dirty{false} {}
+struct umap_page {
     bool page_is_dirty() { return dirty; }
     void mark_page_dirty() { dirty = true; }
     void mark_page_clean() { dirty = false; }
     void* get_page(void) { return page; }
-
     void set_page(void* _p);
-  private:
     void* page;
     bool dirty;
 };
@@ -329,6 +326,28 @@ void umap_cfg_flush_buffer( void* region )
 
   if (it != active_umaps.end())
     it->second->flushbuffers();
+}
+
+int umap_cfg_get_pagesize()
+{
+  return page_size;
+}
+
+int umap_cfg_set_pagesize( long psize )
+{
+  long sys_psize = sysconf(_SC_PAGESIZE);
+
+  /*
+   * Must be multiple of system page size
+   */
+  if ( psize % sys_psize ) {
+    cerr << "Specified page size (" << psize << ") must be a multiple of system page size (" << sys_psize << ")\n";
+    return -1;
+  }
+
+  debug_printf("Adjusting page size from %d to %d\n", page_size, psize);
+
+  page_size = psize;
 }
 
 void umap_cfg_get_stats(void* region, struct umap_cfg_stats* stats)
@@ -922,8 +941,11 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
 //
 umap_page_buffer::umap_page_buffer(uint64_t pbuffersize) : page_buffer_size{pbuffersize}
 {
+  free_page_descriptors.reserve(page_buffer_size);
+  page_descriptor_array = (umap_page *)calloc(page_buffer_size, sizeof(umap_page));
+
   for (uint64_t i = 0; i < page_buffer_size; ++i)
-    free_page_descriptors.push_front(new umap_page());
+    free_page_descriptors.push_back(page_descriptor_array + i);
 }
 
 umap_page_buffer::~umap_page_buffer()
@@ -932,8 +954,10 @@ umap_page_buffer::~umap_page_buffer()
   assert(inmem_page_descriptors.size() == 0);
   assert(free_page_descriptors.size() == page_buffer_size);
 
-  for (unsigned long i = 0; i < page_buffer_size; ++i)
-    delete free_page_descriptors[i];
+  //for (unsigned long i = 0; i < page_buffer_size; ++i)
+    //free_page_descriptors.pop_back();
+
+  free(page_descriptor_array);
 }
 
 umap_page* umap_page_buffer::alloc_page_desc(void* page)
@@ -951,7 +975,7 @@ void umap_page_buffer::dealloc_page_desc(umap_page* page_desc)
 {
   page_desc->mark_page_clean();
   page_desc->set_page(nullptr);
-  free_page_descriptors.push_front(page_desc);
+  free_page_descriptors.push_back(page_desc);
 }
 
 void umap_page_buffer::add_page_desc_to_inmem(umap_page* page_desc)

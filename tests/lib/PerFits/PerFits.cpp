@@ -110,7 +110,7 @@ void* PerFits_alloc_cube(
   }
 
   Cube* cube = new Cube{.test_options = *TestOptions, .tile_size = 0, .cube_size = 0};
-  cube->page_size = sysconf(_SC_PAGESIZE);
+  cube->page_size = umt_getpagesize();
   string basename(TestOptions->filename);
 
   *xDim = *yDim = *BytesPerElement = 0;

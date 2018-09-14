@@ -24,6 +24,7 @@ typedef struct {
   int noio;
   int shuffle;
 
+  long pagesize;
   uint64_t numpages;
   uint64_t numthreads;
   uint64_t bufsize;
