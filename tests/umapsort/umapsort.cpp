@@ -136,6 +136,7 @@ int main(int argc, char **argv)
   uint64_t arraysize;
   void* base_addr;
 
+  uint64_t start = getns();
   pagesize = (uint64_t)umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
@@ -147,16 +148,18 @@ int main(int argc, char **argv)
   if (base_addr == nullptr)
     return -1;
  
+  fprintf(stdout, "umap INIT took %f seconds\n", (double)(getns() - start)/1000000000.0);
+#ifdef taken_out
   fprintf(stdout, "%lu pages, %llu bytes, %lu threads\n", options.numpages, totalbytes, options.numthreads);
 
   uint64_t *arr = (uint64_t *) base_addr; 
   arraysize = totalbytes/sizeof(uint64_t);
 
-  uint64_t start = getns();
+  start = getns();
   if ( !options.noinit ) {
     // init data
     initdata(arr, arraysize);
-    fprintf(stdout, "Init took %f microseconds\n", (double)(getns() - start)/1000000.0);
+    fprintf(stdout, "Init took %f seconds\n", (double)(getns() - start)/1000000000.0);
   }
 
   if ( !options.initonly ) 
@@ -173,14 +176,17 @@ int main(int argc, char **argv)
       __gnu_parallel::sort(arr, &arr[arraysize], std::greater<uint64_t>(), __gnu_parallel::quicksort_tag());
     }
 
-    fprintf(stdout, "Sort took %f microseconds\n", (double)(getns() - start)/1000000.0);
+    fprintf(stdout, "Sort took %f seconds\n", (double)(getns() - start)/1000000000.0);
 
     start = getns();
     validatedata(arr, arraysize);
-    fprintf(stdout, "Validate took %f microseconds\n", (double)(getns() - start)/1000000.0);
+    fprintf(stdout, "Validate took %f seconds\n", (double)(getns() - start)/1000000000.0);
   }
+#endif
   
+  start = getns();
   PerFile_closeandunmap(&options, totalbytes, base_addr);
+  fprintf(stdout, "umap TERM took %f seconds\n", (double)(getns() - start)/1000000000.0);
 
   return 0;
 }

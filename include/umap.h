@@ -20,8 +20,12 @@ extern "C" {
  * persistant storage.
  *
  * \param region Returned from previous umap() call
- * \param buf Buffer provided and owned by umap to read data in to
- * \param nbytes # of bytes to read/write in/from \a buf
+ * \param dblbuf Buffer provided and owned by umap to read data in to.  This
+ * buffer must page-aligned and at least 2X the size of the # of bytes being
+ * requested.  This is for buffering purposes in the event that the source
+ * file is not page-aligned.
+ * \param nbytes # of bytes to read/write in/from \a dblbuf. The # of bytes
+ * must be a multiple of the system page size.
  * \param region_offset Byte offset from beginning of \a region
  * \returns If successful, the number of bytes read/written in/from \a buf.
  * Otherwise, -1.
@@ -32,14 +36,14 @@ extern "C" {
  */
 typedef ssize_t (*umap_pstore_read_f_t)(
     void* region,
-    void* buf,
+    char* dblbuf,
     size_t nbytes,
     off_t region_offset
     );
 
 typedef ssize_t (*umap_pstore_write_f_t)(
     void* region,
-    void* buf,
+    char* buf,
     size_t nbytes,
     off_t region_offset
     );
@@ -72,6 +76,8 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize );
 uint64_t umap_cfg_get_uffdthreads( void );
 void umap_cfg_set_uffdthreads( uint64_t numthreads );
 void umap_cfg_flush_buffer( void* region );
+int umap_cfg_get_pagesize( void );
+int umap_cfg_set_pagesize( long psize );
 
 struct umap_cfg_stats {
     uint64_t dirty_evicts;

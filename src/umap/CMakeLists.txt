@@ -9,7 +9,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 # TODO: This needs to change to "AFTER" when we have code in place to
 # dynamically check for existence of WP functionality
 #
-include_directories( BEFORE 
+include_directories( AFTER 
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${UMAPINCLUDEDIRS} 
   ${CMAKE_SOURCE_DIR}/sysincludes
