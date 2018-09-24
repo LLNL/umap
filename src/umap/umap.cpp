@@ -1,4 +1,4 @@
-/* This file is part of UMAP.  
+/* This file is part of UMAP.
  *
  * For copyright information see the COPYRIGHT file in the top level directory,
  * or at https://github.com/LLNL/umap/blob/master/COPYRIGHT.
@@ -26,6 +26,7 @@
 
 #include <iostream>
 #include <cstdint>
+#include <cinttypes>
 #include <vector>
 #include <algorithm>
 #include <thread>
@@ -77,12 +78,12 @@ class umap_stats;
 class __umap;
 class UserFaultHandler;
 
-// 
+//
 // |------------------------- umap() provided Region ----------------------------|
 // |------------------------- umap() provided backing file(s) -------------------|
 // |- Page Block 1 -|- Page Block 2 -|- ... -|- Page Block N-1 -|- Page Block N -|
 //
-// _umap organizes a region of memory into a set of blocks of pages.  The blocks 
+// _umap organizes a region of memory into a set of blocks of pages.  The blocks
 // of pages are then distributed evenly to a set of UserFaultHandler objects.
 //
 class _umap {
@@ -120,7 +121,7 @@ class UserFaultHandler {
     umap_page_buffer* get_pagebuffer() { return pagebuffer; }
     void flushbuffers( void );
     void resetstats( void );
-    
+
     umap_stats* stat;
   private:
     _umap* _u;
@@ -144,14 +145,14 @@ class UserFaultHandler {
 
 class umap_stats {
   public:
-    umap_stats(): 
-      dirty_evicts{0}, 
-      clean_evicts{0}, 
-      evict_victims{0}, 
-      wp_messages{0}, 
-      read_faults{0}, 
-      write_faults{0}, 
-      sigbus{0}, 
+    umap_stats():
+      dirty_evicts{0},
+      clean_evicts{0},
+      evict_victims{0},
+      wp_messages{0},
+      read_faults{0},
+      write_faults{0},
+      sigbus{0},
       stuck_wp{0},
       dropped_dups{0}
       {};
@@ -295,6 +296,34 @@ int uunmap(void*  addr, uint64_t length)
     active_umaps.erase(it);
   }
   return 0;
+}
+
+uint64_t* umap_cfg_readenv(const char* env, uint64_t* val) {
+  // return a pointer to val on success, null on failure
+  char* val_ptr = 0;
+  if ( (val_ptr = getenv(env)) ) {
+    uint64_t env_val = 0;
+    if (sscanf(val_ptr, "%"PRIu64, &env_val)) {
+      *val = env_val;
+      return val;
+    }
+  }
+  return 0;
+}
+
+void umap_cfg_getenv( void ) {
+  uint64_t env_value = 0;
+  if ( (umap_cfg_readenv("UMAP_BUFSIZE", &env_value)) ) {
+    umap_cfg_set_bufsize(env_value);
+  }
+
+  if ( (umap_cfg_readenv("UMAP_UFFD_THREADS", &env_value)) ) {
+    umap_cfg_set_uffdthreads(env_value);
+  }
+
+  if ( (umap_cfg_readenv("UMAP_PAGESIZE", &env_value)) ) {
+    umap_cfg_set_pagesize(env_value);
+  }
 }
 
 uint64_t umap_cfg_get_bufsize( void )
@@ -449,6 +478,8 @@ void __attribute ((constructor)) init_umap_lib( void )
     perror("ERROR: sigaction: ");
     exit(1);
   }
+
+  umap_cfg_getenv();
   LOGGING_FINI;
 }
 
@@ -480,13 +511,13 @@ _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap
   uint64_t additional_blocks_for_last_worker = page_blocks % num_workers;
 
   stringstream ss;
-  ss << "umap(" 
-    << region << " - " << (void*)((char*)region+region_size) 
+  ss << "umap("
+    << region << " - " << (void*)((char*)region+region_size)
     << ") " << pages_in_region << " region pages, "
     << pages_per_block << " pages per block, "
     << page_blocks  << " page blocks, "
     << additional_pages_for_last_block << " additional pages for last block, "
-    << num_workers << " workers, " 
+    << num_workers << " workers, "
     << page_blocks_per_worker << " page blocks per worker, "
     << additional_blocks_for_last_worker << " additional blocks for last worker"
     << endl;
@@ -538,11 +569,11 @@ _umap::~_umap(void)
 }
 
 UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pblks, uint64_t _pbuf_size)
-    : 
+    :
       stat{ new umap_stats },
-      _u{_um}, 
-      PageBlocks{_pblks}, 
-      pbuf_size{_pbuf_size}, 
+      _u{_um},
+      PageBlocks{_pblks},
+      pbuf_size{_pbuf_size},
       pagebuffer{ new umap_page_buffer{_pbuf_size} }
 {
   umessages.resize(UMAP_UFFD_MAX_MESSAGES);
@@ -898,7 +929,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
 // Enabling WP always wakes up blocked faulting threads that may have been faulted in the specified range.
 //
 // For reasons which are unknown, the kernel module interface for UFFDIO_WRITEPROTECT does not allow for the caller to submit
-// UFFDIO_WRITEPROTECT_MODE_DONTWAKE when enabling WP with UFFDIO_WRITEPROTECT_MODE_WP.  UFFDIO_WRITEPROTECT_MODE_DONTWAKE is only 
+// UFFDIO_WRITEPROTECT_MODE_DONTWAKE when enabling WP with UFFDIO_WRITEPROTECT_MODE_WP.  UFFDIO_WRITEPROTECT_MODE_DONTWAKE is only
 // allowed when disabling WP.
 //
 void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_pages)
@@ -908,7 +939,7 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
   wp.range.len = num_pages * page_size;
   wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-  debug_printf3("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
+  debug_printf3("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1)));
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");
@@ -927,7 +958,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
   //wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
   wp.mode = do_not_awaken ? UFFDIO_WRITEPROTECT_MODE_DONTWAKE : 0;
 
-  //debug_printf3("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1))); 
+  //debug_printf3("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1)));
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Disable)");
@@ -1007,6 +1038,6 @@ umap_page* umap_page_buffer::find_inmem_page_desc(void* page_addr)
 // umap_page class implementation
 //
 void umap_page::set_page(void* _p)
-{ 
+{
   page = _p;
 }

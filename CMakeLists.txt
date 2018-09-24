@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.5.1)
-project(umap 
+project(umap
   VERSION 0.0.3
   LANGUAGES CXX C
 )
@@ -22,7 +22,7 @@ configure_file(
   ${PROJECT_SOURCE_DIR}/config/config.h.in
   ${PROJECT_BINARY_DIR}/include/config.h)
 
-set (UMAPINCLUDEDIRS 
+set (UMAPINCLUDEDIRS
     "${CMAKE_BINARY_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/src/logging"
