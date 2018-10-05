@@ -28,10 +28,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string>
 #include <cmath>
 #include <cfenv>
-#include <vector>
 #include <cassert>
 
 #define MEDIAN_CALCULATION_COLUMN_MAJOR 1
+// #define MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
 
 namespace median
 {
@@ -45,15 +45,6 @@ struct cube_t {
   size_t size_k;
   pixel_type *data;
 };
-
-struct vector_t
-{
-  double x_intercept;
-  double x_slope;
-  double y_intercept;
-  double y_slope;
-};
-
 
 /// \brief Return frame size
 template <typename pixel_type>
@@ -71,23 +62,35 @@ inline size_t get_cube_size(const cube_t<pixel_type>& cube)
 
 /// \brief Returns an index of a 3D coordinate
 template <typename pixel_type>
-inline size_t get_index(const cube_t<pixel_type>& cube, const size_t x, const size_t y, const size_t k)
+inline ssize_t get_index(const cube_t<pixel_type>& cube, const size_t x, const size_t y, const size_t k)
 {
 #if MEDIAN_CALCULATION_COLUMN_MAJOR
-  return x + y * cube.size_x + k * get_frame_size(cube); // column major
+  const ssize_t frame_index = x + y * cube.size_x;
 #else
-  return x * cube.size_y + y + k * get_frame_size(cube); // row major
+  const ssize_t frame_index = x * cube.size_y + y;
 #endif
-}
 
-/// \brief Returns an index of a 3D coordinate. vector version
-template <typename pixel_type>
-inline size_t get_index(const cube_t<pixel_type>& cube, const vector_t& vec, const size_t epoch)
-{
-  return get_index(cube,
-                   std::round(vec.x_slope * epoch + vec.x_intercept),
-                   std::round(vec.y_slope * epoch + vec.y_intercept),
-                   epoch);
+  if (get_frame_size(cube) <= frame_index) {
+#ifdef MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
+    std::cerr << "Frame index is out-of-range: "
+              << "(" << x << ", " << y << ") is out of "
+              << "(" << cube.size_x << ", " << cube.size_y << ")" << std::endl;
+#endif
+    return -1;
+  }
+
+  const ssize_t cube_index = frame_index + k * get_frame_size(cube);
+
+  if (get_cube_size(cube) <= cube_index) {
+#ifdef MEDIAN_CALCULATION_VERBOSE_OUT_OF_RANGE
+    std::cerr << "Cube index is out-of-range: "
+              << "(" << x << ", " << y << ", " << k << ") is out of "
+              << "(" << cube.size_x << ", " << cube.size_y << ", " << cube.size_k << ")" << std::endl;
+#endif
+    return -1;
+  }
+
+  return cube_index;
 }
 
 /// \brief Reverses byte order
@@ -107,6 +110,12 @@ inline T reverse_byte_order(const T x)
   p2[3] = p1[0];
 
   return reversed_x;
+}
+
+template <typename pixel_type>
+bool is_nan(const pixel_type value)
+{
+  return std::isnan(value);
 }
 
 } // namespace median

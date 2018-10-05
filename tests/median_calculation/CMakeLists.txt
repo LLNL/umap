@@ -10,20 +10,16 @@ if(OPENMP_FOUND)
 
     add_executable(test_median_calculation test_median_calculation.cpp)
     add_dependencies(test_median_calculation libtestoptions libumap libPerFile libPerFits )
-
+    target_link_libraries(test_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARY} )
     install(TARGETS test_median_calculation
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 
-    add_executable(random_vector_median_calculation random_vector_median_calculation.cpp)
-
-    add_dependencies(random_vector_median_calculation libumap libtestoptions libPerFits )
-
-    target_link_libraries(random_vector_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARIES} ${CURL_LIBRARIES} )
-    target_link_libraries(test_median_calculation libumap libtestoptions libPerFits ${CFITS_LIBRARIES} ${CURL_LIBRARIES} )
-
-    install(TARGETS random_vector_median_calculation
+    add_executable(run_random_vector run_random_vector.cpp)
+    add_dependencies(run_random_vector libumap libtestoptions libPerFits )
+    target_link_libraries(run_random_vector libumap libtestoptions libPerFits ${CFITS_LIBRARY} )
+    install(TARGETS run_random_vector
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
