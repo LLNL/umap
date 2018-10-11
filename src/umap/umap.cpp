@@ -263,7 +263,7 @@ void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_psto
     return NULL;
   }
 
-  if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
+  if (!(flags & UM AP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
     cerr << "umap: Invalid flags: " << hex << flags << endl;
     return UMAP_FAILED;
   }
@@ -303,7 +303,7 @@ uint64_t* umap_cfg_readenv(const char* env, uint64_t* val) {
   char* val_ptr = 0;
   if ( (val_ptr = getenv(env)) ) {
     uint64_t env_val = 0;
-    if (sscanf(val_ptr, "%"PRIu64, &env_val)) {
+    if (sscanf(val_ptr, "%" PRIu64, &env_val)) {
       *val = env_val;
       return val;
     }
