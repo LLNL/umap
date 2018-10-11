@@ -1,7 +1,7 @@
 if ( ENABLE_CFITS )
   FIND_PACKAGE(CURL)
   if ( NOT CURL_FOUND )
-    message (FATAL_ERROR "Could not find CURL libraries which are needed by cfitsio")
+    message ( STATUS "CURL library not found, will attempt to use cfitsio without CURL support")
   endif()
 
   find_library( CFITS_LIBRARY libcfitsio.a PATHS ${CFITS_LIBRARY_PATH} )
