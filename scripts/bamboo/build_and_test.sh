@@ -39,5 +39,8 @@ trycmd "make -j"
 
 trycmd "./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10"
 trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16"
-/bin/rm -f /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat
+trycmd "tar xvf ${UMAP_DIR}/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
+trycmd "./tests/median_calculation/test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch00"
+trycmd "./tests/median_calculation/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16"
+/bin/rm -f /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat /tmp/test_fits_files
 
