@@ -263,7 +263,7 @@ void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_psto
     return NULL;
   }
 
-  if (!(flags & UM AP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
+  if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
     cerr << "umap: Invalid flags: " << hex << flags << endl;
     return UMAP_FAILED;
   }
