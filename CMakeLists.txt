@@ -13,6 +13,7 @@ OPTION (ENABLE_STATS "Enable display statistics on exit" Off)
 set(UMAP_ENABLE_LOGGING ${ENABLE_LOGGING})
 set(UMAP_ENABLE_CFITS ${ENABLE_CFITS})
 set(UMAP_DISPLAY_STATS ${ENABLE_STATS})
+set(UMAP_DEBUG_LOGGING ${ENABLE_LOGGING})
 
 include(cmake/BuildEnv.cmake)
 include(cmake/BuildType.cmake)

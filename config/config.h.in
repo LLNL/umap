@@ -5,4 +5,5 @@
 #define UMAP_VERSION_MINOR @umap_VERSION_MINOR@
 #define UMAP_VERSION_PATCH @umap_VERSION_PATCH@
 #cmakedefine UMAP_DISPLAY_STATS
+#cmakedefine UMAP_DEBUG_LOGGING
 #endif

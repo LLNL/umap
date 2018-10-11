@@ -27,10 +27,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #define _GNU_SOURCE
 
-#include "spindle_debug.h"
-#include "spindle_logc.h"
 #include "config.h"
 
+#if defined(UMAP_DEBUG_LOGGING)
+#include "spindle_debug.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -370,12 +370,6 @@ void spindle_dump_on_error()
    char **syms;
    int size, i;
 
-#if 0
-   if (strstr(spindle_debug_name, "Client")) {
-      return;
-   }
-#endif
-
    size = backtrace(stacktrace, 256);
    if (size <= 0)
       return;
@@ -400,3 +394,4 @@ int is_debug_fd(int fd)
 {
    return (fd == debug_fd);
 }
+#endif
