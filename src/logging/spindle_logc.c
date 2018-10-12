@@ -103,6 +103,20 @@ static void getProgramAndPath( char** fpath, char** ppath, char**  pname)
   if (pname != NULL) *pname = programName;
 }
 
+/*
+ * There are two possible places for where the logging daemon will exist.
+ * Normally, the logging daemon will be in the ../libexec directory of the
+ * place where umap is installed/deployed.  For developers, the other place
+ * is in the build directory relative to where running umap program is being
+ * run.
+ *
+ * This function will first attempt to find the executable in the installation
+ * location.  If it does not find the file there, it will then check the
+ * directory relative to where the program being run was built.
+ *
+ * If neither are found, this function will print an error and will cause the
+ * forked daemon to just exit and no logging will be performed.
+ */
 void spawnLogDaemon(char *tempdir)
 {
     int result = fork();
