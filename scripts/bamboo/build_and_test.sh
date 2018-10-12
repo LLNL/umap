@@ -10,6 +10,18 @@
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
 
+#
+# This script is intended to be run by the bamboo continuous integration
+# project definition for UMAP.  It is invoked with the following command
+# line arguments:
+# $1 - Optionally set to compiler configuration to run
+# $2 - Optionally set to -Release or -Debug build ($1 must be set)
+#
+# BUILD_OPTIONS environment variable may also be set by the bamboo plan
+# for locations of dependent libraries (such as CFITS).  This environment
+# variable will be tacked on to the end of the cmake build options constructed 
+# below.
+#
 function trycmd
 {
   echo $1
@@ -28,8 +40,8 @@ export BUILD_DIR=build-${SYS_TYPE}
 
 export COMPILER=${1:-gcc_4_8_5}
 export BUILD_TYPE=${2:-Release}
-export BUILD_OPTIONS="-DENABLE_STATS=On -DENABLE_CFITS=On -DENABLE_FITS_TESTS=On -DCFITS_LIBRARY_PATH=/g/g0/martymcf/.bin/toss_3_x86_64/lib -DCFITS_INCLUDE_PATH=/g/g0/martymcf/.bin/toss_3_x86_64/include ${BUILD_OPTIONS}"
 
+export BUILD_OPTIONS="-DENABLE_STATS=On ${BUILD_OPTIONS}"
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
