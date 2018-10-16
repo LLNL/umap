@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.5.1)
-project(umap 
+project(umap
   VERSION 0.0.3
   LANGUAGES CXX C
 )
@@ -10,19 +10,20 @@ OPTION (ENABLE_TESTS "Selects whether tests are built." On)
 OPTION (ENABLE_LOGGING "Build umap with Logging enabled" On)
 OPTION (ENABLE_STATS "Enable display statistics on exit" Off)
 
-include(cmake/BuildEnv.cmake)
-include(cmake/BuildType.cmake)
-include(cmake/SetupUmapThirdParty.cmake)
-
 set(UMAP_ENABLE_LOGGING ${ENABLE_LOGGING})
 set(UMAP_ENABLE_CFITS ${ENABLE_CFITS})
 set(UMAP_DISPLAY_STATS ${ENABLE_STATS})
+set(UMAP_DEBUG_LOGGING ${ENABLE_LOGGING})
+
+include(cmake/BuildEnv.cmake)
+include(cmake/BuildType.cmake)
+include(cmake/SetupUmapThirdParty.cmake)
 
 configure_file(
   ${PROJECT_SOURCE_DIR}/config/config.h.in
   ${PROJECT_BINARY_DIR}/include/config.h)
 
-set (UMAPINCLUDEDIRS 
+set (UMAPINCLUDEDIRS
     "${CMAKE_BINARY_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/src/logging"

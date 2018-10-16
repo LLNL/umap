@@ -3,34 +3,34 @@ This file was taken from Spindle and made part of Umpire.  The Spindle and
 umpire boilerplate is included below.
 
 This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at
-https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or 
-modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) 
-version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY 
-WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms 
-and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the 
-GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 
+https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation)
+version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms
+and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the
+GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc.,
 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
-This file is part of Spindle.  For copyright information see the COPYRIGHT 
-file in the top level directory, or at 
+This file is part of Spindle.  For copyright information see the COPYRIGHT
+file in the top level directory, or at
 https://github.com/hpc/Spindle/blob/master/COPYRIGHT
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License (as published by the Free Software
 Foundation) version 2.1 dated February 1999.  This program is distributed in the
 hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED
-WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms 
-and conditions of the GNU Lesser General Public License for more details.  You should 
-have received a copy of the GNU Lesser General Public License along with this 
+WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms
+and conditions of the GNU Lesser General Public License for more details.  You should
+have received a copy of the GNU Lesser General Public License along with this
 program; if not, write to the Free Software Foundation, Inc., 59 Temple
 Place, Suite 330, Boston, MA 02111-1307 USA
 */
 #define _GNU_SOURCE
 
-#include "spindle_debug.h"
-#include "spindle_logc.h"
 #include "config.h"
 
+#if defined(UMAP_DEBUG_LOGGING)
+#include "spindle_debug.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -45,18 +45,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <errno.h>
 #include <execinfo.h>
 
-#if 0
-#if !defined(LIBEXEC)
-#error Expected to have LIBEXEC defined
-#endif
-#if !defined(DAEMON_NAME)
-#error Expected to have DAEMON_NAME defined
-#endif
-static char spindle_log_daemon_name[] = LIBEXEC "/" DAEMON_NAME;
-
-#else
 static char spindle_log_daemon_name[] = "../libexec/umap_logd";
-#endif
+static char spindle_log_daemon_name2[] = "../../src/umap/umap_logd";
 
 static int debug_fd = -1;
 static char *tempdir;
@@ -72,7 +62,7 @@ int spindle_debug_prints;
 
 extern int spindle_mkdir(char *orig_path);
 
-int fileExists(char *name) 
+int fileExists(char *name)
 {
    struct stat buf;
    return (stat(name, &buf) != -1);
@@ -113,6 +103,20 @@ static void getProgramAndPath( char** fpath, char** ppath, char**  pname)
   if (pname != NULL) *pname = programName;
 }
 
+/*
+ * There are two possible places for where the logging daemon will exist.
+ * Normally, the logging daemon will be in the ../libexec directory of the
+ * place where umap is installed/deployed.  For developers, the other place
+ * is in the build directory relative to where running umap program is being
+ * run.
+ *
+ * This function will first attempt to find the executable in the installation
+ * location.  If it does not find the file there, it will then check the
+ * directory relative to where the program being run was built.
+ *
+ * If neither are found, this function will print an error and will cause the
+ * forked daemon to just exit and no logging will be performed.
+ */
 void spawnLogDaemon(char *tempdir)
 {
     int result = fork();
@@ -123,18 +127,35 @@ void spawnLogDaemon(char *tempdir)
             char *params[7];
             int cur = 0;
             char* path_prefix;
+            char* pname_pri;
+            char* pname_alt;
             char* pname;
+            struct stat sbuf;
 
             getProgramAndPath( NULL, &path_prefix, NULL);
 
-            pname = malloc(strlen(path_prefix) + strlen(spindle_log_daemon_name) + 1);
-            if ( pname == NULL ) {
+            pname_pri = malloc(strlen(path_prefix) + strlen(spindle_log_daemon_name) + 1);
+            if ( pname_pri == NULL ) {
                 fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
                 exit(0);
             }
-            pname[0] = '\0';
+            pname_pri[0] = '\0';
+            sprintf(pname_pri, "%s/%s", path_prefix, spindle_log_daemon_name);
 
-            sprintf(pname, "%s/%s", path_prefix, spindle_log_daemon_name);
+            pname_alt = malloc(strlen(path_prefix) + strlen(spindle_log_daemon_name2) + 1);
+            if ( pname_alt == NULL ) {
+                fprintf(stderr, "Insufficient memory: %s\n", strerror(errno));
+                exit(0);
+            }
+            pname_alt[0] = '\0';
+            sprintf(pname_alt, "%s/%s", path_prefix, spindle_log_daemon_name2);
+
+            pname = pname_pri;
+            if ( stat(pname_pri, &sbuf) < 0 ) {
+              if ( stat(pname_alt, &sbuf) == 0 ) {
+                pname = pname_alt;
+              }
+            }
 
             params[cur++] = pname;
             params[cur++] = tempdir;
@@ -152,7 +173,7 @@ void spawnLogDaemon(char *tempdir)
             exit(0);
         }
     }
-    else 
+    else
     {
       int status;
       do {
@@ -206,7 +227,7 @@ int connectToLogDaemon(char *path)
    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
    if (sockfd == -1)
       return -1;
-   
+
    bzero(&saddr, sizeof(saddr));
    pathsize = sizeof(saddr.sun_path);
    saddr.sun_family = AF_UNIX;
@@ -271,13 +292,13 @@ static int setup_connection(char *connection_name)
       /* If the daemon doesn't exist, create it and wait for its existance */
       if (!fileExists(socket_file)) {
          spawnLogDaemon(tempdir);
-            
+
          int timeout = 0;
          while (!fileExists(socket_file) && timeout < SPAWN_TIMEOUT) {
             usleep(100000); /* .1 seconds */
             timeout++;
          }
-            
+
          if (timeout == SPAWN_TIMEOUT) {
             free(socket_file);
             return -1;
@@ -288,9 +309,9 @@ static int setup_connection(char *connection_name)
       fd = connectToLogDaemon(socket_file);
       if (fd != -1)
          break;
-         
+
       /* Handle failed connection. */
-      if (--tries == 0) 
+      if (--tries == 0)
          break;
 
       result = clearDaemon(tempdir);
@@ -363,21 +384,15 @@ void spindle_dump_on_error()
    char **syms;
    int size, i;
 
-#if 0
-   if (strstr(spindle_debug_name, "Client")) {
-      return;
-   }
-#endif
-
    size = backtrace(stacktrace, 256);
    if (size <= 0)
       return;
    syms = backtrace_symbols(stacktrace, size);
-   
+
    for (i = 0; i<size; i++) {
       fprintf(spindle_debug_output_f, "%p - %s\n", stacktrace[i], syms && syms[i] ? syms[i] : "<NO NAME>");
    }
-   
+
    if (syms)
       free(syms);
 }
@@ -393,3 +408,4 @@ int is_debug_fd(int fd)
 {
    return (fd == debug_fd);
 }
+#endif
