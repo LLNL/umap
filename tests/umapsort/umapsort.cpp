@@ -149,7 +149,6 @@ int main(int argc, char **argv)
     return -1;
  
   fprintf(stdout, "umap INIT took %f seconds\n", (double)(getns() - start)/1000000000.0);
-#ifdef taken_out
   fprintf(stdout, "%lu pages, %llu bytes, %lu threads\n", options.numpages, totalbytes, options.numthreads);
 
   uint64_t *arr = (uint64_t *) base_addr; 
@@ -182,7 +181,6 @@ int main(int argc, char **argv)
     validatedata(arr, arraysize);
     fprintf(stdout, "Validate took %f seconds\n", (double)(getns() - start)/1000000000.0);
   }
-#endif
   
   start = getns();
   PerFile_closeandunmap(&options, totalbytes, base_addr);

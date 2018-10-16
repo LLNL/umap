@@ -153,10 +153,17 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
     usage(pname);
   }
 
-  umap_cfg_set_bufsize(testops->bufsize);
-
+  /*
+   * Note: Care must be taken when configuring the number of threads
+   * and the buffer size of umap.  When the buffer size is set, it
+   * apportions the buffer evenly to the umap threads.  So setting the
+   * buffer size requires that the number of threads be set properly
+   * first.
+   */
   if (testops->uffdthreads != umap_cfg_get_uffdthreads())
     umap_cfg_set_uffdthreads(testops->uffdthreads);
+
+  umap_cfg_set_bufsize(testops->bufsize);
 }
 
 long umt_getpagesize(void)
