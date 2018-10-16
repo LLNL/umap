@@ -32,7 +32,7 @@
 #include <thread>
 #include <unordered_map>
 #include <sstream>
-#include <deque>
+#include <fstream>
 #include <string>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -56,6 +56,10 @@
 #define UMAP_RO_MODE
 #endif
 
+/*
+ * Note: this implementation is multi-threaded, but the data structures are
+ * not shared between threads.
+ */
 using namespace std;
 
 const int umap_Version_Major = UMAP_VERSION_MAJOR;
@@ -63,13 +67,11 @@ const int umap_Version_Minor = UMAP_VERSION_MINOR;
 const int umap_Version_Patch = UMAP_VERSION_PATCH;
 
 static const int UMAP_UFFD_MAX_MESSAGES = 256;
-static unsigned int uffd_threads;
-const uint64_t UMAP_DEFAULT_PAGES_PER_UFFD_HANDLER = 1024;  // Separate Page Buffer per Thread
-
-static const uint64_t UMAP_PAGES_PER_BLOCK = 1024;
-static uint64_t  umap_pages_per_uffd_handler = UMAP_DEFAULT_PAGES_PER_UFFD_HANDLER;
+static uint64_t uffd_threads;
+static uint64_t umap_buffer_size;
 
 static long page_size;
+static unsigned long total_mem_kb;
 
 class umap_page;
 struct umap_PageBlock;
@@ -110,6 +112,7 @@ class _umap {
 
 class UserFaultHandler {
   friend _umap;
+  friend umap_page_buffer;
   public:
     UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pblks, uint64_t _pbuf_size);
     ~UserFaultHandler(void);
@@ -174,25 +177,23 @@ struct umap_PageBlock {
 };
 
 class umap_page_buffer {
-  /*
-   * TODO: Make the single page buffer threadsafe
-   */
   public:
-    umap_page_buffer(uint64_t pbuffersize);
+    umap_page_buffer(UserFaultHandler* _ufh_, uint64_t pbuffersize);
     ~umap_page_buffer();
     umap_page* alloc_page_desc(void* page);
-    void dealloc_page_desc(umap_page* page_desc);
+    void dealloc_page_desc( void );
+    bool pages_still_present( void );
 
-    void add_page_desc_to_inmem(umap_page* page_desc);
-    umap_page* get_page_desc_to_evict();
-    umap_page* find_inmem_page_desc(void* page_addr); // Finds page_desc for page_addr in inmem_page_descriptors
+    umap_page* find_inmem_page_desc(void* page_addr);
 
   private:
     uint64_t page_buffer_size;
-    vector<umap_page*> free_page_descriptors;
-    deque<umap_page*> inmem_page_descriptors;
+    uint64_t page_buffer_alloc_idx;
+    uint64_t page_buffer_free_idx;
+    uint64_t page_buffer_alloc_cnt;
     unordered_map<void*, umap_page*> inmem_page_map;
     umap_page* page_descriptor_array;
+    UserFaultHandler* ufh;
 };
 
 struct umap_page {
@@ -292,9 +293,32 @@ int uunmap(void*  addr, uint64_t length)
   auto it = active_umaps.find(addr);
 
   if (it != active_umaps.end()) {
-    delete it->second;
-    active_umaps.erase(it);
-  }
+    struct umap_cfg_stats st;
+    umap_cfg_get_stats(addr, &st);
+
+    debug_printf( "\n\t"
+                "Dirty Evictions: %" PRIu64 "\n\t"
+                "Clean Evictions: %" PRIu64 "\n\t"
+                "  Evict Victims: %" PRIu64 "\n\t"
+                "    WP Messages: %" PRIu64 "\n\t"
+                "    Read Faults: %" PRIu64 "\n\t"
+                "   Write Faults: %" PRIu64 "\n\t"
+                "  SIGBUS Errors: %" PRIu64 "\n\t"
+                "       Stuck WP: %" PRIu64 "\n\t"
+                "   Dropped Dups: %" PRIu64 "\n",
+                st.dirty_evicts, 
+                st.clean_evicts, 
+                st.evict_victims,
+                st.wp_messages, 
+                st.read_faults, 
+                st.write_faults,
+                st.sigbus, 
+                st.stuck_wp, 
+                st.dropped_dups);
+
+      delete it->second;
+      active_umaps.erase(it);
+    }
   return 0;
 }
 
@@ -313,12 +337,12 @@ uint64_t* umap_cfg_readenv(const char* env, uint64_t* val) {
 
 void umap_cfg_getenv( void ) {
   uint64_t env_value = 0;
-  if ( (umap_cfg_readenv("UMAP_BUFSIZE", &env_value)) ) {
-    umap_cfg_set_bufsize(env_value);
-  }
-
   if ( (umap_cfg_readenv("UMAP_UFFD_THREADS", &env_value)) ) {
     umap_cfg_set_uffdthreads(env_value);
+  }
+
+  if ( (umap_cfg_readenv("UMAP_BUFSIZE", &env_value)) ) {
+    umap_cfg_set_bufsize(env_value);
   }
 
   if ( (umap_cfg_readenv("UMAP_PAGESIZE", &env_value)) ) {
@@ -326,22 +350,49 @@ void umap_cfg_getenv( void ) {
   }
 }
 
+static unsigned long get_mem_total()
+{
+  std::string token;
+  std::ifstream file("/proc/meminfo");
+  while(file >> token) {
+    if(token == "MemTotal:") {
+      unsigned long mem;
+      if(file >> mem) {
+        return mem;
+      } else {
+        return 0;       
+      }
+    }
+    // ignore rest of the line
+    file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
+  return 0; // nothing found
+}
+
 uint64_t umap_cfg_get_bufsize( void )
 {
-  return (umap_pages_per_uffd_handler * uffd_threads);
+  return umap_buffer_size;
 }
 
 void umap_cfg_set_bufsize( uint64_t page_bufsize )
 {
-  umap_pages_per_uffd_handler = (page_bufsize / uffd_threads);
+  long max_size = ((total_mem_kb / (page_size / 1024)) * 80) / 100;
+  long old_size = umap_buffer_size;
 
-  if (umap_pages_per_uffd_handler == 0)
-    umap_pages_per_uffd_handler = 1;
+  if ( page_bufsize > max_size ) {
+    debug_printf("Bufsize of %d larger than maximum of %d.  Setting to %d\n", 
+        page_bufsize, max_size, max_size);
+    umap_buffer_size = max_size;
+  }
+  else {
+    umap_buffer_size = page_bufsize;
+  }
+  debug_printf("Bufsize changed from %d to %d pages\n", old_size, umap_buffer_size);
 }
 
 uint64_t umap_cfg_get_uffdthreads( void )
 {
-  return (uint64_t)uffd_threads;
+  return uffd_threads;
 }
 
 void umap_cfg_set_uffdthreads( uint64_t numthreads )
@@ -440,9 +491,9 @@ void sighandler(int signum, siginfo_t *info, void* buf)
         ufh->stat->sigbus++;
 
         if (ufh->get_pagebuffer()->find_inmem_page_desc(page_begin) != nullptr)
-          err_printf("SIGBUS %p (page=%p) ALREADY IN UMAP PAGE_BUFFER\n", info->si_addr, page_begin);
+          debug_printf("SIGBUS %p (page=%p) present\n", info->si_addr, page_begin);
         else
-          err_printf("SIGBUS %p (page=%p) Not currently in umap buffer\n", info->si_addr, page_begin);
+          debug_printf("SIGBUS %p (page=%p) not present\n", info->si_addr, page_begin);
         return;
       }
     }
@@ -457,10 +508,15 @@ void __attribute ((constructor)) init_umap_lib( void )
 
   LOGGING_INIT;
 
+  total_mem_kb = get_mem_total();
+
   if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
     perror("ERROR: sysconf(_SC_PAGESIZE)");
     throw -1;
   }
+
+  // Default buffer if 80% of pages in memory
+  umap_buffer_size = ((total_mem_kb / (page_size / 1024)) * 80) / 100;
 
   unsigned int n = std::thread::hardware_concurrency();
   uffd_threads = (n == 0) ? 16 : n;
@@ -501,48 +557,65 @@ void __attribute ((destructor)) fine_umap_lib( void )
 _umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
     : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}, pstore_read{_ps_read}, pstore_write{_ps_write}
 {
-  uint64_t pages_in_region = region_size / page_size;
-  uint64_t pages_per_block = pages_in_region < UMAP_PAGES_PER_BLOCK ? pages_in_region : UMAP_PAGES_PER_BLOCK;
-  uint64_t page_blocks = pages_in_region / pages_per_block;
-  uint64_t additional_pages_for_last_block = pages_in_region % pages_per_block;
+  uint64_t region_pages = region_size / page_size;
 
-  uint64_t num_workers = page_blocks < uffd_threads ? page_blocks : uffd_threads;
-  uint64_t page_blocks_per_worker = page_blocks / num_workers;
-  uint64_t additional_blocks_for_last_worker = page_blocks % num_workers;
+  // Shrink buffer size to fit requested region if needed
+  uint64_t buffer_adjusted_pages = std::min(umap_buffer_size, region_pages);
+
+  // Shrink # of workers if there are too few pages to make it worth it.
+  uint64_t num_workers = std::min(buffer_adjusted_pages, uffd_threads);
+
+  uint64_t buffer_pages_per_worker = buffer_adjusted_pages / num_workers;
+  uint64_t buffer_residual_pages = buffer_adjusted_pages % num_workers;
+
+  uint64_t region_pages_per_worker = region_pages / num_workers;
+  uint64_t region_residual_pages = region_pages % num_workers;
 
   stringstream ss;
   ss << "umap("
-    << region << " - " << (void*)((char*)region+region_size)
-    << ") " << pages_in_region << " region pages, "
-    << pages_per_block << " pages per block, "
-    << page_blocks  << " page blocks, "
-    << additional_pages_for_last_block << " additional pages for last block, "
-    << num_workers << " workers, "
-    << page_blocks_per_worker << " page blocks per worker, "
-    << additional_blocks_for_last_worker << " additional blocks for last worker"
+    << region << " - " << (void*)((char*)region+region_size) << ")\n\t" 
+    << umap_buffer_size << " UMAP Buffer Size in Pages\n\t"
+    << region_pages << " Requested Region Pages\n\t"
+    << buffer_adjusted_pages << " Adjusted UMAP Buffer Size in Pages\n\t"
+    << uffd_threads << " Configured Maximum UMAP Threads\n\t"
+    << num_workers << " UMAP Threads Allocated\n\t"
+    << buffer_pages_per_worker << " Buffer Pages per worker\n\t"
+    << buffer_residual_pages << " Residual Buffer pages\n\t"
+    << region_pages_per_worker << " Region Pages per worker\n\t"
+    << region_residual_pages << " Risidual Buffer pages"
     << endl;
   debug_printf("%s\n", ss.str().c_str());
 
   try {
+    uint64_t region_offset = 0;
     for (uint64_t worker = 0; worker < num_workers; ++worker) {
       umap_PageBlock pb;
+      uint64_t worker_region_pages = region_pages_per_worker;
+      uint64_t worker_buffer_pages = buffer_pages_per_worker;
 
-      pb.base = (void*)((uint64_t)region + (worker * page_blocks_per_worker * pages_per_block * page_size));
-      pb.length = page_blocks_per_worker * pages_per_block * page_size;
-
-      // If I am the last worker, deal with any residual blocks and pages
-      if (worker == (num_workers-1)) {
-        if (additional_blocks_for_last_worker)
-          pb.length += (additional_blocks_for_last_worker * pages_per_block * page_size);
-
-        if (additional_pages_for_last_block)
-          pb.length += (additional_pages_for_last_block * page_size);
+      //
+      // Distribute residual buffer pages across workers
+      //
+      if (buffer_residual_pages) {
+        buffer_residual_pages--;
+        worker_buffer_pages++;
       }
+
+      //
+      // Distribute residual buffer pages across workers
+      //
+      if (region_residual_pages) {
+        region_residual_pages--;
+        worker_region_pages++;
+      }
+
+      pb.base = (void*)((uint64_t)region + (region_offset * page_size));
+      pb.length = worker_region_pages * page_size;
 
       vector<umap_PageBlock> segs{ pb };
 
-      // TODO - Find a way to more fairly distribute buffer to handlers
-      ufault_handlers.push_back( new UserFaultHandler{this, segs, umap_pages_per_uffd_handler} );
+      ufault_handlers.push_back( new UserFaultHandler{this, segs, worker_buffer_pages} );
+      region_offset += worker_region_pages;
     }
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
@@ -574,7 +647,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
       _u{_um},
       PageBlocks{_pblks},
       pbuf_size{_pbuf_size},
-      pagebuffer{ new umap_page_buffer{_pbuf_size} }
+      pagebuffer{ new umap_page_buffer{this, _pbuf_size} }
 {
   umessages.resize(UMAP_UFFD_MAX_MESSAGES);
 
@@ -606,7 +679,9 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
 #endif
     };
 
-    debug_printf("Register %p - %p\n", seg.base, (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
+    debug_printf2("Register %d Pages from: %p - %p\n", 
+        (seg.length / page_size), seg.base, 
+        (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
       perror("ERROR: ioctl/uffdio_register");
@@ -714,15 +789,6 @@ void UserFaultHandler::uffd_handler(void)
 
     sort(umessages.begin(), umessages.begin()+msgs, less_than_key());
 
-#if 0
-    stringstream ss;
-    ss << msgs << " Messages:\n";
-    for (int i = 0; i < msgs; ++i) {
-      ss << "    " << uffd_pf_reason(umessages[i]) << endl;
-    }
-    debug_printf3("%s\n", ss.str().c_str());
-#endif
-
     uint64_t last_addr = 0;
     for (int i = 0; i < msgs; ++i) {
       if (umessages[i].event != UFFD_EVENT_PAGEFAULT) {
@@ -745,18 +811,15 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 {
   void* page_begin = (void*)msg.arg.pagefault.address;
   umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
-  stringstream ss;
 
   if (pm != nullptr) {
 #ifndef UMAP_RO_MODE
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
       if (!pm->page_is_dirty()) {
-        ss << "PF(" << msg.arg.pagefault.flags << " WP)    (DISABLE_WP)       @(" << page_begin << ")";
-        debug_printf3("%s\n", ss.str().c_str());
-
         pm->mark_page_dirty();
         disable_wp_on_pages((uint64_t)page_begin, 1, false);
         stat->wp_messages++;
+        debug_printf2("Present page written, marking %p dirty\n", page_begin);
       }
       else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
         struct uffdio_copy copy;
@@ -766,8 +829,6 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
         copy.mode = 0;  // No WP
 
         stat->stuck_wp++;
-
-        debug_printf3("EVICT WORKAROUND FOR %p\n", page_begin);
 
         pm->mark_page_clean();
         memcpy(copyin_buf, page_begin, page_size);   // Save our data
@@ -779,6 +840,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
           perror("ERROR WP Workaround: ioctl(UFFDIO_COPY)");
           exit(1);
         }
+        debug_printf2("Present page stuck, EVICT WORKAROUND %p\n", page_begin);
       }
     }
 #else
@@ -786,11 +848,15 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       assert("Write operation not allowed without WP support" && 0);
     }
 #endif
+    else {
+      debug_printf2("Spurious fault for page %p which is already present\n",
+          page_begin);
+    }
     return;
   }
 
   //
-  // Page not in memory, read it in and (potentially) evict someone
+  // Page not present, read it in and (potentially) evict someone
   //
   off_t offset=(uint64_t)page_begin - (uint64_t)_u->region;
 
@@ -799,30 +865,15 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
     exit(1);
   }
 
-#ifndef UMAP_RO_MODE
-  if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE))
-    ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")";
-  else
-    ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")";
-#else
-  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
-    ss << "PF(" << msg.arg.pagefault.flags << " WRITE)    (UFFDIO_COPY)       @(" << page_begin << ")";
-  else
-    ss << "PF(" << msg.arg.pagefault.flags << " READ)     (UFFDIO_COPY)       @(" << page_begin << ")";
-#endif
-
-  for (pm = pagebuffer->alloc_page_desc(page_begin); pm == nullptr; pm = pagebuffer->alloc_page_desc(page_begin)) {
-    umap_page* ep = pagebuffer->get_page_desc_to_evict();
-    assert(ep != nullptr);
-
-    ss << " Evicting " << (ep->page_is_dirty() ? "Dirty" : "Clean") << "Page " << ep->get_page();
-    stat->evict_victims++;
-    evict_page(ep);
-    pagebuffer->dealloc_page_desc(ep);
+  /*
+   * Keep trying to obtain a free page descriptor until we get one..
+   */
+  for ( pm = pagebuffer->alloc_page_desc(page_begin); 
+        pm == nullptr; 
+        pm = pagebuffer->alloc_page_desc(page_begin))
+  {
+    pagebuffer->dealloc_page_desc();
   }
-  pagebuffer->add_page_desc_to_inmem(pm);
-
-  debug_printf3("%s\n", ss.str().c_str());
 
   struct uffdio_copy copy;
   copy.src = (uint64_t)copyin_buf;
@@ -832,6 +883,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 
 #ifndef UMAP_RO_MODE
   if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+    debug_printf3("Write Fault: Copying in dirty page %p\n", page_begin);
     stat->write_faults++;
     pm->mark_page_dirty();
 
@@ -846,6 +898,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   }
 #endif
   else {
+    debug_printf3("Read Fault: Copying in page %p\n", page_begin);
     stat->read_faults++;
     pm->mark_page_clean();
 
@@ -871,13 +924,10 @@ bool UserFaultHandler::page_is_in_umap(const void* page_begin)
   return false;
 }
 
-// TODO: make this thread-safe (it isn't currently)
 void UserFaultHandler::flushbuffers( void )
 {
-  for (umap_page* ep = pagebuffer->get_page_desc_to_evict(); ep != nullptr; ep = pagebuffer->get_page_desc_to_evict()) {
-    evict_page(ep);
-    pagebuffer->dealloc_page_desc(ep);
-  }
+  while (pagebuffer->pages_still_present() == true)
+    pagebuffer->dealloc_page_desc();
 }
 
 void UserFaultHandler::resetstats( void )
@@ -897,6 +947,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
 {
   uint64_t* page = (uint64_t*)pb->get_page();
 
+  stat->evict_victims++;
   if (pb->page_is_dirty()) {
 #ifdef UMAP_RO_MODE
     assert("Dirty page found when running in RO mode" && 0);
@@ -939,8 +990,6 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
   wp.range.len = num_pages * page_size;
   wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-  debug_printf3("+WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1)));
-
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");
     exit(1);
@@ -955,10 +1004,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
   struct uffdio_writeprotect wp;
   wp.range.start = start;
   wp.range.len = page_size * num_pages;
-  //wp.mode = UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
   wp.mode = do_not_awaken ? UFFDIO_WRITEPROTECT_MODE_DONTWAKE : 0;
-
-  //debug_printf3("-WRITEPROTECT  (%p -- %p)\n", (void*)start, (void*)(start+((num_pages*page_size)-1)));
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
     perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Disable)");
@@ -970,62 +1016,58 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
 //
 // umap_page_buffer class implementation
 //
-umap_page_buffer::umap_page_buffer(uint64_t pbuffersize) : page_buffer_size{pbuffersize}
+umap_page_buffer::umap_page_buffer(UserFaultHandler* _ufh_, uint64_t pbuffersize)
+  : ufh{_ufh_}, page_buffer_size{pbuffersize}, page_buffer_alloc_idx{0}, 
+    page_buffer_free_idx{0}, page_buffer_alloc_cnt{0}
 {
-  free_page_descriptors.reserve(page_buffer_size);
   page_descriptor_array = (umap_page *)calloc(page_buffer_size, sizeof(umap_page));
-
-  for (uint64_t i = 0; i < page_buffer_size; ++i)
-    free_page_descriptors.push_back(page_descriptor_array + i);
 }
 
 umap_page_buffer::~umap_page_buffer()
 {
   assert(inmem_page_map.size() == 0);
-  assert(inmem_page_descriptors.size() == 0);
-  assert(free_page_descriptors.size() == page_buffer_size);
-
-  //for (unsigned long i = 0; i < page_buffer_size; ++i)
-    //free_page_descriptors.pop_back();
+  assert(page_buffer_alloc_cnt == 0);
 
   free(page_descriptor_array);
 }
 
 umap_page* umap_page_buffer::alloc_page_desc(void* page)
 {
-  umap_page* p = nullptr;
-  if (!free_page_descriptors.empty()) {
-    p = free_page_descriptors.back();
-    free_page_descriptors.pop_back();
+  if ( page_buffer_alloc_cnt < page_buffer_size ) {
+    umap_page* p = page_descriptor_array + page_buffer_alloc_idx;
+    page_buffer_alloc_idx = (page_buffer_alloc_idx + 1) % page_buffer_size;
+    page_buffer_alloc_cnt++;
     p->set_page(page);
+    inmem_page_map[page] = p;
+    debug_printf3("%p allocated for %p, free idx=%d alloc idx=%d cnt=%d\n",
+        p, page, page_buffer_free_idx, page_buffer_alloc_idx, page_buffer_alloc_cnt);
+    return p;
   }
-  return p;
+  return nullptr;
 }
 
-void umap_page_buffer::dealloc_page_desc(umap_page* page_desc)
+bool umap_page_buffer::pages_still_present( void )
 {
-  page_desc->mark_page_clean();
-  page_desc->set_page(nullptr);
-  free_page_descriptors.push_back(page_desc);
+  return page_buffer_alloc_cnt != 0;
 }
 
-void umap_page_buffer::add_page_desc_to_inmem(umap_page* page_desc)
+void umap_page_buffer::dealloc_page_desc( void )
 {
-  inmem_page_map[page_desc->get_page()] = page_desc;
-  inmem_page_descriptors.push_front(page_desc);
-}
+  umap_page* p = page_buffer_alloc_cnt ? 
+                    page_descriptor_array + page_buffer_free_idx : nullptr;
 
-umap_page* umap_page_buffer::get_page_desc_to_evict()
-{
-  umap_page* p = nullptr;
-  if (!inmem_page_descriptors.empty()) {
-    p = inmem_page_descriptors.back();
-    inmem_page_descriptors.pop_back();
-    assert(p != nullptr);
-    assert(p->get_page() != nullptr);
+  if ( p != nullptr ) {
+    debug_printf3("%p freed for %p, free idx=%d alloc idx=%d cnt=%d\n",
+        p, p->get_page(), page_buffer_alloc_idx, 
+        page_buffer_free_idx, page_buffer_alloc_cnt);
+    page_buffer_free_idx = (page_buffer_free_idx + 1) % page_buffer_size;
+    page_buffer_alloc_cnt--;
     inmem_page_map.erase(p->get_page());
+
+    ufh->evict_page(p);
+    p->mark_page_clean();
+    p->set_page(nullptr);
   }
-  return p;
 }
 
 umap_page* umap_page_buffer::find_inmem_page_desc(void* page_addr)
