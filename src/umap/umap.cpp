@@ -71,7 +71,6 @@ static uint64_t uffd_threads;
 static uint64_t umap_buffer_size;
 
 static long page_size;
-static unsigned long total_mem_kb;
 
 class umap_page;
 struct umap_PageBlock;
@@ -254,6 +253,33 @@ static int check_uffd_compatibility( void )
   return 0;
 }
 
+static inline long get_max_buf_size( void )
+{ static unsigned long total_mem_kb = 0;
+  const unsigned long oneK = 1024;
+  const unsigned long percentageToAllocate = 80;  // 80% of memory is max
+
+  // Lazily set total_mem_kb global
+  if ( ! total_mem_kb ) {
+    string token;
+    ifstream file("/proc/meminfo");
+    while (file >> token) {
+      if (token == "MemTotal:") {
+        unsigned long mem;
+        if (file >> mem) {
+          total_mem_kb = mem;
+        } else {
+          cerr << "UMAP unable to determine system memory size\n";
+          total_mem_kb = oneK * oneK;
+        }
+      }
+      // ignore rest of the line
+      file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+  }
+  return ((total_mem_kb / (page_size / oneK)) * percentageToAllocate) / 100;
+}
+
+
 void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
 {
   if (check_uffd_compatibility() < 0)
@@ -350,25 +376,6 @@ void umap_cfg_getenv( void ) {
   }
 }
 
-static unsigned long get_mem_total()
-{
-  std::string token;
-  std::ifstream file("/proc/meminfo");
-  while(file >> token) {
-    if(token == "MemTotal:") {
-      unsigned long mem;
-      if(file >> mem) {
-        return mem;
-      } else {
-        return 0;       
-      }
-    }
-    // ignore rest of the line
-    file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-  }
-  return 0; // nothing found
-}
-
 uint64_t umap_cfg_get_bufsize( void )
 {
   return umap_buffer_size;
@@ -376,7 +383,7 @@ uint64_t umap_cfg_get_bufsize( void )
 
 void umap_cfg_set_bufsize( uint64_t page_bufsize )
 {
-  long max_size = ((total_mem_kb / (page_size / 1024)) * 80) / 100;
+  long max_size = get_max_buf_size();
   long old_size = umap_buffer_size;
 
   if ( page_bufsize > max_size ) {
@@ -508,15 +515,12 @@ void __attribute ((constructor)) init_umap_lib( void )
 
   LOGGING_INIT;
 
-  total_mem_kb = get_mem_total();
-
   if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
     perror("ERROR: sysconf(_SC_PAGESIZE)");
     throw -1;
   }
 
-  // Default buffer if 80% of pages in memory
-  umap_buffer_size = ((total_mem_kb / (page_size / 1024)) * 80) / 100;
+  umap_buffer_size = get_max_buf_size();
 
   unsigned int n = std::thread::hardware_concurrency();
   uffd_threads = (n == 0) ? 16 : n;
