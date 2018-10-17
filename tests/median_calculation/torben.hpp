@@ -98,11 +98,14 @@ torben(iterator_type iterator_begin, iterator_type iterator_end) {
   // ---------- Find min and max value over time frame ---------- //
   value_type min = *iterator_begin;
   value_type max = *iterator_begin;
+  std::size_t length = 0;
   for (auto iterator(iterator_begin); iterator != iterator_end; ++iterator) {
     const value_type value = *iterator;
     min = std::min(min, value);
     max = std::max(max, value);
+    ++length;
   }
+  const size_t half = (length + 1) / 2;
 
   // ---------- Find median value ---------- //
   size_t less, greater, equal;
@@ -128,20 +131,17 @@ torben(iterator_type iterator_begin, iterator_type iterator_end) {
       }
     }
 
-    const size_t half = (std::distance(iterator_begin, iterator_end) + 1) / 2;
     if (less <= half && greater <= half) break;
     else if (less > greater) max = maxltguess;
     else min = mingtguess;
   }
 
   // ----- Calculate a mean value if the number of the given elements is an even number ----- //
-  const size_t half = std::distance(iterator_begin, iterator_end) / 2;
-
   if (less >= half) min = maxltguess;
   else if (less + equal >= half) min = guess;
   else min = mingtguess;
 
-  if (std::distance(iterator_begin, iterator_end) & 1) return min;
+  if (length & 1) return min;
 
   if (greater >= half) max = mingtguess;
   else if (greater + equal >= half) max = guess;
