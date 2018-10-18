@@ -159,7 +159,7 @@ void* PerFits_alloc_cube(
   const int prot = PROT_READ|PROT_WRITE;
   int flags = UMAP_PRIVATE;
 
-  region = umap(NULL, cube->cube_size, prot, flags, ps_read, ps_write);
+  region = umap_ex(NULL, cube->cube_size, prot, flags, ps_read, ps_write);
   if ( region == UMAP_FAILED ) {
       ostringstream ss;
       ss << "umap of " << cube->cube_size << " bytes failed for Cube";

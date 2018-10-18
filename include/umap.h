@@ -16,6 +16,29 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+/** Allow application to create region of memory to a peristant store
+ * \param addr Same as input argument for mmap(2)
+ * \param length Same as input argument of mmap(2)
+ * \param prot Same as input argument of mmap(2)
+ * \param flags Same as input argument of mmap(2)
+ * \param r_pstore pointer to callback function to be used for providing data from
+ *                 persistent storage.
+ * \param w_pstore pointer to callback function to be used for saving data to
+ *                 persistent storage.
+ */
+void* umap(
+    void* addr,
+    size_t length,
+    int prot,               /* See mmap(2) - Subset supported, rest ignored */
+    int flags,              /* See mmap(2) - Subset supported, rest ignored */
+    int fd,                 /* See mmap(2) - umap ignores this */
+    off_t offset            /* See mmap(2) - umap ignores this */
+);
+
+int uunmap( void*  addr,    /* See mmap(2) */
+            size_t length   /* See mmap(2) */
+        );
+
 /** Signatures for application provided callbacks to read/write data from/to
  * persistant storage.
  *
@@ -58,7 +81,7 @@ typedef ssize_t (*umap_pstore_write_f_t)(
  * \param w_pstore pointer to callback function to be used for saving data to
  *                 persistent storage.
  */
-void* umap(
+void* umap_ex(
     void* addr,
     size_t length,
     int prot,
@@ -66,10 +89,6 @@ void* umap(
     umap_pstore_read_f_t r_pstore,
     umap_pstore_write_f_t w_pstore
 );
-
-int uunmap( void*  addr,    /* See mmap(2) */
-            size_t length   /* See mmap(2) */
-        );
 
 uint64_t* umap_cfg_readenv(const char* env, uint64_t* val);
 void umap_cfg_getenv( void );

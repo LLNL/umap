@@ -162,9 +162,9 @@ void* PerFile_openandmap(const umt_optstruct_t* testops, uint64_t numbytes)
     int flags = UMAP_PRIVATE;
 
     if (testops->noio)
-      region = umap(NULL, handle->range_size, prot, flags, pstore_noio, pstore_noio);
+      region = umap_ex(NULL, handle->range_size, prot, flags, pstore_noio, pstore_noio);
     else
-      region = umap(NULL, handle->range_size, prot, flags, pstore_read, pstore_write);
+      region = umap_ex(NULL, handle->range_size, prot, flags, pstore_read, pstore_write);
     if ( region == UMAP_FAILED ) {
         ostringstream ss;
         ss << "umap_mf of " << handle->range_size << " bytes failed for " << handle->filename << ": ";

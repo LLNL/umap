@@ -279,8 +279,12 @@ static inline long get_max_buf_size( void )
   return ((total_mem_kb / (page_size / oneK)) * percentageToAllocate) / 100;
 }
 
+void* umap(void* base_addr, uint64_t region_size, int prot, int flags, int fd, off_t offset)
+{
+  return umap_ex(base_addr, region_size, prot, flags, nullptr, nullptr);
+}
 
-void* umap(void* base_addr, uint64_t region_size, int prot, int flags, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
+void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
 {
   if (check_uffd_compatibility() < 0)
     return NULL;
