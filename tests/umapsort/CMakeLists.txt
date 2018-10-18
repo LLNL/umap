@@ -17,8 +17,8 @@ if(OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     add_executable(umapsort umapsort.cpp)
 
-    add_dependencies(umapsort libumap libtestoptions libPerFile)
-      target_link_libraries(umapsort libumap libtestoptions libPerFile)
+    add_dependencies(umapsort umap testoptions PerFile)
+      target_link_libraries(umapsort umap testoptions PerFile)
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 

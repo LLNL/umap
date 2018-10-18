@@ -1,9 +1,10 @@
 project(umap_libraries)
 
-add_library(libumap SHARED umap.cpp ../logging/spindle_logc.c ../logging/spindle_mkdir.c)
+add_library(umap SHARED umap.cpp ../logging/spindle_logc.c ../logging/spindle_mkdir.c)
+add_library(umap-static STATIC umap.cpp ../logging/spindle_logc.c ../logging/spindle_mkdir.c)
+set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-
 
 #
 # TODO: This needs to change to "AFTER" when we have code in place to
@@ -15,7 +16,7 @@ include_directories( AFTER
   ${CMAKE_SOURCE_DIR}/sysincludes
 )
 
-install(TARGETS libumap
+install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib/static
         RUNTIME DESTINATION bin )
