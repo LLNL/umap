@@ -17,34 +17,24 @@
 #endif // _GNU_SOURCE
 
 #include <iostream>
+#include <string>
+#include <sstream>
+#include <cassert>
 #include <random>
-#include <algorithm>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/mman.h>
-#include <stdint.h>
-#include <string.h>
-#include <assert.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <unistd.h>    // optind
-#include <errno.h>
-#include <utmpx.h>
+#include <string>
+#include <vector>
 #include <parallel/algorithm>
 
-#ifdef _OPENMP
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <omp.h>
-#endif
 
 #include "umap.h"
 #include "testoptions.h"
-#include "PerFile.h"
+
+using namespace std;
 
 bool sort_ascending = true;
 
@@ -128,6 +118,101 @@ void validatedata(uint64_t *region, uint64_t rlen) {
   }
 }
 
+void* map_in_file(const umt_optstruct_t* testops, uint64_t numbytes)
+{
+  void* region = NULL;
+  int open_options = O_RDWR | O_LARGEFILE | O_DIRECT;
+  int fd;
+  string filename(testops->filename);
+
+  if ( testops->initonly || !testops->noinit ) {
+    open_options |= O_CREAT;
+    unlink(filename.c_str());   // Remove the file if it exists
+  }
+
+  if ( ( fd = open(filename.c_str(), open_options, S_IRUSR | S_IWUSR) ) == -1 ) {
+    string estr = "Failed to open/create " + filename + ": ";
+    perror(estr.c_str());
+    return NULL;
+  }
+
+  if ( open_options & O_CREAT ) { // If we are initializing, attempt to pre-allocate disk space for the file.
+    try {
+      int x;
+      if ( ( x = posix_fallocate(fd, 0, numbytes) != 0 ) ) {
+        ostringstream ss;
+        ss << "Failed to pre-allocate " << numbytes << " bytes in " << filename << ": ";
+        perror(ss.str().c_str());
+        return NULL;
+      }
+    } catch(const std::exception& e) {
+      cerr << "posix_fallocate: " << e.what() << endl;
+      return NULL;
+    } catch(...) {
+      cerr << "posix_fallocate failed to allocate backing store\n";
+      return NULL;
+    }
+  }
+
+  struct stat sbuf;
+  if (fstat(fd, &sbuf) == -1) {
+    string estr = "Failed to get status (fstat) for " + filename + ": ";
+    perror(estr.c_str());
+    return NULL;
+  }
+
+  if ( (off_t)sbuf.st_size != (numbytes) ) {
+    cerr << filename << " size " << sbuf.st_size << " does not match specified data size of " << (numbytes) << endl;
+    return NULL;
+  }
+
+  const int prot = PROT_READ|PROT_WRITE;
+
+  if ( testops->usemmap ) {
+    region = mmap(NULL, numbytes, prot, MAP_SHARED | MAP_NORESERVE, fd, 0);
+
+    if (region == MAP_FAILED) {
+      ostringstream ss;
+      ss << "mmap of " << numbytes << " bytes failed for " << filename << ": ";
+      perror(ss.str().c_str());
+      return NULL;
+    }
+  }
+  else {
+    int flags = UMAP_PRIVATE;
+
+    region = umap(NULL, numbytes, prot, flags, fd, 0);
+    if ( region == UMAP_FAILED ) {
+        ostringstream ss;
+        ss << "umap_mf of " << numbytes << " bytes failed for " << filename << ": ";
+        perror(ss.str().c_str());
+        return NULL;
+    }
+  }
+
+  return region;
+}
+
+void unmap_file(const umt_optstruct_t* testops, uint64_t numbytes, void* region)
+{
+  if ( testops->usemmap ) {
+    if ( munmap(region, numbytes) < 0 ) {
+      ostringstream ss;
+      ss << "munmap failure: ";
+      perror(ss.str().c_str());
+      exit(-1);
+    }
+  }
+  else {
+    if (uunmap(region, numbytes) < 0) {
+      ostringstream ss;
+      ss << "uunmap of failure: ";
+      perror(ss.str().c_str());
+      exit(-1);
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   umt_optstruct_t options;
@@ -144,7 +229,7 @@ int main(int argc, char **argv)
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  base_addr = PerFile_openandmap(&options, totalbytes);
+  base_addr = map_in_file(&options, totalbytes);
   if (base_addr == nullptr)
     return -1;
  
@@ -183,7 +268,7 @@ int main(int argc, char **argv)
   }
   
   start = getns();
-  PerFile_closeandunmap(&options, totalbytes, base_addr);
+  unmap_file(&options, totalbytes, base_addr);
   fprintf(stdout, "umap TERM took %f seconds\n", (double)(getns() - start)/1000000000.0);
 
   return 0;
