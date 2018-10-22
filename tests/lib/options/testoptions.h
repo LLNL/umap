@@ -19,9 +19,7 @@
 typedef struct {
   int initonly;
   int noinit;
-  int iodirect;
   int usemmap;
-  int noio;
   int shuffle;
 
   long pagesize;

@@ -27,6 +27,7 @@ set (UMAPINCLUDEDIRS
     "${CMAKE_BINARY_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/src/logging"
+    "${CMAKE_SOURCE_DIR}/src/store"
     "${CMAKE_SOURCE_DIR}/tests/lib/options"
     "${CMAKE_SOURCE_DIR}/tests/lib/PerFile"
     "${CMAKE_SOURCE_DIR}/tests/lib/PerFits"

@@ -40,9 +40,7 @@ static void usage(char* pname)
   << " --help                 - This message\n"
   << " --initonly             - Initialize file, then stop\n"
   << " --noinit               - Use previously initialized file\n"
-  << " --directio             - Use O_DIRECT for file IO\n"
   << " --usemmap              - Use mmap instead of umap\n"
-  << " --noio                 - Run test with no backing store\n"
   << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
@@ -62,8 +60,6 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
 
   testops->initonly = 0;
   testops->noinit = 0;
-  testops->iodirect = 0;
-  testops->noio = 0;
   testops->usemmap = 0;
   testops->shuffle = 0;
   testops->pages_to_access = 0;
@@ -80,9 +76,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
     static struct option long_options[] = {
       {"initonly",  no_argument,  &testops->initonly, 1 },
       {"noinit",    no_argument,  &testops->noinit,   1 },
-      {"directio",  no_argument,  &testops->iodirect, 1 },
       {"usemmap",   no_argument,  &testops->usemmap,  1 },
-      {"noio",      no_argument,  &testops->noio,     1 },
       {"shuffle",   no_argument,  &testops->shuffle,  1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }

@@ -33,7 +33,7 @@
 #include "spindle_debug.h"
 
 namespace Fits {
-Tile::Tile(const std::string& _fn, bool use_direct_io)
+Tile::Tile(const std::string& _fn)
 {
   fitsfile* fptr = NULL;
   int status = 0;
@@ -43,10 +43,7 @@ Tile::Tile(const std::string& _fn, bool use_direct_io)
   int bitpix;
   long naxis[2];
   int naxes;
-  int open_flags = (O_RDONLY | O_LARGEFILE);
-
-  if (use_direct_io)
-    open_flags |= O_DIRECT;
+  int open_flags = (O_RDONLY | O_LARGEFILE | O_DIRECT);
 
   file.fname = _fn;
   file.tile_start = (size_t)0;

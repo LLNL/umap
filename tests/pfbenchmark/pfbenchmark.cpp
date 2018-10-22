@@ -40,7 +40,6 @@
 
 using namespace std;
 using namespace chrono;
-static bool no_io = false;
 static bool usemmap = false;
 static uint64_t pagesize;
 static uint64_t page_step;
@@ -68,10 +67,7 @@ uint64_t do_read_pages(uint64_t page_step, uint64_t pages)
     uint64_t myidx = shuffled_indexes[i];
     x = glb_array[myidx * page_step];
 
-    if ( x != (myidx * page_step) && no_io == true ) {
-      x--;
-    }
-    else if (x != (myidx * page_step)) {
+    if (x != (myidx * page_step)) {
       cout << __FUNCTION__ << "glb_array[" << myidx * page_step << "]: (" << glb_array[myidx*page_step] << ") != " << myidx * page_step << "\n";
       exit(1);
     }
@@ -90,11 +86,7 @@ uint64_t do_read_modify_write_pages(uint64_t page_step, uint64_t pages)
     uint64_t myidx = shuffled_indexes[i];
     x = glb_array[myidx * page_step];
 
-    if ( x != (myidx * page_step) && no_io == true ) {
-      glb_array[myidx * page_step] = (myidx * page_step);
-      x--;
-    }
-    else if (x != (myidx * page_step)) {
+    if (x != (myidx * page_step)) {
       cout << __FUNCTION__ << "glb_array[" << myidx * page_step << "]: (" << x << ") != " << myidx * page_step << "\n";
       exit(1);
     }
@@ -133,7 +125,6 @@ int read_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "read,"
       << options.numthreads << ","
@@ -150,7 +141,6 @@ int write_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "write,"
       << options.numthreads << ","
@@ -170,7 +160,6 @@ int read_modify_write_test(int argc, char **argv)
   end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "rmw,"
       << options.numthreads << ","
@@ -197,7 +186,6 @@ int main(int argc, char **argv)
     std::shuffle(shuffled_indexes.begin(), shuffled_indexes.end(), g);
 
   options.initonly = 0;
-  no_io = (options.noio == 1);
   usemmap = (options.usemmap == 1);
   omp_set_num_threads(options.numthreads);
   pagesize = (uint64_t)umt_getpagesize();

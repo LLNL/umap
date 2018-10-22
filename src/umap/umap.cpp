@@ -49,6 +49,7 @@
 #include <cstring>
 #include <sys/prctl.h>
 #include "umap.h"               // API to library
+#include "Store.h"
 #include "config.h"
 #include "spindle_debug.h"
 
@@ -90,7 +91,7 @@ class UserFaultHandler;
 class _umap {
   friend UserFaultHandler;
   public:
-    _umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write);
+    _umap(void* _region, uint64_t _rsize, int fd, Store* _store_);
     ~_umap();
 
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
@@ -105,8 +106,7 @@ class _umap {
     void* region;
     uint64_t region_size;
     bool uffd_time_to_stop_working;
-    umap_pstore_read_f_t pstore_read;
-    umap_pstore_write_f_t pstore_write;
+    Store* store;
 };
 
 class UserFaultHandler {
@@ -279,12 +279,14 @@ static inline long get_max_buf_size( void )
   return ((total_mem_kb / (page_size / oneK)) * percentageToAllocate) / 100;
 }
 
-void* umap(void* base_addr, uint64_t region_size, int prot, int flags, int fd, off_t offset)
+void* umap(void* base_addr, uint64_t region_size, int prot, int flags,
+    int fd, off_t offset)
 {
-  return umap_ex(base_addr, region_size, prot, flags, nullptr, nullptr);
+  return umap_ex(base_addr, region_size, prot, flags, fd, 0, nullptr);
 }
 
-void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
+void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
+    int fd, off_t offset, Store* _store_)
 {
   if (check_uffd_compatibility() < 0)
     return NULL;
@@ -307,7 +309,7 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags, umap_p
   }
 
   try {
-    active_umaps[region] = new _umap{region, region_size, _ps_read, _ps_write};
+    active_umaps[region] = new _umap{region, region_size, fd, _store_};
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
     return UMAP_FAILED;
@@ -562,9 +564,16 @@ void __attribute ((destructor)) fine_umap_lib( void )
 //
 // _umap class implementation
 //
-_umap::_umap(void* _region, uint64_t _rsize, umap_pstore_read_f_t _ps_read, umap_pstore_write_f_t _ps_write)
-    : region{_region}, region_size{_rsize}, uffd_time_to_stop_working{false}, pstore_read{_ps_read}, pstore_write{_ps_write}
+_umap::_umap( void* _region,
+              uint64_t _rsize,
+              int fd,
+              Store* _store_) :
+                region{_region}, region_size{_rsize},
+                uffd_time_to_stop_working{false}, store{_store_}
 {
+  if ( store == nullptr )
+    store = Store::make_store(_region, _rsize, page_size, fd);
+
   uint64_t region_pages = region_size / page_size;
 
   // Shrink buffer size to fit requested region if needed
@@ -868,8 +877,8 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   //
   off_t offset=(uint64_t)page_begin - (uint64_t)_u->region;
 
-  if (_u->pstore_read(_u->region, copyin_buf, page_size, offset) == -1) {
-    perror("ERROR: pstore_read failed");
+  if (_u->store->read_from_store(copyin_buf, page_size, offset) == -1) {
+    perror("ERROR: read_from_store failed");
     exit(1);
   }
 
@@ -965,8 +974,8 @@ void UserFaultHandler::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
-    if (_u->pstore_write(_u->region, (char*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
-      perror("ERROR: pstore_write failed");
+    if (_u->store->write_to_store((char*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
+      perror("ERROR: write_to_store failed");
       assert(0);
     }
 #endif
