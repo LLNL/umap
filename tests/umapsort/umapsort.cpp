@@ -31,8 +31,8 @@
 #include <omp.h>
 
 #include "umap.h"
-#include "../util/commandline.hpp"
-#include "../util/umap_file.hpp"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
 
 using namespace std;
 
@@ -118,7 +118,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
   }
 }
 
-void* map_in_file(const util::umt_optstruct_t* testops, uint64_t numbytes)
+void* map_in_file(const utility::umt_optstruct_t* testops, uint64_t numbytes)
 {
   void* region = NULL;
   int open_options = O_RDWR | O_LARGEFILE | O_DIRECT;
@@ -193,7 +193,7 @@ void* map_in_file(const util::umt_optstruct_t* testops, uint64_t numbytes)
   return region;
 }
 
-void unmap_file(const util::umt_optstruct_t* testops, uint64_t numbytes, void* region)
+void unmap_file(const utility::umt_optstruct_t* testops, uint64_t numbytes, void* region)
 {
   if ( testops->usemmap ) {
     if ( munmap(region, numbytes) < 0 ) {
@@ -215,21 +215,21 @@ void unmap_file(const util::umt_optstruct_t* testops, uint64_t numbytes, void* r
 
 int main(int argc, char **argv)
 {
-  util::umt_optstruct_t options;
+  utility::umt_optstruct_t options;
   uint64_t pagesize;
   uint64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
 
   uint64_t start = getns();
-  pagesize = (uint64_t)util::umt_getpagesize();
+  pagesize = (uint64_t)utility::umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  base_addr = util::map_in_file(options.filename, options.initonly, options.noinit, options.usemmap, totalbytes);
+  base_addr = utility::map_in_file(options.filename, options.initonly, options.noinit, options.usemmap, totalbytes);
   if (base_addr == nullptr)
     return -1;
 
@@ -268,7 +268,7 @@ int main(int argc, char **argv)
   }
 
   start = getns();
-  util::unmap_file(options.usemmap, totalbytes, base_addr);
+  utility::unmap_file(options.usemmap, totalbytes, base_addr);
   fprintf(stdout, "umap TERM took %f seconds\n", (double)(getns() - start)/1000000000.0);
 
   return 0;

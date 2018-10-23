@@ -6,19 +6,19 @@ if(OPENMP_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 
-    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
+    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS})
 
     add_executable(test_median_calculation test_median_calculation.cpp)
-    add_dependencies(test_median_calculation umap PerFits )
-    target_link_libraries(test_median_calculation umap PerFits ${CFITS_LIBRARIES} )
+    add_dependencies(test_median_calculation umap)
+    target_link_libraries(test_median_calculation umap ${CFITS_LIBRARIES})
     install(TARGETS test_median_calculation
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 
     add_executable(run_random_vector run_random_vector.cpp)
-    add_dependencies(run_random_vector umap PerFits )
-    target_link_libraries(run_random_vector umap PerFits ${CFITS_LIBRARIES} )
+    add_dependencies(run_random_vector umap)
+    target_link_libraries(run_random_vector umap ${CFITS_LIBRARIES})
     install(TARGETS run_random_vector
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static

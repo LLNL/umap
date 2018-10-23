@@ -43,8 +43,8 @@
 #endif
 
 #include "umap.h"
-#include "../util/commandline.hpp"
-#include "../util/umap_file.hpp"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
 
 #define handle_error_en(en, msg) \
   do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -88,7 +88,7 @@ void initdata(uint64_t *region, int64_t rlen) {
 
 int main(int argc, char **argv)
 {
-  util::umt_optstruct_t options;
+  utility::umt_optstruct_t options;
   long pagesize;
   int64_t totalbytes;
   uint64_t arraysize;
@@ -97,14 +97,14 @@ int main(int argc, char **argv)
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> rnd_int(0, 39);
 
-  pagesize = util::umt_getpagesize();
+  pagesize = utility::umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  base_addr = util::map_in_file(options.filename, options.initonly,
+  base_addr = utility::map_in_file(options.filename, options.initonly,
       options.noinit, options.usemmap, totalbytes);
   assert(base_addr != NULL);
  
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "test took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  util::unmap_file(options.usemmap, totalbytes, base_addr);
+  utility::unmap_file(options.usemmap, totalbytes, base_addr);
 
   return 0;
 }

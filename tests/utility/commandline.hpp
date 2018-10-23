@@ -25,7 +25,7 @@
 #include <getopt.h>     // duh...
 #include "umap.h"
 
-namespace util {
+namespace utility {
 typedef struct {
   int initonly;       // Just perform initialization, then quit
   int noinit;         // Init already done, so skip it
@@ -71,7 +71,7 @@ static void usage(char* pname)
   exit(1);
 }
 
-void umt_getoptions(util::umt_optstruct_t* testops, int argc, char *argv[])
+void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
 {
   int c;
   char *pname = argv[0];

@@ -18,8 +18,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <iostream>
 #include <limits>
 
-#include "../lib/utility/bitmap.hpp"
-#include "../lib/utility/mmap.hpp"
+#include "../utility/bitmap.hpp"
+#include "../utility/mmap.hpp"
 
 namespace bfs {
 

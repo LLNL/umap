@@ -1,5 +1,3 @@
-add_subdirectory(lib)
-
 if ( ENABLE_FITS_TESTS )
   add_subdirectory(median_calculation)
 endif()

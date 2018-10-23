@@ -25,7 +25,7 @@
 #include <fcntl.h>
 #include "umap.h"
 
-namespace util {
+namespace utility {
 
 void* map_in_file(
     std::string filename,

@@ -28,7 +28,6 @@ set (UMAPINCLUDEDIRS
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/src/logging"
     "${CMAKE_SOURCE_DIR}/src/store"
-    "${CMAKE_SOURCE_DIR}/tests/lib/PerFits"
     )
 
 add_subdirectory(src)

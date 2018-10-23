@@ -21,8 +21,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <fstream>
 
 #include "bfs_kernel.hpp"
-#include "../lib/utility/bitmap.hpp"
-#include "../lib/utility/mmap.hpp"
+#include "../utility/bitmap.hpp"
+#include "../utility/mmap.hpp"
 
 void parse_options(int argc, char **argv,
                    size_t &num_vertices, size_t &num_edges,

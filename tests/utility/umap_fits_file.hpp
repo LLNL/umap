@@ -19,9 +19,13 @@
  * 59 Temple Place, Suite 330,
  * Boston, MA 02111-1307 USA
  */
-#include <iostream>
-#include <iomanip>
+#ifndef _UMAP_PERFITS_H
+#define _UMAP_PERFITS_H
+#include <ostream>
 #include <string>
+#include <vector>
+#include <stdint.h>
+#include <iomanip>
 #include <sstream>
 #include <cassert>
 #include <unordered_map>
@@ -29,23 +33,62 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
 
 #include "umap.h"
-#include "../../util/commandline.hpp"
-#include "Tile.hpp"
-#include "PerFits.h"
+#include "../utility/commandline.hpp"
+#include "fitsio.h"
 #include "spindle_debug.h"
 
-using namespace std;
 
-namespace PerFits {
+namespace utility {
+namespace umap_fits_file {
+
+/* Returns pointer to cube[Z][Y][X] Z=time, X/Y=2D space coordinates */
+void* PerFits_alloc_cube(
+    const utility::umt_optstruct_t* TestOptions, /* Input */
+    size_t* BytesPerElement,            /* Output: size of each element of cube */
+    size_t* xDim,                       /* Output: Dimension of X */
+    size_t* yDim,                       /* Output: Dimension of Y */
+    size_t* zDim                        /* Output: Dimension of Z */
+);
+
+void PerFits_free_cube(
+    void* cube                          /* Input: cube returned by */
+);
+
+struct Tile_Dim {
+  std::size_t xDim;
+  std::size_t yDim;
+  std::size_t elem_size;
+};
+
+struct Tile_File {
+  int fd;
+  std::string fname;
+  std::size_t tile_start;
+  std::size_t tile_size;
+};
+
+class Tile {
+friend std::ostream &operator<<(std::ostream &os, utility::umap_fits_file::Tile const &ft);
+public:
+  Tile(const std::string& _fn);
+  ssize_t pread(std::size_t alignment, void* cpy_buf, void* buf, std::size_t nbytes, off_t offset);
+  Tile_Dim get_Dim() { return dim; }
+private:
+  Tile_File file;
+  Tile_Dim  dim;
+};
+std::ostream &operator<<(std::ostream &os, utility::umap_fits_file::Tile const &ft);
 
 struct Cube {
-  const util::umt_optstruct_t test_options;
+  const utility::umt_optstruct_t test_options;
   size_t tile_size;  // Size of each tile (assumed to be the same for each tile)
   size_t cube_size;  // Total bytes in cube
   off_t page_size;
-  vector<Fits::Tile> tiles;  // Just one column for now
+  vector<utility::umap_fits_file::Tile> tiles;  // Just one column for now
 };
 
 static std::unordered_map<void*, Cube*> Cubes;
@@ -90,7 +133,7 @@ static ssize_t ps_write(void* region, char* buf, size_t nbytes, off_t region_off
 }
 
 void* PerFits_alloc_cube(
-    const util::umt_optstruct_t* TestOptions, /* Input */
+    const utility::umt_optstruct_t* TestOptions, /* Input */
     size_t* BytesPerElement,            /* Output: size of each element of cube */
     size_t* xDim,                       /* Output: Dimension of X */
     size_t* yDim,                       /* Output: Dimension of Y */
@@ -110,7 +153,7 @@ void* PerFits_alloc_cube(
   }
 
   Cube* cube = new Cube{.test_options = *TestOptions, .tile_size = 0, .cube_size = 0};
-  cube->page_size = util::umt_getpagesize();
+  cube->page_size = utility::umt_getpagesize();
   string basename(TestOptions->filename);
 
   *xDim = *yDim = *BytesPerElement = 0;
@@ -128,11 +171,11 @@ void* PerFits_alloc_cube(
       break;
     }
 
-    Fits::Tile T( ss.str() );
+    utility::umap_fits_file::Tile T( ss.str() );
 
     //cout << T << endl;
 
-    Fits::Tile_Dim dim = T.get_Dim();
+    utility::umap_fits_file::Tile_Dim dim = T.get_Dim();
     if ( *BytesPerElement == 0 ) {
       *xDim = dim.xDim;
       *yDim = dim.yDim;
@@ -151,7 +194,7 @@ void* PerFits_alloc_cube(
 
   // Make sure that our cube is padded if necessary to be page aligned
   
-  long psize = util::umt_getpagesize();
+  long psize = utility::umt_getpagesize();
   long remainder = cube->cube_size % psize;
 
   cube->cube_size += remainder ? (psize - remainder) : 0;
@@ -188,4 +231,99 @@ void PerFits_free_cube(void* region)
 
   Cubes.erase(region);
 }
+
+Tile::Tile(const std::string& _fn)
+{
+  fitsfile* fptr = NULL;
+  int status = 0;
+  LONGLONG headstart;
+  LONGLONG datastart;
+  LONGLONG dataend;
+  int bitpix;
+  long naxis[2];
+  int naxes;
+  int open_flags = (O_RDONLY | O_LARGEFILE | O_DIRECT);
+
+  file.fname = _fn;
+  file.tile_start = (size_t)0;
+  file.tile_size = (size_t)0;
+  dim.xDim = (size_t)0;
+  dim.yDim = (size_t)0;
+  dim.elem_size = 0;
+  file.fd = -1;
+
+  if ( fits_open_data(&fptr, file.fname.c_str(), READONLY, &status) ) {
+    fits_report_error(stderr, status);
+    exit(-1);
+  }
+
+  if ( fits_get_hduaddrll(fptr, &headstart, &datastart, &dataend, &status) ) {
+    fits_report_error(stderr, status);
+    exit(-1);
+  }
+
+  if ( fits_get_img_type(fptr, &bitpix, &status) ) {
+    fits_report_error(stderr, status);
+    exit(-1);
+  }
+
+  if ( fits_get_img_param(fptr, 2, &bitpix, &naxes, &naxis[0], &status) ) {
+    fits_report_error(stderr, status);
+    exit(-1);
+  }
+
+  if ( fits_close_file(fptr, &status) ) {
+    fits_report_error(stderr, status);
+    exit(-1);
+  }
+
+  if ( ( file.fd = open(file.fname.c_str(), open_flags) ) == -1 ) {
+    perror(file.fname.c_str());
+    exit(-1);
+  }
+
+  dim.xDim = (size_t)naxis[0];
+  dim.yDim = (size_t)naxis[1];
+  dim.elem_size = bitpix < 0 ? (size_t)( ( bitpix * -1 ) / 8 ) : (size_t)( bitpix / 8 );
+  file.tile_start = (size_t)datastart;
+  file.tile_size = (size_t)(dim.xDim * dim.yDim * dim.elem_size);
+
+  assert( (dataend - datastart) >= (dim.xDim * dim.yDim * dim.elem_size) );
 }
+
+ssize_t Tile::pread(std::size_t alignment, void* cpy_buf, void* buf, std::size_t nbytes, off_t offset)
+{
+  std::size_t rval;
+
+  offset += file.tile_start;  // Skip to data portion of file
+  off_t unaligned_amount = offset & (alignment - 1);
+  offset -= unaligned_amount;
+  char* tbuf = (char*)cpy_buf;
+
+  debug_printf("%zu bytes into %p from offset %zu\n", alignment, buf, offset);
+  if ( ( rval = ::pread(file.fd, tbuf, alignment, offset) ) == -1) {
+    perror("ERROR: pread failed");
+    exit(1);
+  }
+
+  ssize_t amount_to_copy = std::min(rval, nbytes) - unaligned_amount;
+
+  memcpy(buf, &tbuf[unaligned_amount], amount_to_copy);
+
+  return amount_to_copy;
+}
+
+std::ostream &operator<<(std::ostream &os, Tile const &ft)
+{
+  os << ft.file.fname << " "
+     << "Start=" << ft.file.tile_start << ", "
+     << "Size=" << ft.file.tile_size << ", "
+     << "XDim=" << ft.dim.xDim << ", "
+     << "YDim=" << ft.dim.yDim << ", "
+     << "ESize=" << ft.dim.elem_size << " ";
+
+  return os;
+}
+}
+}
+#endif

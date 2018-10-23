@@ -64,8 +64,8 @@
 
 #include "umap.h"
 #include "options.h"
-#include "../util/commandline.hpp"
-#include "../util/umap_file.hpp"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
 
 uint64_t g_count = 0;
 using namespace std;
@@ -73,7 +73,7 @@ using namespace chrono;
 
 class pageiotest {
 public:
-    pageiotest(int _ac, char** _av): time_to_stop{false}, pagesize{util::umt_getpagesize()} {
+    pageiotest(int _ac, char** _av): time_to_stop{false}, pagesize{utility::umt_getpagesize()} {
         getoptions(options, _ac, _av);
 
         umt_options.usemmap = options.usemmap;
@@ -84,7 +84,7 @@ public:
         num_rw_load_pages = num_read_load_pages = options.num_load_pages;
         num_churn_pages = options.num_churn_pages;
 
-        base_addr = util::map_in_file(options.fn, options.initonly,
+        base_addr = utility::map_in_file(options.fn, options.initonly,
             options.noinit, options.usemmap,
             (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
 
@@ -117,7 +117,7 @@ public:
     }
 
     ~pageiotest( void ) {
-        util::unmap_file(umt_options.usemmap,
+        utility::unmap_file(umt_options.usemmap,
             (options.num_churn_pages + num_rw_load_pages
              + num_read_load_pages) * pagesize, base_addr);
     }
@@ -160,7 +160,7 @@ public:
 
 private:
     bool time_to_stop;
-    util::umt_optstruct_t umt_options;
+    utility::umt_optstruct_t umt_options;
     options_t options;
 
     long pagesize;
