@@ -24,12 +24,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <omp.h>
 #endif
 
-#include "testoptions.h"
-#include "PerFits.h"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_fits_file.hpp"
 #include "torben.hpp"
 #include "utility.hpp"
 #include "vector.hpp"
-#include "../lib/utility/time.hpp"
+#include "../utility/time.hpp"
 
 using pixel_type = float;
 constexpr size_t default_num_random_vector = 100000;
@@ -142,7 +142,7 @@ void print_top_median(const median::cube_t<pixel_type> &cube, std::vector<std::p
 }
 
 int main(int argc, char **argv) {
-  umt_optstruct_t options;
+  utility::umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
 
 #ifdef _OPENMP
@@ -153,11 +153,8 @@ int main(int argc, char **argv) {
   median::cube_t<pixel_type> cube;
 
   // Alloc memory space and read data from fits files with umap
-  cube.data = (pixel_type *)PerFits::PerFits_alloc_cube(&options,
-                                                        &BytesPerElement,
-                                                        &cube.size_x,
-                                                        &cube.size_y,
-                                                        &cube.size_k);
+  cube.data = (pixel_type *)utility::umap_fits_file::PerFits_alloc_cube(
+      options.filename, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
 
   if (cube.data == nullptr) {
     std::cerr << "Failed to allocate memory for cube\n";
@@ -181,7 +178,7 @@ int main(int argc, char **argv) {
             << "\nvectors/sec = " << static_cast<double>(num_random_vector) / result.first << std::endl;
   print_top_median(cube, result.second);
 
-  PerFits::PerFits_free_cube(cube.data);
+  utility::umap_fits_file::PerFits_free_cube(cube.data);
 
   return 0;
 }

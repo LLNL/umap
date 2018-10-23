@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "torben.hpp"
 #include "utility.hpp"
 #include "vector.hpp"
-#include "testoptions.h"
-#include "PerFits.h"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_fits_file.hpp"
 
 using pixel_type = float;
 
@@ -34,13 +34,14 @@ const pixel_type correct_median[num_vectors] = {14913.25, 15223.21, 2284.29, 893
 
 int main(int argc, char** argv)
 {
-  umt_optstruct_t options;
+  utility::umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
 
   size_t BytesPerElement;
   median::cube_t<float> cube;
 
-  cube.data = (float*)PerFits::PerFits_alloc_cube(&options, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
+  cube.data = (float*)utility::umap_fits_file::PerFits_alloc_cube(
+      options.filename, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
 
   for (int i = 0; i < num_vectors; ++i) {
     std::cout << "Vector " << i << std::endl;
@@ -63,7 +64,7 @@ int main(int argc, char** argv)
     }
   }
 
-  PerFits::PerFits_free_cube(cube.data);
+  utility::umap_fits_file::PerFits_free_cube(cube.data);
 
   std::cout << "Passed all tests" << std::endl;
 

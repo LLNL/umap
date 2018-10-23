@@ -40,7 +40,7 @@ export BUILD_DIR=build-${SYS_TYPE}
 
 export COMPILER=${1:-gcc_4_8_5}
 export BUILD_TYPE=${2:-Release}
-export BUILD_OPTIONS="-DENABLE_STATS=On ${BUILD_OPTIONS}"
+export BUILD_OPTIONS="${BUILD_OPTIONS}"
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
@@ -49,8 +49,8 @@ trycmd "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_
 trycmd "make -j"
 
 /bin/rm -rf /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat /tmp/test_fits_files
-trycmd "./tests/churn/churn --directio -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10"
-trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat --directio -t 16"
+trycmd "./tests/churn/churn -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10"
+trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat -t 16"
 trycmd "tar xvf ${UMAP_DIR}/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
 trycmd "./tests/median_calculation/test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch00"
 /bin/rm -rf /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat /tmp/test_fits_files

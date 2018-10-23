@@ -130,13 +130,3 @@ void getoptions(options_t& testops, int& argc, char **argv)
   umap_cfg_set_bufsize(testops.page_buffer_size);
 }
 
-long umt_getpagesize(void)
-{
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (page_size == -1) {
-        perror("sysconf/page_size");
-        exit(1);
-    }
-    return page_size;
-}
-

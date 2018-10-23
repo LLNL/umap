@@ -1,31 +1,49 @@
-/* This file is part of UMAP.  
- *
- * For copyright information see the COPYRIGHT file in the top level 
- * directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT 
- * This program is free software; you can redistribute it and/or modify 
- * it under the terms of the GNU Lesser General Public License (as 
- * published by the Free Software Foundation) version 2.1 dated 
- * February 1999.  This program is distributed in the hope that it will 
- * be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED 
- * WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the terms and conditions of the GNU Lesser General Public 
- * License for more details.  You should have received a copy of 
- * the GNU Lesser General Public License along with this program; 
- * if not, write to the Free Software Foundation, Inc., 
- * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA 
+/*
+ * This file is part of UMAP.  For copyright information see the COPYRIGHT file
+ * in the top level directory, or at
+ * https://github.com/LLNL/umap/blob/master/COPYRIGHT. This program is free
+ * software; you can redistribute it and/or modify it under the terms of the
+ * GNU Lesser General Public License (as published by the Free Software
+ * Foundation) version 2.1 dated February 1999.  This program is distributed in
+ * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+ * IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+ * the terms and conditions of the GNU Lesser General Public License for more
+ * details.  You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
+#ifndef _COMMANDLING_HPP
+#define _COMMANDLING_HPP
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
 
+#include <stdint.h>
 #include <iostream>     // cout/cerr
 #include <unistd.h>     // getopt()
 #include <getopt.h>     // duh...
-#include "testoptions.h"
 #include "umap.h"
 
-char const* DIRNAME = "/mnt/intel/";
-char const* FILENAME = "abc";
+namespace utility {
+typedef struct {
+  int initonly;       // Just perform initialization, then quit
+  int noinit;         // Init already done, so skip it
+  int usemmap;
+  int shuffle;
+
+  long pagesize;
+  uint64_t numpages;
+  uint64_t numthreads;
+  uint64_t bufsize;
+  uint64_t uffdthreads;
+  uint64_t pages_to_access;  // 0 (default) - access all pages
+  char const* filename; // file name or basename
+  char const* dirname; // dir name or basename
+} umt_optstruct_t;
+
+static char const* DIRNAME = "/mnt/intel/";
+static char const* FILENAME = "abc";
 const uint64_t NUMPAGES = 10000000;
 const uint64_t NUMTHREADS = 2;
 const uint64_t BUFFERSIZE = 16;
@@ -40,9 +58,7 @@ static void usage(char* pname)
   << " --help                 - This message\n"
   << " --initonly             - Initialize file, then stop\n"
   << " --noinit               - Use previously initialized file\n"
-  << " --directio             - Use O_DIRECT for file IO\n"
   << " --usemmap              - Use mmap instead of umap\n"
-  << " --noio                 - Run test with no backing store\n"
   << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
@@ -55,15 +71,13 @@ static void usage(char* pname)
   exit(1);
 }
 
-void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
+void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
 {
   int c;
   char *pname = argv[0];
 
   testops->initonly = 0;
   testops->noinit = 0;
-  testops->iodirect = 0;
-  testops->noio = 0;
   testops->usemmap = 0;
   testops->shuffle = 0;
   testops->pages_to_access = 0;
@@ -80,9 +94,7 @@ void umt_getoptions(umt_optstruct_t* testops, int argc, char *argv[])
     static struct option long_options[] = {
       {"initonly",  no_argument,  &testops->initonly, 1 },
       {"noinit",    no_argument,  &testops->noinit,   1 },
-      {"directio",  no_argument,  &testops->iodirect, 1 },
       {"usemmap",   no_argument,  &testops->usemmap,  1 },
-      {"noio",      no_argument,  &testops->noio,     1 },
       {"shuffle",   no_argument,  &testops->shuffle,  1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }
@@ -170,3 +182,5 @@ long umt_getpagesize(void)
 {
   return umap_cfg_get_pagesize();
 }
+}
+#endif // _COMMANDLING_HPP
