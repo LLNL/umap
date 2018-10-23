@@ -40,7 +40,7 @@ export BUILD_DIR=build-${SYS_TYPE}
 
 export COMPILER=${1:-gcc_4_8_5}
 export BUILD_TYPE=${2:-Release}
-export BUILD_OPTIONS="-DENABLE_STATS=On ${BUILD_OPTIONS}"
+export BUILD_OPTIONS="${BUILD_OPTIONS}"
 mkdir ${BUILD_DIR} 2> /dev/null
 cd ${BUILD_DIR}
 
