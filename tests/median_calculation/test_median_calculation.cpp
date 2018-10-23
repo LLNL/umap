@@ -40,7 +40,8 @@ int main(int argc, char** argv)
   size_t BytesPerElement;
   median::cube_t<float> cube;
 
-  cube.data = (float*)utility::umap_fits_file::PerFits_alloc_cube(&options, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
+  cube.data = (float*)utility::umap_fits_file::PerFits_alloc_cube(
+      options.filename, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
 
   for (int i = 0; i < num_vectors; ++i) {
     std::cout << "Vector " << i << std::endl;

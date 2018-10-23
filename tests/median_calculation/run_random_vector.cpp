@@ -153,11 +153,8 @@ int main(int argc, char **argv) {
   median::cube_t<pixel_type> cube;
 
   // Alloc memory space and read data from fits files with umap
-  cube.data = (pixel_type *)utility::umap_fits_file::PerFits_alloc_cube(&options,
-                                                        &BytesPerElement,
-                                                        &cube.size_x,
-                                                        &cube.size_y,
-                                                        &cube.size_k);
+  cube.data = (pixel_type *)utility::umap_fits_file::PerFits_alloc_cube(
+      options.filename, &BytesPerElement, &cube.size_x, &cube.size_y, &cube.size_k);
 
   if (cube.data == nullptr) {
     std::cerr << "Failed to allocate memory for cube\n";

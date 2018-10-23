@@ -35,28 +35,16 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-
+#include <stdlib.h>
 #include "umap.h"
-#include "../utility/commandline.hpp"
 #include "fitsio.h"
-#include "spindle_debug.h"
 
+#include "spindle_debug.h"
+#include "../utility/commandline.hpp"
+#include "../../src/store/Store.h"
 
 namespace utility {
 namespace umap_fits_file {
-
-/* Returns pointer to cube[Z][Y][X] Z=time, X/Y=2D space coordinates */
-void* PerFits_alloc_cube(
-    const utility::umt_optstruct_t* TestOptions, /* Input */
-    size_t* BytesPerElement,            /* Output: size of each element of cube */
-    size_t* xDim,                       /* Output: Dimension of X */
-    size_t* yDim,                       /* Output: Dimension of Y */
-    size_t* zDim                        /* Output: Dimension of Z */
-);
-
-void PerFits_free_cube(
-    void* cube                          /* Input: cube returned by */
-);
 
 struct Tile_Dim {
   std::size_t xDim;
@@ -84,56 +72,75 @@ private:
 std::ostream &operator<<(std::ostream &os, utility::umap_fits_file::Tile const &ft);
 
 struct Cube {
-  const utility::umt_optstruct_t test_options;
   size_t tile_size;  // Size of each tile (assumed to be the same for each tile)
   size_t cube_size;  // Total bytes in cube
   off_t page_size;
   vector<utility::umap_fits_file::Tile> tiles;  // Just one column for now
 };
 
-static std::unordered_map<void*, Cube*> Cubes;
+static std::unordered_map<void*, Cube*>  Cubes;
 
-static ssize_t ps_read(void* region, char* dblbuf, size_t nbytes, off_t region_offset)
-{
-  auto it = Cubes.find(region);
-  assert( "ps_read: failed to find control object" && it != Cubes.end() );
-  Cube* cube = it->second;
-  ssize_t rval;
-  ssize_t bytesread = 0;
-  char* direct_io_buf = &dblbuf[nbytes];
-
-  //
-  // Now read in remaining bytes
-  //
-  while ( nbytes ) {
-    off_t tileno = region_offset / cube->tile_size;
-    off_t tileoffset = region_offset % cube->tile_size;
-    size_t bytes_to_eof = cube->tile_size - tileoffset;
-    size_t bytes_to_read = std::min(bytes_to_eof, nbytes);
-
-    debug_printf("dblbuf=%p, bytes_to_read=%zu, offset=%zu\n", dblbuf, bytes_to_read, tileoffset);
-    if ( ( rval = cube->tiles[tileno].pread(cube->page_size, direct_io_buf, dblbuf, bytes_to_read, tileoffset) ) == -1) {
-      perror("ERROR: pread failed");
-      exit(1);
+class CfitsStoreFile : public Store {
+  public:
+    CfitsStoreFile(Cube* _cube_, size_t _rsize_, size_t _alignsize_)
+      : cube{_cube_}, rsize{_rsize_}, alignsize{_alignsize_}
+    {
+      if ( posix_memalign(&alignment_buffer, alignsize, alignsize) ) {
+            debug_printf("ERROR: posix_memalign failed\n");
+            exit(1);
+      }
     }
 
-    bytesread += rval;
-    nbytes -= rval;
-    dblbuf += rval;
-    region_offset += rval;
-  }
+    ~CfitsStoreFile() {
+      free(alignment_buffer);
+    }
 
-  return bytesread;
-}
+    ssize_t read_from_store(char* buf, size_t nb, off_t off) {
+      ssize_t rval;
+      ssize_t bytesread = 0;
 
-static ssize_t ps_write(void* region, char* buf, size_t nbytes, off_t region_offset)
-{
-  assert("FITS write not supported" && 0);
-  return 0;
-}
+      //
+      // Now read in remaining bytes
+      //
+      while ( nb ) {
+        off_t tileno = off / cube->tile_size;
+        off_t tileoffset = off % cube->tile_size;
+        size_t bytes_to_eof = cube->tile_size - tileoffset;
+        size_t bytes_to_read = std::min(bytes_to_eof, nb);
 
+        debug_printf("buf=%p, bytes_to_read=%zu, offset=%zu\n", buf, bytes_to_read, tileoffset);
+        if ( ( rval = cube->tiles[tileno].pread(cube->page_size, alignment_buffer, buf, bytes_to_read, tileoffset) ) == -1) {
+          perror("ERROR: pread failed");
+          exit(1);
+        }
+
+        bytesread += rval;
+        nb -= rval;
+        buf += rval;
+        off += rval;
+      }
+
+      return bytesread;
+    }
+
+    ssize_t  write_to_store(char* buf, size_t nb, off_t off) {
+      assert("FITS write not supported" && 0);
+      return 0;
+    }
+
+    void* region;
+
+  private:
+    Cube* cube;
+    void* alignment_buffer;
+    size_t rsize;
+    size_t alignsize;
+    int fd;
+};
+
+/* Returns pointer to cube[Z][Y][X] Z=time, X/Y=2D space coordinates */
 void* PerFits_alloc_cube(
-    const utility::umt_optstruct_t* TestOptions, /* Input */
+    string name,
     size_t* BytesPerElement,            /* Output: size of each element of cube */
     size_t* xDim,                       /* Output: Dimension of X */
     size_t* yDim,                       /* Output: Dimension of Y */
@@ -142,24 +149,13 @@ void* PerFits_alloc_cube(
 {
   void* region = NULL;
 
-  if ( TestOptions->usemmap ) {
-    cerr << "MMAP is not supported for FITS files\n";
-    return nullptr;
-  }
-
-  if ( TestOptions->initonly ) {
-    cerr << "INIT/Creation of FITS files is not supported\n";
-    return nullptr;
-  }
-
-  Cube* cube = new Cube{.test_options = *TestOptions, .tile_size = 0, .cube_size = 0};
+  Cube* cube = new Cube{.tile_size = 0, .cube_size = 0};
   cube->page_size = utility::umt_getpagesize();
-  string basename(TestOptions->filename);
+  string basename(name);
 
   *xDim = *yDim = *BytesPerElement = 0;
   for (int i = 1; ; ++i) {
-    stringstream ss;
-    //ss << basename << std::setfill('0') << std::setw(3) << i << ".fits";
+    std::stringstream ss;
     ss << basename << i << ".fits";
     struct stat sbuf;
 
@@ -170,10 +166,11 @@ void* PerFits_alloc_cube(
       }
       break;
     }
-
     utility::umap_fits_file::Tile T( ss.str() );
+    ss.str(""); ss.clear();
 
-    //cout << T << endl;
+    ss << T << endl;
+    debug_printf3("%s\n", ss.str().c_str());
 
     utility::umap_fits_file::Tile_Dim dim = T.get_Dim();
     if ( *BytesPerElement == 0 ) {
@@ -194,24 +191,28 @@ void* PerFits_alloc_cube(
 
   // Make sure that our cube is padded if necessary to be page aligned
   
-  long psize = utility::umt_getpagesize();
+  size_t psize = utility::umt_getpagesize();
   long remainder = cube->cube_size % psize;
 
   cube->cube_size += remainder ? (psize - remainder) : 0;
 
+
+  CfitsStoreFile* cstore;
+  cstore = new CfitsStoreFile{cube, cube->cube_size, psize};
+
   const int prot = PROT_READ|PROT_WRITE;
   int flags = UMAP_PRIVATE;
 
-  region = umap_ex(NULL, cube->cube_size, prot, flags, 0, 0, nullptr);
-  if ( region == UMAP_FAILED ) {
+  cstore->region = umap_ex(NULL, cube->cube_size, prot, flags, 0, 0, cstore);
+  if ( cstore->region == UMAP_FAILED ) {
       ostringstream ss;
       ss << "umap of " << cube->cube_size << " bytes failed for Cube";
       perror(ss.str().c_str());
       return NULL;
   }
 
-  Cubes[region] = cube;
-  return region;
+  Cubes[cstore->region] = cube;
+  return cstore->region;
 }
 
 void PerFits_free_cube(void* region)
