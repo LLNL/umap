@@ -1,17 +1,16 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT 
- * file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT 
- * This program is free software; you can redistribute it and/or modify it under 
- * the terms of the GNU Lesser General Public License (as published by the Free 
- * Software Foundation) version 2.1 dated February 1999.  This program is distributed in 
- * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED 
- * WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the terms and conditions of the GNU Lesser General Public License for more details.  
- * You should have received a copy of the GNU Lesser General Public License along with 
- * this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, 
- * Suite 330, Boston, MA 02111-1307 USA 
+/* This file is part of UMAP.  For copyright information see the COPYRIGHT
+ * file in the top level directory, or at
+ * https://github.com/LLNL/umap/blob/master/COPYRIGHT. This program is free
+ * software; you can redistribute it and/or modify it under the terms of the
+ * GNU Lesser General Public License (as published by the Free Software
+ * Foundation) version 2.1 dated February 1999.  This program is distributed in
+ * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+ * IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the terms and conditions of the GNU Lesser General Public License for
+ * more details.  You should have received a copy of the GNU Lesser General
+ * Public License along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
-// uffd sort benchmark
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
@@ -32,7 +31,8 @@
 #include <omp.h>
 
 #include "umap.h"
-#include "testoptions.h"
+#include "../util/commandline.hpp"
+#include "../util/umap_file.hpp"
 
 using namespace std;
 
@@ -62,7 +62,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
 #pragma omp parallel for
     for(uint64_t i = 0; i < rlen; ++i) {
         if (region[i] != (i+1)) {
-            fprintf(stderr, "Worker %d found an error at index %lu, %lu != lt %lu!\n", 
+            fprintf(stderr, "Worker %d found an error at index %lu, %lu != lt %lu!\n",
                             omp_get_thread_num(), i, region[i], i+1);
 
             if (i < 3) {
@@ -80,7 +80,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
                 fprintf(stderr, "\n");
             }
             else {
-                fprintf(stderr, 
+                fprintf(stderr,
                     "Context i-3 i-2 i-1 i i+1 i+2 i+3:%lu %lu %lu %lu %lu %lu %lu\n",
                     region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
             }
@@ -91,7 +91,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
 #pragma omp parallel for
     for(uint64_t i = 0; i < rlen; ++i) {
         if(region[i] != (rlen - i)) {
-            fprintf(stderr, "Worker %d found an error at index %lu, %lu != %lu!\n", 
+            fprintf(stderr, "Worker %d found an error at index %lu, %lu != %lu!\n",
                             omp_get_thread_num(), i, region[i], (rlen - i));
 
             if (i < 3) {
@@ -109,7 +109,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
                 fprintf(stderr, "\n");
             }
             else {
-                fprintf(stderr, 
+                fprintf(stderr,
                     "Context i-3 i-2 i-1 i i+1 i+2 i+3:%lu %lu %lu %lu %lu %lu %lu\n",
                     region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
             }
@@ -118,7 +118,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
   }
 }
 
-void* map_in_file(const umt_optstruct_t* testops, uint64_t numbytes)
+void* map_in_file(const util::umt_optstruct_t* testops, uint64_t numbytes)
 {
   void* region = NULL;
   int open_options = O_RDWR | O_LARGEFILE | O_DIRECT;
@@ -193,7 +193,7 @@ void* map_in_file(const umt_optstruct_t* testops, uint64_t numbytes)
   return region;
 }
 
-void unmap_file(const umt_optstruct_t* testops, uint64_t numbytes, void* region)
+void unmap_file(const util::umt_optstruct_t* testops, uint64_t numbytes, void* region)
 {
   if ( testops->usemmap ) {
     if ( munmap(region, numbytes) < 0 ) {
@@ -215,28 +215,28 @@ void unmap_file(const umt_optstruct_t* testops, uint64_t numbytes, void* region)
 
 int main(int argc, char **argv)
 {
-  umt_optstruct_t options;
+  util::umt_optstruct_t options;
   uint64_t pagesize;
   uint64_t totalbytes;
   uint64_t arraysize;
   void* base_addr;
 
   uint64_t start = getns();
-  pagesize = (uint64_t)umt_getpagesize();
+  pagesize = (uint64_t)util::umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  base_addr = map_in_file(&options, totalbytes);
+  base_addr = util::map_in_file(options.filename, options.initonly, options.noinit, options.usemmap, totalbytes);
   if (base_addr == nullptr)
     return -1;
- 
+
   fprintf(stdout, "umap INIT took %f seconds\n", (double)(getns() - start)/1000000000.0);
   fprintf(stdout, "%lu pages, %llu bytes, %lu threads\n", options.numpages, totalbytes, options.numthreads);
 
-  uint64_t *arr = (uint64_t *) base_addr; 
+  uint64_t *arr = (uint64_t *) base_addr;
   arraysize = totalbytes/sizeof(uint64_t);
 
   start = getns();
@@ -246,11 +246,11 @@ int main(int argc, char **argv)
     fprintf(stdout, "Init took %f seconds\n", (double)(getns() - start)/1000000000.0);
   }
 
-  if ( !options.initonly ) 
+  if ( !options.initonly )
   {
     start = getns();
     sort_ascending = (arr[0] != 1);
-    
+
     if (sort_ascending == true) {
       printf("Sorting in Ascending Order\n");
       __gnu_parallel::sort(arr, &arr[arraysize], std::less<uint64_t>(), __gnu_parallel::quicksort_tag());
@@ -266,9 +266,9 @@ int main(int argc, char **argv)
     validatedata(arr, arraysize);
     fprintf(stdout, "Validate took %f seconds\n", (double)(getns() - start)/1000000000.0);
   }
-  
+
   start = getns();
-  unmap_file(&options, totalbytes, base_addr);
+  util::unmap_file(options.usemmap, totalbytes, base_addr);
   fprintf(stdout, "umap TERM took %f seconds\n", (double)(getns() - start)/1000000000.0);
 
   return 0;

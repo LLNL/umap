@@ -22,12 +22,12 @@
 #ifndef _UMAP_PERFITS_H
 #define _UMAP_PERFITS_H
 #include <stdint.h>
-#include "testoptions.h"
+#include "../../util/commandline.hpp"
 
 namespace PerFits {
   /* Returns pointer to cube[Z][Y][X] Z=time, X/Y=2D space coordinates */
   void* PerFits_alloc_cube(
-      const umt_optstruct_t* TestOptions, /* Input */
+      const util::umt_optstruct_t* TestOptions, /* Input */
       size_t* BytesPerElement,            /* Output: size of each element of cube */
       size_t* xDim,                       /* Output: Dimension of X */
       size_t* yDim,                       /* Output: Dimension of Y */
@@ -35,7 +35,7 @@ namespace PerFits {
   );
 
   void PerFits_free_cube(
-      void* cube                          /* Input: cube returned by PerFile_alloc_cube */
+      void* cube                          /* Input: cube returned by */
   );
 }
 #endif // _UMAP_PERFITS_H

@@ -35,8 +35,8 @@
 #include <iterator>
 
 #include "umap.h"
-#include "testoptions.h"
-#include "PerFile.h"
+#include "../util/umap_file.hpp"
+#include "../util/commandline.hpp"
 
 using namespace std;
 using namespace chrono;
@@ -44,7 +44,7 @@ static bool usemmap = false;
 static uint64_t pagesize;
 static uint64_t page_step;
 static uint64_t* glb_array;
-static umt_optstruct_t options;
+static util::umt_optstruct_t options;
 static uint64_t pages_to_access;
 vector<uint64_t> shuffled_indexes;
 
@@ -188,9 +188,11 @@ int main(int argc, char **argv)
   options.initonly = 0;
   usemmap = (options.usemmap == 1);
   omp_set_num_threads(options.numthreads);
-  pagesize = (uint64_t)umt_getpagesize();
+  pagesize = (uint64_t)util::umt_getpagesize();
   page_step = pagesize/sizeof(uint64_t);
-  glb_array = (uint64_t*)PerFile_openandmap(&options, pagesize * options.numpages);
+
+  glb_array = (uint64_t*) util::map_in_file(options.filename, options.initonly,
+      options.noinit, options.usemmap, pagesize * options.numpages);
 
   if (strcmp(argv[0], "pfbenchmark-read") == 0)
     rval = read_test(argc, argv);
@@ -202,6 +204,6 @@ int main(int argc, char **argv)
     cerr << "Unknown test mode " << argv[0] << "\n";
 
   print_stats();
-  PerFile_closeandunmap(&options, pagesize * options.numpages, glb_array);
+  util::unmap_file(options.usemmap, pagesize * options.numpages, glb_array);
   return rval;
 }

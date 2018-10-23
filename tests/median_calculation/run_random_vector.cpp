@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <omp.h>
 #endif
 
-#include "testoptions.h"
+#include "../util/commandline.hpp"
 #include "PerFits.h"
 #include "torben.hpp"
 #include "utility.hpp"
@@ -142,7 +142,7 @@ void print_top_median(const median::cube_t<pixel_type> &cube, std::vector<std::p
 }
 
 int main(int argc, char **argv) {
-  umt_optstruct_t options;
+  util::umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
 
 #ifdef _OPENMP

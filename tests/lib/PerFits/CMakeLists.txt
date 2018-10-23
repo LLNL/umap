@@ -4,8 +4,6 @@ add_library(PerFits SHARED PerFits.cpp Tile.cpp )
 add_library(PerFits-static STATIC PerFits.cpp Tile.cpp )
 set_target_properties(PerFits-static PROPERTIES OUTPUT_NAME PerFits)
 
-add_dependencies(PerFits testoptions)
-
 target_link_libraries(PerFits umap)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

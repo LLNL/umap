@@ -9,16 +9,16 @@ if(OPENMP_FOUND)
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
     add_executable(test_median_calculation test_median_calculation.cpp)
-    add_dependencies(test_median_calculation testoptions umap PerFile PerFits )
-    target_link_libraries(test_median_calculation umap testoptions PerFits ${CFITS_LIBRARIES} )
+    add_dependencies(test_median_calculation umap PerFits )
+    target_link_libraries(test_median_calculation umap PerFits ${CFITS_LIBRARIES} )
     install(TARGETS test_median_calculation
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 
     add_executable(run_random_vector run_random_vector.cpp)
-    add_dependencies(run_random_vector umap testoptions PerFits )
-    target_link_libraries(run_random_vector umap testoptions PerFits ${CFITS_LIBRARIES} )
+    add_dependencies(run_random_vector umap PerFits )
+    target_link_libraries(run_random_vector umap PerFits ${CFITS_LIBRARIES} )
     install(TARGETS run_random_vector
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static

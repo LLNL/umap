@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "torben.hpp"
 #include "utility.hpp"
 #include "vector.hpp"
-#include "testoptions.h"
+#include "../util/commandline.hpp"
 #include "PerFits.h"
 
 using pixel_type = float;
@@ -34,7 +34,7 @@ const pixel_type correct_median[num_vectors] = {14913.25, 15223.21, 2284.29, 893
 
 int main(int argc, char** argv)
 {
-  umt_optstruct_t options;
+  util::umt_optstruct_t options;
   umt_getoptions(&options, argc, argv);
 
   size_t BytesPerElement;

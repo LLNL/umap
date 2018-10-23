@@ -31,7 +31,7 @@
 #include <unistd.h>
 
 #include "umap.h"
-#include "testoptions.h"
+#include "../../util/commandline.hpp"
 #include "Tile.hpp"
 #include "PerFits.h"
 #include "spindle_debug.h"
@@ -41,7 +41,7 @@ using namespace std;
 namespace PerFits {
 
 struct Cube {
-  const umt_optstruct_t test_options;
+  const util::umt_optstruct_t test_options;
   size_t tile_size;  // Size of each tile (assumed to be the same for each tile)
   size_t cube_size;  // Total bytes in cube
   off_t page_size;
@@ -90,7 +90,7 @@ static ssize_t ps_write(void* region, char* buf, size_t nbytes, off_t region_off
 }
 
 void* PerFits_alloc_cube(
-    const umt_optstruct_t* TestOptions, /* Input */
+    const util::umt_optstruct_t* TestOptions, /* Input */
     size_t* BytesPerElement,            /* Output: size of each element of cube */
     size_t* xDim,                       /* Output: Dimension of X */
     size_t* yDim,                       /* Output: Dimension of Y */
@@ -110,7 +110,7 @@ void* PerFits_alloc_cube(
   }
 
   Cube* cube = new Cube{.test_options = *TestOptions, .tile_size = 0, .cube_size = 0};
-  cube->page_size = umt_getpagesize();
+  cube->page_size = util::umt_getpagesize();
   string basename(TestOptions->filename);
 
   *xDim = *yDim = *BytesPerElement = 0;
@@ -151,7 +151,7 @@ void* PerFits_alloc_cube(
 
   // Make sure that our cube is padded if necessary to be page aligned
   
-  long psize = umt_getpagesize();
+  long psize = util::umt_getpagesize();
   long remainder = cube->cube_size % psize;
 
   cube->cube_size += remainder ? (psize - remainder) : 0;
