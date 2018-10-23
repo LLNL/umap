@@ -1,4 +1,4 @@
-if ( ENABLE_FITS_TESTS )
+if ( ENABLE_CFITS_TESTS )
   add_subdirectory(median_calculation)
 endif()
 

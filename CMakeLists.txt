@@ -4,14 +4,12 @@ project(umap
   LANGUAGES CXX C
 )
 
-OPTION (ENABLE_CFITS "Build umap with Logging enabled" Off)
-OPTION (ENABLE_FITS_TESTS "Build FITS-based Tests (requires qfits library)" Off)
 OPTION (ENABLE_TESTS "Selects whether tests are built." On)
 OPTION (ENABLE_LOGGING "Build umap with Logging enabled" On)
 OPTION (ENABLE_STATS "Enable display statistics on exit" Off)
+OPTION (ENABLE_CFITS_TESTS "Build CFITS-based Tests (requires cfits library)" Off)
 
 set(UMAP_ENABLE_LOGGING ${ENABLE_LOGGING})
-set(UMAP_ENABLE_CFITS ${ENABLE_CFITS})
 set(UMAP_DISPLAY_STATS ${ENABLE_STATS})
 set(UMAP_DEBUG_LOGGING ${ENABLE_LOGGING})
 
