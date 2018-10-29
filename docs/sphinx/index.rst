@@ -29,13 +29,12 @@ Any questions? File an issue on GitHub.
   :caption: Reference
 
   advanced_configuration
+..
   features
   code_documentation
   api/api
-
-.. toctree::
+  .. toctree::
   :maxdepth: 2
   :caption: Contributing
-
   contribution_guide
   developer_guide
