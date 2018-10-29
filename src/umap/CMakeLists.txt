@@ -15,7 +15,6 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 include_directories( AFTER 
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${UMAPINCLUDEDIRS} 
-  ${CMAKE_SOURCE_DIR}/sysincludes
 )
 
 install(TARGETS umap umap-static
@@ -23,7 +22,7 @@ install(TARGETS umap umap-static
         ARCHIVE DESTINATION lib/static
         RUNTIME DESTINATION bin )
 
-install(FILES ${CMAKE_SOURCE_DIR}/include/umap.h DESTINATION include)
+install(FILES ${CMAKE_SOURCE_DIR}/src/include/umap.h DESTINATION include)
 
 find_package (Threads)
 add_executable(umap_logd ../logging/spindle_logd.cpp)
