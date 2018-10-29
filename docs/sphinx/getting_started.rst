@@ -4,38 +4,37 @@
 Getting Started
 ===============
 
-This page provides information on how to quickly get up and running with Umpire.
+This page provides information on how to quickly get up and running with umap.
 
 ------------
 Installation
 ------------
 
-Umpire is hosted on GitHub `here <https://github.com/LLNL/Umpire>`_.
+Umap is hosted on GitHub `here <https://github.com/LLNL/umap>`_.
 To clone the repo into your local working space, type:
 
 .. code-block:: bash
 
-  $ git clone --recursive https://github.com/LLNL/Umpire.git
+  $ git clone --recursive https://github.com/LLNL/umap.git
 
+or
+.. code-block:: bash
 
-The ``--recursive`` argument is required to ensure that the *BLT* submodule is
-also checked out. `BLT <https://github.com/LLNL/BLT>`_ is the build system we
-use for Umpire.
-
+  $ git clone --recursive git@github.com:LLNL/umap.git
 
 ^^^^^^^^^^^^^^^
-Building Umpire
+Building Umap
 ^^^^^^^^^^^^^^^
 
-Umpire uses CMake and BLT to handle builds. Make sure that you have a modern
+Umpire uses CMake to handle builds. Make sure that you have a modern
 compiler loaded and the configuration is as simple as:
 
 .. code-block:: bash
 
   $ mkdir build && cd build
-  $ cmake -DCUDA_TOOLKIT_ROOT_DIR=/path/to/cuda ../
+  $ cmake ../
 
-By default, Umpire will attempt to build with CUDA. CMake will provide output
+By default, umap will attempt to build with CUDA. CMake will provide output
 about which compiler is being used, and what version of CUDA was detected. Once
 CMake has completed, Umpire can be built with Make:
 
