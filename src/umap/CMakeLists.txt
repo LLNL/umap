@@ -1,21 +1,24 @@
 project(umap_libraries)
-
-add_library(libumap SHARED umap.cpp ../logging/spindle_logc.c ../logging/spindle_mkdir.c)
+set(umapsrc 
+    umap.cpp 
+    ../logging/spindle_logc.c 
+    ../logging/spindle_mkdir.c
+    ../store/Store.cpp
+    ../store/StoreFile.cpp
+)
+add_library(umap SHARED ${umapsrc} )
+add_library(umap-static STATIC ${umapsrc} )
+set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
-
-#
-# TODO: This needs to change to "AFTER" when we have code in place to
-# dynamically check for existence of WP functionality
-#
 include_directories( AFTER 
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${UMAPINCLUDEDIRS} 
   ${CMAKE_SOURCE_DIR}/sysincludes
 )
 
-install(TARGETS libumap
+install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib/static
         RUNTIME DESTINATION bin )

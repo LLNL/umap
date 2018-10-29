@@ -40,8 +40,7 @@
 #include <iterator>
 
 #include "umap.h"
-#include "testoptions.h"
-#include "PerFile.h"
+#include "../utility/commandline.hpp"
 
 using namespace std;
 using namespace chrono;
@@ -49,7 +48,7 @@ static uint64_t pagesize;
 static uint64_t pages_to_access;
 static char** tmppagebuf; // One per thread
 static int fd;
-static umt_optstruct_t options;
+static utility::umt_optstruct_t options;
 vector<uint64_t> shuffled_indexes;
 
 void do_write_pages(uint64_t pages)
@@ -158,7 +157,7 @@ int main(int argc, char **argv)
     std::shuffle(shuffled_indexes.begin(), shuffled_indexes.end(), g);
 
   omp_set_num_threads(options.numthreads);
-  pagesize = (uint64_t)umt_getpagesize();
+  pagesize = (uint64_t)utility::umt_getpagesize();
 
   tmppagebuf = (char**)calloc(options.numthreads, sizeof(char*));
 

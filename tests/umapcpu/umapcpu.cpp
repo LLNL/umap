@@ -1,6 +1,17 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
-// uffd sort benchmark
-
+/*
+ * This file is part of UMAP.  For copyright information see the COPYRIGHT file
+ * in the top level directory, or at
+ * https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free
+ * software; you can redistribute it and/or modify it under the terms of the
+ * GNU Lesser General Public License (as published by the Free Software
+ * Foundation) version 2.1 dated February 1999.  This program is distributed in
+ * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+ * IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+ * the terms and conditions of the GNU Lesser General Public License for more
+ * details.  You should have received a copy of the GNU Lesser General Public
+ * License along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
@@ -32,8 +43,8 @@
 #endif
 
 #include "umap.h"
-#include "testoptions.h"
-#include "PerFile.h"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
 
 #define handle_error_en(en, msg) \
   do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -77,7 +88,7 @@ void initdata(uint64_t *region, int64_t rlen) {
 
 int main(int argc, char **argv)
 {
-  umt_optstruct_t options;
+  utility::umt_optstruct_t options;
   long pagesize;
   int64_t totalbytes;
   uint64_t arraysize;
@@ -86,14 +97,15 @@ int main(int argc, char **argv)
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> rnd_int(0, 39);
 
-  pagesize = umt_getpagesize();
+  pagesize = utility::umt_getpagesize();
 
   umt_getoptions(&options, argc, argv);
 
   omp_set_num_threads(options.numthreads);
 
   totalbytes = options.numpages*pagesize;
-  base_addr = PerFile_openandmap(&options, totalbytes);
+  base_addr = utility::map_in_file(options.filename, options.initonly,
+      options.noinit, options.usemmap, totalbytes);
   assert(base_addr != NULL);
  
   fprintf(stdout, "%lu pages, %lu threads\n", options.numpages, options.numthreads);
@@ -137,7 +149,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "test took %f us\n", (double)(getns() - start)/1000000.0);
   }
   
-  PerFile_closeandunmap(&options, totalbytes, base_addr);
+  utility::unmap_file(options.usemmap, totalbytes, base_addr);
 
   return 0;
 }

@@ -1,4 +1,17 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
+/*
+ * This file is part of UMAP.  For copyright information see the COPYRIGHT file
+ * in the top level directory, or at
+ * https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free
+ * software; you can redistribute it and/or modify it under the terms of the
+ * GNU Lesser General Public License (as published by the Free Software
+ * Foundation) version 2.1 dated February 1999.  This program is distributed in
+ * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+ * IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the terms and conditions of the GNU Lesser General Public License for
+ * more details.  You should have received a copy of the GNU Lesser General
+ * Public License along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
 
 /*
    The idea is that we have a single "Load Page" and a set
@@ -26,11 +39,16 @@
    |                                                  |
    +==================================================+
   
-   We then have a smaller page_buffer_size that these pages will be faulted into and madvised out of via umap().
+   We then have a smaller page_buffer_size that these pages will be faulted
+   into and madvised out of via umap().
   
-   The LoadPage will have a set of num_load_reader and num_load_writer threads focussed exclusively on making reads and writes to locations constrained to the Load Page.
+   The LoadPage will have a set of num_load_reader and num_load_writer threads
+   focussed exclusively on making reads and writes to locations constrained to
+   the Load Page.
 
-   The the Churn Pages will have num_churn_reader threads performing random byte read accesses across all of the Churn Pages effectively causing the Load Page to be paged in and out of the smaller Page_Buffer.
+   The the Churn Pages will have num_churn_reader threads performing random
+   byte read accesses across all of the Churn Pages effectively causing the
+   Load Page to be paged in and out of the smaller Page_Buffer.
 */
 #include <iostream>
 #include <cassert>
@@ -46,8 +64,8 @@
 
 #include "umap.h"
 #include "options.h"
-#include "testoptions.h"
-#include "PerFile.h"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
 
 uint64_t g_count = 0;
 using namespace std;
@@ -55,20 +73,21 @@ using namespace chrono;
 
 class pageiotest {
 public:
-    pageiotest(int _ac, char** _av): time_to_stop{false}, pagesize{umt_getpagesize()} {
+    pageiotest(int _ac, char** _av): time_to_stop{false}, pagesize{utility::umt_getpagesize()} {
         getoptions(options, _ac, _av);
 
-        umt_options.iodirect = options.iodirect;
         umt_options.usemmap = options.usemmap;
         umt_options.filename = options.fn;
         umt_options.noinit = options.noinit;
         umt_options.initonly = options.initonly;
-        umt_options.noio = false;
 
         num_rw_load_pages = num_read_load_pages = options.num_load_pages;
         num_churn_pages = options.num_churn_pages;
 
-        base_addr = PerFile_openandmap(&umt_options, (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
+        base_addr = utility::map_in_file(options.fn, options.initonly,
+            options.noinit, options.usemmap,
+            (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
+
         if ( base_addr == nullptr ) {
           exit(1);
         }
@@ -98,7 +117,9 @@ public:
     }
 
     ~pageiotest( void ) {
-        PerFile_closeandunmap(&umt_options, (options.num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize, base_addr);
+        utility::unmap_file(umt_options.usemmap,
+            (options.num_churn_pages + num_rw_load_pages
+             + num_read_load_pages) * pagesize, base_addr);
     }
 
     void start( void ) {
@@ -139,7 +160,7 @@ public:
 
 private:
     bool time_to_stop;
-    umt_optstruct_t umt_options;
+    utility::umt_optstruct_t umt_options;
     options_t options;
 
     long pagesize;

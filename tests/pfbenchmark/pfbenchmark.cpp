@@ -35,17 +35,16 @@
 #include <iterator>
 
 #include "umap.h"
-#include "testoptions.h"
-#include "PerFile.h"
+#include "../utility/umap_file.hpp"
+#include "../utility/commandline.hpp"
 
 using namespace std;
 using namespace chrono;
-static bool no_io = false;
 static bool usemmap = false;
 static uint64_t pagesize;
 static uint64_t page_step;
 static uint64_t* glb_array;
-static umt_optstruct_t options;
+static utility::umt_optstruct_t options;
 static uint64_t pages_to_access;
 vector<uint64_t> shuffled_indexes;
 
@@ -68,10 +67,7 @@ uint64_t do_read_pages(uint64_t page_step, uint64_t pages)
     uint64_t myidx = shuffled_indexes[i];
     x = glb_array[myidx * page_step];
 
-    if ( x != (myidx * page_step) && no_io == true ) {
-      x--;
-    }
-    else if (x != (myidx * page_step)) {
+    if (x != (myidx * page_step)) {
       cout << __FUNCTION__ << "glb_array[" << myidx * page_step << "]: (" << glb_array[myidx*page_step] << ") != " << myidx * page_step << "\n";
       exit(1);
     }
@@ -90,11 +86,7 @@ uint64_t do_read_modify_write_pages(uint64_t page_step, uint64_t pages)
     uint64_t myidx = shuffled_indexes[i];
     x = glb_array[myidx * page_step];
 
-    if ( x != (myidx * page_step) && no_io == true ) {
-      glb_array[myidx * page_step] = (myidx * page_step);
-      x--;
-    }
-    else if (x != (myidx * page_step)) {
+    if (x != (myidx * page_step)) {
       cout << __FUNCTION__ << "glb_array[" << myidx * page_step << "]: (" << x << ") != " << myidx * page_step << "\n";
       exit(1);
     }
@@ -133,7 +125,6 @@ int read_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "read,"
       << options.numthreads << ","
@@ -150,7 +141,6 @@ int write_test(int argc, char **argv)
   auto end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "write,"
       << options.numthreads << ","
@@ -170,7 +160,6 @@ int read_modify_write_test(int argc, char **argv)
   end_time = chrono::high_resolution_clock::now();
 
   cout << ((options.usemmap == 1) ? "mmap" : "umap") << ","
-      << ((options.noio == 1) ? "-IO" : "+IO") << ","
       << (( options.shuffle == 1) ? "shuffle" : "seq") << ","
       << "rmw,"
       << options.numthreads << ","
@@ -197,12 +186,13 @@ int main(int argc, char **argv)
     std::shuffle(shuffled_indexes.begin(), shuffled_indexes.end(), g);
 
   options.initonly = 0;
-  no_io = (options.noio == 1);
   usemmap = (options.usemmap == 1);
   omp_set_num_threads(options.numthreads);
-  pagesize = (uint64_t)umt_getpagesize();
+  pagesize = (uint64_t)utility::umt_getpagesize();
   page_step = pagesize/sizeof(uint64_t);
-  glb_array = (uint64_t*)PerFile_openandmap(&options, pagesize * options.numpages);
+
+  glb_array = (uint64_t*) utility::map_in_file(options.filename, options.initonly,
+      options.noinit, options.usemmap, pagesize * options.numpages);
 
   if (strcmp(argv[0], "pfbenchmark-read") == 0)
     rval = read_test(argc, argv);
@@ -214,6 +204,6 @@ int main(int argc, char **argv)
     cerr << "Unknown test mode " << argv[0] << "\n";
 
   print_stats();
-  PerFile_closeandunmap(&options, pagesize * options.numpages, glb_array);
+  utility::unmap_file(options.usemmap, pagesize * options.numpages, glb_array);
   return rval;
 }
