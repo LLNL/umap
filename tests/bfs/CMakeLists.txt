@@ -31,4 +31,10 @@ else()
   message("Skipping bfs, OpenMP required")
 endif()
 
+add_executable(compute_degree_distribution compute_degree_distribution.cpp)
+install(TARGETS compute_degree_distribution
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib/static
+        RUNTIME DESTINATION bin )
 
+add_subdirectory(rmat_edge_generator)
