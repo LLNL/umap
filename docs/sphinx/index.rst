@@ -22,7 +22,6 @@ Any questions? File an issue on GitHub.
   :caption: Basics
 
   getting_started
-  tutorial
 
 .. toctree::
   :maxdepth: 2
@@ -35,4 +34,3 @@ Any questions? File an issue on GitHub.
   :caption: Contributing
 
   contribution_guide
-  developer_guide
