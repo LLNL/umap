@@ -75,38 +75,16 @@ you will want to access data:
 
 .. code-block:: cpp
 
-  auto& rm = umpire::ResourceManager::getInstance();
-  umpire::Allocator allocator = rm.getAllocator("HOST");
+  #include "umap.h"
 
-  float* my_data = static_cast<float*>(allocator.allocate(100*sizeof(float));
+  void* region = umap(NULL, 100*4096, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
 
+  float* my_data = static_cast<float*>region;
 
-This code grabs the default allocator for the host memory, and uses it to
-allocate an array of 100 floats. We can ask for different Allocators to
-allocate memory in different places. Let's ask for a device allocator:
+  my_data[0] = 3.1415;
 
-.. code-block:: cpp
+  uunmap(region, 100*4096);
 
-  umpire::Allocator device_allocator = rm.getAllocator("DEVICE");
+This code creates a 100*4096 byte mapping to the open file specified by the
+``fd`` file descriptor.
 
-  float* my_data_device = static_cast<float*>(device_allocator.allocate(100*sizeof(float));
-
-This code gets the default device allocator, and uses it to allocate an array
-of 100 floats. Remember, since this is a device pointer, there is no guarantee
-you will be able to access it on the host.  Luckily, Umpire's ResourceManager
-can copy one pointer to another transparently. Let's copy the data from our
-first pointer to the DEVICE-allocated pointer.
-
-.. code-block:: cpp
-
-  rm.copy(my_data, my_data_device);
-
-To free any memory allocated, you can use the deallocate function of the
-Allocator, or the ResourceManager. Asking the ResourceManager to deallocate
-memory is slower, but useful if you don't know how or where an allocation was
-made:
-
-.. code-block:: cpp
-
-  allocator.deallocate(my_data); // deallocate using Allocator
-  rm.deallocate(my_data_device); // deallocate using ResourceManager
