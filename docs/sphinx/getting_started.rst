@@ -68,23 +68,11 @@ automatically detected and available for use.
 Basic Usage
 -----------
 
-Let's take a quick tour through Umap's most important features. A complete
-listing you can compile is included at the bottom of the page. First, let's
-grab an Allocator and allocate some memory. This is the interface through which
-you will want to access data:
+The interface to umap mirrors that of mmap(2) as shown:
 
-.. code-block:: cpp
+.. literalinclude:: ../../../examples/psort.cpp
+                    :lines: 43-52
 
-  #include "umap.h"
+The following code is a simple example of how one may use umap:
 
-  void* region = umap(NULL, 100*4096, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
-
-  float* my_data = static_cast<float*>region;
-
-  my_data[0] = 3.1415;
-
-  uunmap(region, 100*4096);
-
-This code creates a 100*4096 byte mapping to the open file specified by the
-``fd`` file descriptor.
-
+.. literalinclude:: ../../../examples/psort.cpp
