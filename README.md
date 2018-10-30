@@ -1,5 +1,7 @@
 # UMAP v0.0.3 (alpha)
 
+[![Documentation Status](https://readthedocs.org/projects/llnl-umap/badge/?version=develop)](https://llnl-umap.readthedocs.io/en/develop/?badge=develop)
+
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
 4.3 linux kernel). The use case is to have an application specific buffer of
