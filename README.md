@@ -11,10 +11,6 @@ The tests directory contains various tests written to test the library
 including a hello world program for userfaultfd based upon code from the
 [userfaultfd-hello-world project](http://noahdesu.github.io/2016/10/10/userfaultfd-hello-world.html).
 
-
-The sortbenchmark directory is the original sort benchmark, modified to use
-threads rather than forking processes.
-
 ## Quick Start
 
 *Building umap* is trivial. In the root directory of the repo
@@ -32,9 +28,11 @@ version, simply run
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
 ```
 
-## umap() Interface
+## Documentation
 
-The interface is currently a work in progress (see [umap.h](include/umap.h)).
+Both user and code documentation is available [here](http://llnl-umap.readthedocs.io/).
+
+If you have build problems, we have comprehensive [build sytem documentation](https://llnl-umap.readthedocs.io/en/develop/advanced_configuration.html) too!
 
 ## License
 
