@@ -70,9 +70,9 @@ Basic Usage
 
 The interface to umap mirrors that of mmap(2) as shown:
 
-.. literalinclude:: ../../../examples/psort.cpp
+.. literalinclude:: ../../examples/psort.cpp
                     :lines: 43-52
 
 The following code is a simple example of how one may use umap:
 
-.. literalinclude:: ../../../examples/psort.cpp
+.. literalinclude:: ../../examples/psort.cpp
