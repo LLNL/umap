@@ -441,6 +441,7 @@ int umap_cfg_set_pagesize( long psize )
   debug_printf("Adjusting page size from %d to %d\n", page_size, psize);
 
   page_size = psize;
+  return 0;
 }
 
 void umap_cfg_get_stats(void* region, struct umap_cfg_stats* stats)
