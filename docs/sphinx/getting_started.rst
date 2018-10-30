@@ -71,7 +71,7 @@ Basic Usage
 The interface to umap mirrors that of mmap(2) as shown:
 
 .. literalinclude:: ../../examples/psort.cpp
-                    :lines: 43-52
+                    :lines: 29-33
 
 The following code is a simple example of how one may use umap:
 
