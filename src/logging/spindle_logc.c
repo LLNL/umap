@@ -50,10 +50,11 @@ static char spindle_log_daemon_name2[] = "../../src/umap/umap_logd";
 
 static int debug_fd = -1;
 static char *tempdir;
+static int run_local_only = 1;    // Don't use sockets
 static char *debug_location;
 
 FILE *spindle_debug_output_f;
-char *spindle_debug_name = "UNKNOWN";
+char *spindle_debug_name = "umap";
 int spindle_debug_prints;
 
 //Timeout in tenths of a second
@@ -336,18 +337,21 @@ void init_spindle_debugging(int survive_exec)
    char *already_setup, *log_level_str;
    int log_level = 0;
 
-   //spindle_debug_name = name;
-
-   getProgramAndPath( NULL, NULL, &spindle_debug_name);
-
-   if (spindle_debug_prints)
-      return;
-
    log_level_str = getenv("UMAP_LOGGING");
    if (log_level_str)
       log_level = atoi(log_level_str);
    spindle_debug_prints = log_level;
    if (!log_level)
+      return;
+
+   if (run_local_only) {
+     spindle_debug_output_f = stdout;
+     return;
+   }
+
+   getProgramAndPath( NULL, NULL, &spindle_debug_name);
+
+   if (spindle_debug_prints)
       return;
 
    /* Setup locations for temp and output files */
