@@ -23,7 +23,7 @@
 #include <sstream>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "umap.h"
+#include "umap/umap.h"
 
 namespace utility {
 

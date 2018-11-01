@@ -34,7 +34,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include "umap.h"
+#include "umap/umap.h"
 #include "../utility/umap_file.hpp"
 #include "../utility/commandline.hpp"
 

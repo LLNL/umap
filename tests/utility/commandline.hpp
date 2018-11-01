@@ -23,7 +23,7 @@
 #include <iostream>     // cout/cerr
 #include <unistd.h>     // getopt()
 #include <getopt.h>     // duh...
-#include "umap.h"
+#include "umap/umap.h"
 
 namespace utility {
 typedef struct {

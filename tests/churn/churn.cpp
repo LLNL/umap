@@ -62,7 +62,7 @@
 #include <utmpx.h>  // sched_getcpu()
 #include <omp.h>
 
-#include "umap.h"
+#include "umap/umap.h"
 #include "options.h"
 #include "../utility/commandline.hpp"
 #include "../utility/umap_file.hpp"

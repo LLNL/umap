@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <unistd.h>
 #include <sys/mman.h>
-#include "Store.h"
+#include "umap/Store.h"
 
 /** Allow application to create region of memory to a peristant store
  * \param addr Same as input argument for mmap(2)

@@ -15,7 +15,7 @@
  */
 #include <unistd.h>
 #include <stdio.h>
-#include "Store.h"
+#include "umap/Store.h"
 #include "StoreFile.h"
 
 using namespace std;

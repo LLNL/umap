@@ -19,10 +19,13 @@ include_directories( AFTER
 
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib/static
+        ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin )
 
-install(FILES ${CMAKE_SOURCE_DIR}/src/include/umap.h DESTINATION include)
+install(FILES 
+  ${CMAKE_SOURCE_DIR}/src/include/umap/umap.h
+  ${CMAKE_SOURCE_DIR}/src/include/umap/Store.h
+  DESTINATION include/umap)
 
 find_package (Threads)
 add_executable(umap_logd ../logging/spindle_logd.cpp)

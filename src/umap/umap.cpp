@@ -48,8 +48,8 @@
 #include <signal.h>
 #include <cstring>
 #include <sys/prctl.h>
-#include "umap.h"               // API to library
-#include "Store.h"
+#include "umap/umap.h"               // API to library
+#include "umap/Store.h"
 #include "config.h"
 #include "spindle_debug.h"
 

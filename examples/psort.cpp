@@ -8,7 +8,7 @@
 #include <parallel/algorithm>
 #include <fcntl.h>
 #include <omp.h>
-#include "umap.h"
+#include "umap/umap.h"
 
 using namespace std;
 

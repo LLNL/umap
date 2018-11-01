@@ -36,12 +36,12 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
-#include "umap.h"
+#include "umap/umap.h"
 #include "fitsio.h"
 
 #include "spindle_debug.h"
 #include "../utility/commandline.hpp"
-#include "../../src/store/Store.h"
+#include "../../src/store/umap/Store.h"
 
 namespace utility {
 namespace umap_fits_file {

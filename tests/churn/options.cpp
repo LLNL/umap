@@ -7,7 +7,7 @@
 #include <unistd.h>     // getopt()
 #include <getopt.h>     // duh...
 #include "options.h"
-#include "umap.h"
+#include "umap/umap.h"
 
 static char const* FILENAME = "/tmp/abc";
 static const uint64_t NUMCHURNPAGES = 99;

@@ -30,7 +30,7 @@
 
 #include <omp.h>
 
-#include "umap.h"
+#include "umap/umap.h"
 #include "../utility/commandline.hpp"
 #include "../utility/umap_file.hpp"
 

@@ -39,7 +39,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include "umap.h"
+#include "umap/umap.h"
 #include "../utility/commandline.hpp"
 
 using namespace std;
