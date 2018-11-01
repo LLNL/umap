@@ -6,63 +6,30 @@ Getting Started
 
 This page provides information on how to quickly get up and running with umap.
 
-------------
-Installation
-------------
+^^^^^^^^^^^^^
+Dependencies
+^^^^^^^^^^^^^
+At a minimum, cmake 3.5.1 or greater is required for building umap.
 
-Umap is hosted on GitHub `here <https://github.com/LLNL/umap>`_.
-To clone the repo into your local working space, type:
-
-.. code-block:: bash
-
-  $ git clone --recursive https://github.com/LLNL/umap.git
-
-or
+---------------------------
+UMAP Build and Installation
+---------------------------
+The following lines should get you up and running:
 
 .. code-block:: bash
 
-  $ git clone --recursive git@github.com:LLNL/umap.git
-
-^^^^^^^^^^^^^^^
-Building umap
-^^^^^^^^^^^^^^^
-
-Umap uses CMake to handle builds. Make sure that you have a modern
-compiler loaded and the configuration is as simple as:
-
-.. code-block:: bash
-
+  $ git clone https://github.com/LLNL/umap.git
   $ mkdir build && cd build
-  $ cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=my.install.dir ../
-
-By default, umap will build a Release type build and will use the system
-defined directories for installation.  You may specify a different build type
-such as Debug and your own specific directory for installation by using the
-two "-D" parameters above.  CMake will provide output about which compiler iscw
-being used. Once CMake has completed, umap can be built with Make as follows:
-
-.. code-block:: bash
-
+  $ cmake -DCMAKE_INSTALL_PREFIX="<Place to install umap>" ../umap
   $ make
-
-For more advanced configuration, see :doc:`advanced_configuration`.
-
-^^^^^^^^^^^^^^^^^
-Installing umap
-^^^^^^^^^^^^^^^^^
-
-To install umap, just run:
-
-.. code-block:: bash
-
   $ make install
 
+By default, umap will build a Release type build and will use the system
+defined directories for installation.  To specify different build types or
+specify alternate installation paths, see the :doc:`advanced_configuration`.
+
 Umap install files to the ``lib``, ``include`` and ``bin`` directories of the
-``CMAKE_INSTALL_PREFIX``. Additionally, umap installs a CMake configuration
-file that can help you use umap in other projects. By setting `umap_DIR` to
-point to the root of your umap installation, you can call
-``find_package(umap)`` inside your CMake project and Umpire will be
-automatically detected and available for use.
+``CMAKE_INSTALL_PREFIX``.
 
 -----------
 Basic Usage
