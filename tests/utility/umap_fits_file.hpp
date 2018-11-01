@@ -41,7 +41,7 @@
 
 #include "spindle_debug.h"
 #include "../utility/commandline.hpp"
-#include "../../src/store/umap/Store.h"
+#include "../../src/include/umap/Store.h"
 
 namespace utility {
 namespace umap_fits_file {
