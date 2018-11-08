@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/nvmebenchmark-read.dir/nvmebenchmark.cpp.o  -o nvmebenchmark-read ../../src/umap/libumap.so -Wl,-rpath,/home/cc/test/umap/build/src/umap: 

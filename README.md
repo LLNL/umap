@@ -1,5 +1,7 @@
 # UMAP v0.0.3 (alpha)
 
+[![Documentation Status](https://readthedocs.org/projects/llnl-umap/badge/?version=develop)](https://llnl-umap.readthedocs.io/en/develop/?badge=develop)
+
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
 4.3 linux kernel). The use case is to have an application specific buffer of
@@ -10,10 +12,6 @@ The src directory in the top level contains the source code for the library.
 The tests directory contains various tests written to test the library
 including a hello world program for userfaultfd based upon code from the
 [userfaultfd-hello-world project](http://noahdesu.github.io/2016/10/10/userfaultfd-hello-world.html).
-
-
-The sortbenchmark directory is the original sort benchmark, modified to use
-threads rather than forking processes.
 
 ## Quick Start
 
@@ -32,9 +30,11 @@ version, simply run
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
 ```
 
-## umap() Interface
+## Documentation
 
-The interface is currently a work in progress (see [umap.h](include/umap.h)).
+Both user and code documentation is available [here](http://llnl-umap.readthedocs.io/).
+
+If you have build problems, we have comprehensive [build sytem documentation](https://llnl-umap.readthedocs.io/en/develop/advanced_configuration.html) too!
 
 ## License
 

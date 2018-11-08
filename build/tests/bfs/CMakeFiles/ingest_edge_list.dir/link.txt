@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/ingest_edge_list.dir/ingest_edge_list.cpp.o  -o ingest_edge_list 

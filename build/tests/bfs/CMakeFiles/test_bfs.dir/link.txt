@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/test_bfs.dir/test_bfs.cpp.o  -o test_bfs 

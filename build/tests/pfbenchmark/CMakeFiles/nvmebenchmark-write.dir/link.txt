@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/nvmebenchmark-write.dir/nvmebenchmark.cpp.o  -o nvmebenchmark-write ../../src/umap/libumap.so -Wl,-rpath,/home/cc/test/umap/build/src/umap: 

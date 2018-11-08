@@ -1,0 +1,40 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/cc/test/umap/tests/bfs/rmat_edge_generator/generate_edge_list.cpp
+unistd.h
+-
+iostream
+-
+fstream
+-
+string
+-
+vector
+-
+rmat_edge_generator.hpp
+/home/cc/test/umap/tests/bfs/rmat_edge_generator/rmat_edge_generator.hpp
+
+/home/cc/test/umap/tests/bfs/rmat_edge_generator/hash.hpp
+cstdint
+-
+
+/home/cc/test/umap/tests/bfs/rmat_edge_generator/rmat_edge_generator.hpp
+iostream
+-
+random
+-
+cassert
+-
+hash.hpp
+/home/cc/test/umap/tests/bfs/rmat_edge_generator/hash.hpp
+utility
+-
+stddef.h
+-
+

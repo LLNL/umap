@@ -1,0 +1,1 @@
+/usr/bin/c++   -g   CMakeFiles/umap_logd.dir/__/logging/spindle_logd.cpp.o  -o umap_logd -lpthread 

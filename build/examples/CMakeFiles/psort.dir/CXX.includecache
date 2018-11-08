@@ -1,0 +1,36 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../src/include/umap/Store.h
+unistd.h
+-
+cstdint
+-
+
+../src/include/umap/umap.h
+cstdint
+-
+unistd.h
+-
+sys/mman.h
+-
+umap/Store.h
+../src/include/umap/umap/Store.h
+
+/home/cc/test/umap/examples/psort.cpp
+iostream
+-
+parallel/algorithm
+-
+fcntl.h
+-
+omp.h
+-
+umap/umap.h
+/home/cc/test/umap/examples/umap/umap.h
+

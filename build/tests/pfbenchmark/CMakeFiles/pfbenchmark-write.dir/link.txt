@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/pfbenchmark-write.dir/pfbenchmark.cpp.o  -o pfbenchmark-write ../../src/umap/libumap.so -Wl,-rpath,/home/cc/test/umap/build/src/umap: 

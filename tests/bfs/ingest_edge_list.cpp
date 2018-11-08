@@ -23,9 +23,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <tuple>
 #include <cstring>
 
-#include "../lib/utility/bitmap.hpp"
-#include "../lib/utility/mmap.hpp"
-#include "../lib/utility/file.hpp"
+#include "../utility/bitmap.hpp"
+#include "../utility/mmap.hpp"
+#include "../utility/file.hpp"
 
 std::pair<uint64_t, uint64_t>
 check_edge_list(const std::vector<std::string> &edge_list_file_names) {

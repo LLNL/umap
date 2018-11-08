@@ -18,10 +18,28 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <tuple>
 #include <string>
 #include <fstream>
+#include <cassert>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "bfs_kernel.hpp"
-#include "../lib/utility/bitmap.hpp"
-#include "../lib/utility/mmap.hpp"
+#include "../utility/bitmap.hpp"
+#include "../utility/mmap.hpp"
+
+#include "umap/umap.h"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
+
+
+static inline uint64_t getns(void)
+{
+  struct timespec ts;
+  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  assert(ret == 0);
+  return (((uint64_t)ts.tv_sec) * 1000000000ULL) + ts.tv_nsec;
+}
 
 void parse_options(int argc, char **argv,
                    size_t &num_vertices, size_t &num_edges,
@@ -54,11 +72,23 @@ void parse_options(int argc, char **argv,
 
 std::pair<uint64_t *, uint64_t *>
 map_graph(const size_t num_vertices, const size_t num_edges, const std::string &graph_file_name) {
-  const size_t graph_size = (num_vertices + 1 + num_edges) * sizeof(uint64_t);
 
+  //kai
+  utility::umt_optstruct_t options;
+  //umt_getoptions(&options, argc, argv);
+
+  uint64_t pagesize = (uint64_t)utility::umt_getpagesize();
+  
+  const size_t graph_size = (num_vertices + 1 + num_edges) * sizeof(uint64_t);
+  const size_t graph_size_align = (graph_size / pagesize + 1) * pagesize;
   int fd = -1;
   void *map_raw_address = nullptr;
-  std::tie(fd, map_raw_address) = utility::map_file_read_mode(graph_file_name, nullptr, graph_size, 0);
+ // std::tie(fd, map_raw_address) = utility::map_file_read_mode(graph_file_name, nullptr, graph_size, 0);
+  //kai
+    map_raw_address = utility::map_in_file(graph_file_name, false, true, false,  graph_size_align);
+
+//	map_raw_address = malloc(graph_size);
+	fd = 1;
   if (fd == -1 || map_raw_address == nullptr) {
     std::cerr << "Failed to map the graph" << std::endl;
     std::abort();
@@ -115,10 +145,21 @@ int main(int argc, char **argv) {
 
   std::vector<uint16_t> level(num_vertices); // Array to store each vertex's level (a distance from the source vertex)
   std::vector<uint64_t> visited_filter(utility::bitmap_size(num_vertices)); // bitmap data to store 'visited' information
+//kai
+  uint64_t start = getns();
 
   bfs::init_bfs(num_vertices, level.data(), visited_filter.data());
+//kai
+  fprintf(stdout, "Init took %f seconds\n", (double)(getns() - start)/1000000000.0);
+  start = getns();
   find_bfs_root(num_vertices, index, level.data());
+//kai
+  fprintf(stdout, "Find root took %f seconds\n", (double)(getns() - start)/1000000000.0);
+
+  start = getns();
   const uint16_t max_level = bfs::run_bfs(num_vertices, index, edges, level.data(), visited_filter.data());
+//kai
+  fprintf(stdout, "BFS took %f seconds\n", (double)(getns() - start)/1000000000.0);
 
   count_level(num_vertices, max_level, level.data());
 

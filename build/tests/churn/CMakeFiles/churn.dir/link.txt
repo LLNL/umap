@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/churn.dir/churn.cpp.o CMakeFiles/churn.dir/options.cpp.o  -o churn ../../src/umap/libumap.so -Wl,-rpath,/home/cc/test/umap/build/src/umap: 

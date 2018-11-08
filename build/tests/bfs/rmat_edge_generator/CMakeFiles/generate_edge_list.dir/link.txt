@@ -1,0 +1,1 @@
+/usr/bin/c++    -fopenmp -g    CMakeFiles/generate_edge_list.dir/generate_edge_list.cpp.o  -o generate_edge_list 
