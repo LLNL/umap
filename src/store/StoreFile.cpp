@@ -17,6 +17,10 @@
 #include <stdio.h>
 #include "umap/Store.h"
 #include "StoreFile.h"
+#include "spindle_debug.h"
+#include <iostream>
+#include <sstream>
+#include <string>
 
 using namespace std;
 
@@ -28,9 +32,18 @@ StoreFile::StoreFile(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd
 ssize_t StoreFile::read_from_store(char* buf, size_t nb, off_t off)
 {
   ssize_t rval;
+  stringstream ss;
+  ss << "pread(fd=" << fd
+    << ", buf=" << (void*)buf
+    << ", nb=" << nb
+    << ", off=" << off
+    << ")";
+
+  debug_printf("%s\n", ss.str().c_str());
 
   if ( ( rval = pread(fd, buf, nb, off) ) == -1) {
-    perror("ERROR: pread failed");
+    int eno = errno;
+    cerr << ss.str() << ": " << strerror(eno) << endl;
     _exit(1);
   }
   return rval;
@@ -39,9 +52,17 @@ ssize_t StoreFile::read_from_store(char* buf, size_t nb, off_t off)
 ssize_t  StoreFile::write_to_store(char* buf, size_t nb, off_t off)
 {
   ssize_t rval;
+  stringstream ss;
+  ss << "pwrite(fd=" << fd
+    << ", buf=" << (void*)buf
+    << ", nb=" << nb
+    << ", off=" << off
+    << ")";
 
+  debug_printf("%s\n", ss.str().c_str());
   if ( ( rval = pwrite(fd, buf, nb, off) ) == -1) {
-    perror("ERROR: pwrite failed");
+    int eno = errno;
+    cerr << ss.str() << ": " << strerror(eno) << endl;
     _exit(1);
   }
   return rval;
