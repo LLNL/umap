@@ -113,8 +113,6 @@ int main(int argc, char **argv)
   current_psize *= 2;     // Set new page size
   umap_cfg_set_pagesize(current_psize);
 
-
-  umap_cfg_set_bufsize(nelems / 2);
   initialize_sortfile(filename, nelems*current_psize);
   verify_sortfile(filename, nelems*current_psize);
   return 0;
