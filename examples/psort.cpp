@@ -14,7 +14,7 @@
 
 using namespace std;
 
-void initialize_sortfile( const char* fname, uint64_t totalbytes )
+void initialize_and_sort_file( const char* fname, uint64_t totalbytes )
 {
   uint64_t arraysize = totalbytes / sizeof(uint64_t);
 
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
   current_psize *= 2;     // Set new page size
   umap_cfg_set_pagesize(current_psize);
 
-  initialize_sortfile(filename, nelems*current_psize);
+  initialize_and_sort_file(filename, nelems*current_psize);
   verify_sortfile(filename, nelems*current_psize);
   return 0;
 }
