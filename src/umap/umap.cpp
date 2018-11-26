@@ -71,13 +71,12 @@ static const int UMAP_UFFD_MAX_MESSAGES = 256;
 static uint64_t uffd_threads;
 static uint64_t umap_buffer_size;
 
-static long page_size;
+static long umapPageSize;
 
 class umap_page;
 struct umap_PageBlock;
 class umap_page_buffer;
 class umap_stats;
-class __umap;
 class UserFaultHandler;
 
 //
@@ -91,11 +90,13 @@ class UserFaultHandler;
 class _umap {
   friend UserFaultHandler;
   public:
-    _umap(void* _region, uint64_t _rsize, int fd, Store* _store_);
+    _umap(void* _mmap_region, uint64_t _mmap_rsize, 
+          void* _umap_region, uint64_t _umap_rsize,
+          int fd, Store* _store_);
     ~_umap();
 
     static inline void* UMAP_PAGE_BEGIN(const void* a) {
-      return (void*)((uint64_t)a & ~(page_size-1));
+      return (void*)( (uint64_t)a & ~(umapPageSize-1) );
     }
 
     void flushbuffers( void );
@@ -103,8 +104,10 @@ class _umap {
     vector<UserFaultHandler*> ufault_handlers;
 
   private:
-    void* region;
-    uint64_t region_size;
+    void* mmapRegion;
+    uint64_t mmapRegionSize;
+    void* umapRegion;
+    uint64_t umapRegionSize;
     bool uffd_time_to_stop_working;
     Store* store;
 };
@@ -276,7 +279,7 @@ static inline long get_max_buf_size( void )
       file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
   }
-  return ((total_mem_kb / (page_size / oneK)) * percentageToAllocate) / 100;
+  return ((total_mem_kb / (umapPageSize / oneK)) * percentageToAllocate) / 100;
 }
 
 void* umap(void* base_addr, uint64_t region_size, int prot, int flags,
@@ -291,8 +294,14 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
   if (check_uffd_compatibility() < 0)
     return NULL;
 
-  if ( (region_size % page_size) ) {
-    cerr << "UMAP: Region size " << region_size << " is not a multple of page_size (" << page_size << ")\n";
+  if ( (region_size % umapPageSize) ) {
+    cerr << "UMAP: Region size " << region_size << " is not a multple of umapPageSize (" << umapPageSize << ")\n";
+    return NULL;
+  }
+
+  if ( ((uint64_t)base_addr & (umapPageSize - 1)) ) {
+    cerr << "umap: base_addr must be page aligned: " << base_addr
+      << ", page size is: " << umapPageSize << endl;
     return NULL;
   }
 
@@ -301,15 +310,29 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
     return UMAP_FAILED;
   }
 
-  void* region = mmap(base_addr, region_size, prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
+  //
+  // When dealing with umap-page-sizes that could be multiples of the actual
+  // system-page-size, it is possible for mmap() to provide a region that is on
+  // a system-page-boundary, but not necessarily on a umap-page-size boundary.
+  //
+  // We always allocate an additional umap-page-size set of bytes so that we can
+  // make certain that the umap-region begins on a umap-page-size boundary.
+  //
+  uint64_t mmap_size = region_size + umapPageSize;
 
-  if (region == MAP_FAILED) {
+  void* mmap_region = mmap(base_addr, mmap_size, 
+                        prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
+
+  if (mmap_region == MAP_FAILED) {
     perror("ERROR: mmap failed: ");
     return UMAP_FAILED;
   }
+  void* umap_region = _umap::UMAP_PAGE_BEGIN((void*)((uint64_t)mmap_region + (umapPageSize-1)));
+  uint64_t umap_size = region_size;
 
   try {
-    active_umaps[region] = new _umap{region, region_size, fd, _store_};
+    active_umaps[umap_region] = new _umap{mmap_region, mmap_size, 
+                                      umap_region, umap_size, fd, _store_};
   } catch(const std::exception& e) {
     cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << endl;
     return UMAP_FAILED;
@@ -317,7 +340,7 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
     cerr << "umap failed to instantiate _umap object\n";
     return UMAP_FAILED;
   }
-  return region;
+  return umap_region;
 }
 
 int uunmap(void*  addr, uint64_t length)
@@ -423,7 +446,7 @@ void umap_cfg_flush_buffer( void* region )
 
 int umap_cfg_get_pagesize()
 {
-  return page_size;
+  return umapPageSize;
 }
 
 int umap_cfg_set_pagesize( long psize )
@@ -438,9 +461,9 @@ int umap_cfg_set_pagesize( long psize )
     return -1;
   }
 
-  debug_printf("Adjusting page size from %d to %d\n", page_size, psize);
+  debug_printf("Adjusting page size from %d to %d\n", umapPageSize, psize);
 
-  page_size = psize;
+  umapPageSize = psize;
   return 0;
 }
 
@@ -522,7 +545,7 @@ void __attribute ((constructor)) init_umap_lib( void )
 
   LOGGING_INIT;
 
-  if ((page_size = sysconf(_SC_PAGESIZE)) == -1) {
+  if ((umapPageSize = sysconf(_SC_PAGESIZE)) == -1) {
     perror("ERROR: sysconf(_SC_PAGESIZE)");
     throw -1;
   }
@@ -565,17 +588,20 @@ void __attribute ((destructor)) fine_umap_lib( void )
 //
 // _umap class implementation
 //
-_umap::_umap( void* _region,
-              uint64_t _rsize,
+_umap::_umap( void* _mmap_region,
+              uint64_t _mmap_rsize,
+              void* _umap_region,
+              uint64_t _umap_rsize,
               int fd,
               Store* _store_) :
-                region{_region}, region_size{_rsize},
+                mmapRegion{_mmap_region}, mmapRegionSize{_mmap_rsize},
+                umapRegion{_umap_region}, umapRegionSize{_umap_rsize},
                 uffd_time_to_stop_working{false}, store{_store_}
 {
   if ( store == nullptr )
-    store = Store::make_store(_region, _rsize, page_size, fd);
+    store = Store::make_store(umapRegion, umapRegionSize, umapPageSize, fd);
 
-  uint64_t region_pages = region_size / page_size;
+  uint64_t region_pages = umapRegionSize / umapPageSize;
 
   // Shrink buffer size to fit requested region if needed
   uint64_t buffer_adjusted_pages = std::min(umap_buffer_size, region_pages);
@@ -591,7 +617,8 @@ _umap::_umap( void* _region,
 
   stringstream ss;
   ss << "umap("
-    << region << " - " << (void*)((char*)region+region_size) << ")\n\t" 
+    << umapRegion << " - " << (void*)((char*)umapRegion+umapRegionSize) << ")\n\t" 
+    << umapPageSize << " Page Size\n\t"
     << umap_buffer_size << " UMAP Buffer Size in Pages\n\t"
     << region_pages << " Requested Region Pages\n\t"
     << buffer_adjusted_pages << " Adjusted UMAP Buffer Size in Pages\n\t"
@@ -627,8 +654,8 @@ _umap::_umap( void* _region,
         worker_region_pages++;
       }
 
-      pb.base = (void*)((uint64_t)region + (region_offset * page_size));
-      pb.length = worker_region_pages * page_size;
+      pb.base = (void*)((uint64_t)umapRegion + (region_offset * umapPageSize));
+      pb.length = worker_region_pages * umapPageSize;
 
       vector<umap_PageBlock> segs{ pb };
 
@@ -657,6 +684,10 @@ _umap::~_umap(void)
 
   for ( auto handler : ufault_handlers )
     delete handler;
+
+  if (munmap(mmapRegion, mmapRegionSize)) {
+    perror("munmap failed: ");
+  }
 }
 
 UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pblks, uint64_t _pbuf_size)
@@ -669,13 +700,13 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
 {
   umessages.resize(UMAP_UFFD_MAX_MESSAGES);
 
-  if (posix_memalign((void**)&copyin_buf, (uint64_t)page_size, (page_size * 2))) {
+  if (posix_memalign((void**)&copyin_buf, (uint64_t)umapPageSize, (umapPageSize * 2))) {
     cerr << "ERROR: posix_memalign: failed\n";
     exit(1);
   }
 
   if (copyin_buf == nullptr) {
-    cerr << "Unable to allocate " << page_size << " bytes for temporary buffer\n";
+    cerr << "Unable to allocate " << (umapPageSize * 2) << " bytes for temporary buffer\n";
     exit(1);
   }
 
@@ -698,7 +729,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
     };
 
     debug_printf2("Register %d Pages from: %p - %p\n", 
-        (seg.length / page_size), seg.base, 
+        (seg.length / umapPageSize), seg.base, 
         (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
@@ -827,7 +858,7 @@ void UserFaultHandler::uffd_handler(void)
 
 void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 {
-  void* page_begin = (void*)msg.arg.pagefault.address;
+  void* page_begin = _umap::UMAP_PAGE_BEGIN( (void*)msg.arg.pagefault.address );
   umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
 
   if (pm != nullptr) {
@@ -843,13 +874,13 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
         struct uffdio_copy copy;
         copy.src = (uint64_t)copyin_buf;
         copy.dst = (uint64_t)page_begin;
-        copy.len = page_size;
+        copy.len = umapPageSize;
         copy.mode = 0;  // No WP
 
         stat->stuck_wp++;
 
         pm->mark_page_clean();
-        memcpy(copyin_buf, page_begin, page_size);   // Save our data
+        memcpy(copyin_buf, page_begin, umapPageSize);   // Save our data
         evict_page(pm);                              // Evict ourselves
         pm->set_page(page_begin);                    // Bring ourselves back in
         pm->mark_page_dirty();                       // Will be dirty when write retries
@@ -876,9 +907,9 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   //
   // Page not present, read it in and (potentially) evict someone
   //
-  off_t offset=(uint64_t)page_begin - (uint64_t)_u->region;
+  off_t offset=(uint64_t)page_begin - (uint64_t)_u->umapRegion;
 
-  if (_u->store->read_from_store(copyin_buf, page_size, offset) == -1) {
+  if (_u->store->read_from_store(copyin_buf, umapPageSize, offset) == -1) {
     perror("ERROR: read_from_store failed");
     exit(1);
   }
@@ -896,7 +927,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   struct uffdio_copy copy;
   copy.src = (uint64_t)copyin_buf;
   copy.dst = (uint64_t)page_begin;
-  copy.len = page_size;
+  copy.len = umapPageSize;
   copy.mode = 0;
 
 #ifndef UMAP_RO_MODE
@@ -930,7 +961,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       exit(1);
     }
 
-    assert(memcmp(copyin_buf, page_begin, page_size) == 0);
+    assert(memcmp(copyin_buf, page_begin, umapPageSize) == 0);
   }
 }
 
@@ -975,7 +1006,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
-    if (_u->store->write_to_store((char*)page, page_size, (off_t)((uint64_t)page - (uint64_t)_u->region)) == -1) {
+    if (_u->store->write_to_store((char*)page, umapPageSize, (off_t)((uint64_t)page - (uint64_t)_u->umapRegion)) == -1) {
       perror("ERROR: write_to_store failed");
       assert(0);
     }
@@ -985,7 +1016,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
     stat->clean_evicts++;
   }
 
-  if (madvise((void*)page, page_size, MADV_DONTNEED) == -1) {
+  if (madvise((void*)page, umapPageSize, MADV_DONTNEED) == -1) {
     perror("ERROR: madvise");
     assert(0);
   }
@@ -1005,7 +1036,7 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
 {
   struct uffdio_writeprotect wp;
   wp.range.start = start;
-  wp.range.len = num_pages * page_size;
+  wp.range.len = num_pages * umapPageSize;
   wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
@@ -1021,7 +1052,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
 {
   struct uffdio_writeprotect wp;
   wp.range.start = start;
-  wp.range.len = page_size * num_pages;
+  wp.range.len = umapPageSize * num_pages;
   wp.mode = do_not_awaken ? UFFDIO_WRITEPROTECT_MODE_DONTWAKE : 0;
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
