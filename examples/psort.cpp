@@ -19,14 +19,16 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
 {
   if ( unlink(fname) ) {
     int eno = errno;
-    cerr << "Failed to unlink " << fname << ": " << strerror(eno) << endl;
+    if ( eno != ENOENT ) {
+      cerr << "Failed to unlink " << fname << ": " 
+        << strerror(eno) << " Errno=" << eno << endl;
+    }
   }
 
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
     int eno = errno;
-    if ( eno != ENOENT )
-      cerr << "Failed to create " << fname << ": " << strerror(eno) << endl;
+    cerr << "Failed to create " << fname << ": " << strerror(eno) << endl;
     return;
   }
 
