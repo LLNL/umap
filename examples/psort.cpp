@@ -10,14 +10,13 @@
 #include <omp.h>
 #include <cstdio>
 #include <cstring>
+#include "errno.h"
 #include "umap/umap.h"
 
 using namespace std;
 
-void initialize_and_sort_file( const char* fname, uint64_t totalbytes )
+void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t totalbytes )
 {
-  uint64_t arraysize = totalbytes / sizeof(uint64_t);
-
   if ( unlink(fname) ) {
     int eno = errno;
     cerr << "Failed to unlink " << fname << ": " << strerror(eno) << endl;
@@ -26,7 +25,8 @@ void initialize_and_sort_file( const char* fname, uint64_t totalbytes )
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
     int eno = errno;
-    cerr << "Failed to create " << fname << ": " << strerror(eno) << endl;
+    if ( eno != ENOENT )
+      cerr << "Failed to create " << fname << ": " << strerror(eno) << endl;
     return;
   }
 
@@ -54,8 +54,8 @@ void initialize_and_sort_file( const char* fname, uint64_t totalbytes )
     return;
   }
 
-  cout << "Initializing Array\n";
   uint64_t *arr = (uint64_t *) base_addr;
+  cout << "Initializing Array\n";
 
 #pragma omp parallel for
   for(uint64_t i=0; i < arraysize; ++i)
@@ -72,10 +72,8 @@ void initialize_and_sort_file( const char* fname, uint64_t totalbytes )
   close(fd);
 }
 
-void verify_sortfile( const char* fname, uint64_t totalbytes )
+void verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
 {
-  uint64_t arraysize = totalbytes / sizeof(uint64_t);
-
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
     cerr << "Failed to create " << fname << endl;
@@ -89,14 +87,14 @@ void verify_sortfile( const char* fname, uint64_t totalbytes )
   }
   uint64_t *arr = (uint64_t *) base_addr;
 
-  cout << "Verifying Data\n";
+  cout << "Verifying Data with\n";
+
 #pragma omp parallel for
-  for(uint64_t i = 0; i < arraysize; ++i) {
+  for(uint64_t i = 0; i < arraysize; ++i)
     if (arr[i] != (i+1)) {
       cerr << "Data miscompare\n";
       i = arraysize;
     }
-  }
 
   if (uunmap(base_addr, totalbytes) < 0) {
     cerr << "uunamp failed\n";
@@ -107,13 +105,25 @@ void verify_sortfile( const char* fname, uint64_t totalbytes )
 
 int main(int argc, char **argv)
 {
-  const uint64_t nelems = 40000;
-  const char* filename = "/mnt/intel/testfile";
-  long current_psize = umap_cfg_get_pagesize();
-  current_psize *= 2;     // Set new page size
-  umap_cfg_set_pagesize(current_psize);
+  const char* filename = argv[1];
 
-  initialize_and_sort_file(filename, nelems*current_psize);
-  verify_sortfile(filename, nelems*current_psize);
+  // Optional: Make umap's pages size double the default system page size
+  //
+  uint64_t psize = umap_cfg_get_pagesize() * 2;
+  umap_cfg_set_pagesize( psize );
+
+  const uint64_t pagesInTest = 64;
+  const uint64_t elemPerPage = psize / sizeof(uint64_t);
+
+  const uint64_t arraySize = elemPerPage * pagesInTest;
+  const uint64_t totalBytes = arraySize * sizeof(uint64_t);
+
+  // Optional: Set umap's buffer to half the number of pages we need so that
+  //           we may simulate an out-of-core experience
+  //
+  umap_cfg_set_bufsize( pagesInTest / 2 );
+
+  initialize_and_sort_file(filename, arraySize, totalBytes);
+  verify_sortfile(filename, arraySize, totalBytes);
   return 0;
 }
