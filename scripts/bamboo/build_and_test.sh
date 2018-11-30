@@ -17,11 +17,6 @@
 # $1 - Optionally set to compiler configuration to run
 # $2 - Optionally set to -Release or -Debug build ($1 must be set)
 #
-# BUILD_OPTIONS environment variable may also be set by the bamboo plan
-# for locations of dependent libraries (such as CFITS).  This environment
-# variable will be tacked on to the end of the cmake build options constructed 
-# below.
-#
 function trycmd
 {
   echo $1
@@ -48,10 +43,7 @@ trycmd "cmake -C ${UMAP_DIR}/host-configs/${SYS_TYPE}/${COMPILER}.cmake -DCMAKE_
 
 trycmd "make -j"
 
-/bin/rm -rf /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat /tmp/test_fits_files
 trycmd "./tests/churn/churn -f /tmp/regression_test_churn.dat -b 10000 -c 20000 -l 1000 -d 10"
-trycmd "./tests/umapsort/umapsort -p 100000 -b 95000 -f /tmp/regression_test_sort.dat -t 16"
-trycmd "tar xvf ${UMAP_DIR}/tests/median_calculation/data/test_fits_files.tar.gz -C /tmp/"
-trycmd "./tests/median_calculation/test_median_calculation -f /tmp/test_fits_files/asteroid_sim_epoch00"
-/bin/rm -rf /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat /tmp/test_fits_files
+trycmd "./examples/psort /tmp/regression_test_sort.dat"
+/bin/rm -rf /tmp/regression_test_churn.dat /tmp/regression_test_sort.dat
 

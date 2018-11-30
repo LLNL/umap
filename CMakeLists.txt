@@ -6,7 +6,6 @@ project(umap
 
 OPTION (ENABLE_TESTS "Selects whether tests are built." On)
 OPTION (ENABLE_LOGGING "Build umap with Logging enabled" On)
-OPTION (ENABLE_CFITS_TESTS "Build CFITS-based Tests (requires cfits library)" Off)
 
 include(cmake/BuildEnv.cmake)
 include(cmake/BuildType.cmake)
