@@ -137,9 +137,8 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
           break;
         else goto R0;
       case 'a':
-        if ((testops->pages_to_access = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
-        else goto R0;
+        testops->pages_to_access = strtoull(optarg, nullptr, 0);
+        break;
       case 'd':
         testops->dirname = optarg;
         break;

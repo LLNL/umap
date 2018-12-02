@@ -101,18 +101,15 @@ void getoptions(options_t& testops, int& argc, char **argv)
         testops.fn = optarg;
         break;
       case 'w':
-        if ((testops.num_load_writer_threads = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
-        goto R0;
+        testops.num_load_writer_threads = strtoull(optarg, nullptr, 0);
+        break;
       case 'r':
-        if ((testops.num_load_reader_threads = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
+        testops.num_load_reader_threads = strtoull(optarg, nullptr, 0);
+        break;
         goto R0;
       case 't':
-        if ((testops.num_churn_threads = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
-        goto R0;
-
+        testops.num_churn_threads = strtoull(optarg, nullptr, 0);
+        break;
       default:
       R0:
         usage(pname);
