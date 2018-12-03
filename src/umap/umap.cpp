@@ -416,14 +416,14 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize )
   long old_size = umap_buffer_size;
 
   if ( page_bufsize > max_size ) {
-    debug_printf("Bufsize of %d larger than maximum of %d.  Setting to %d\n", 
+    debug_printf("Bufsize of %" PRIu64 " larger than maximum of %ld.  Setting to %ld\n", 
         page_bufsize, max_size, max_size);
     umap_buffer_size = max_size;
   }
   else {
     umap_buffer_size = page_bufsize;
   }
-  debug_printf("Bufsize changed from %d to %d pages\n", old_size, umap_buffer_size);
+  debug_printf("Bufsize changed from %ld to %lu pages\n", old_size, umap_buffer_size);
 }
 
 uint64_t umap_cfg_get_uffdthreads( void )
@@ -461,7 +461,7 @@ int umap_cfg_set_pagesize( long psize )
     return -1;
   }
 
-  debug_printf("Adjusting page size from %d to %d\n", umapPageSize, psize);
+  debug_printf("Adjusting page size from %ld to %ld\n", umapPageSize, psize);
 
   umapPageSize = psize;
   return 0;
@@ -728,7 +728,7 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const vector<umap_PageBlock>& _pb
 #endif
     };
 
-    debug_printf2("Register %d Pages from: %p - %p\n", 
+    debug_printf2("Register %lu Pages from: %p - %p\n", 
         (seg.length / umapPageSize), seg.base, 
         (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
@@ -1088,7 +1088,7 @@ umap_page* umap_page_buffer::alloc_page_desc(void* page)
     page_buffer_alloc_cnt++;
     p->set_page(page);
     inmem_page_map[page] = p;
-    debug_printf3("%p allocated for %p, free idx=%d alloc idx=%d cnt=%d\n",
+    debug_printf3("%p allocated for %p, free idx=%" PRIu64 " alloc idx=%" PRIu64 " cnt=%" PRIu64 "\n",
         p, page, page_buffer_free_idx, page_buffer_alloc_idx, page_buffer_alloc_cnt);
     return p;
   }
@@ -1106,7 +1106,7 @@ void umap_page_buffer::dealloc_page_desc( void )
                     page_descriptor_array + page_buffer_free_idx : nullptr;
 
   if ( p != nullptr ) {
-    debug_printf3("%p freed for %p, free idx=%d alloc idx=%d cnt=%d\n",
+    debug_printf3("%p freed for %p, free idx=%" PRIu64 " alloc idx=%" PRIu64 " cnt=%" PRIu64 "\n",
         p, p->get_page(), page_buffer_alloc_idx, 
         page_buffer_free_idx, page_buffer_alloc_cnt);
     page_buffer_free_idx = (page_buffer_free_idx + 1) % page_buffer_size;

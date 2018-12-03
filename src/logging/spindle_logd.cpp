@@ -271,11 +271,11 @@ private:
 
          int result = select(max_fd+1, &rset, NULL, NULL, conns.empty() ? &timeout : NULL);
          if (result == 0) {
-            return NULL;
+            return false;
          }
          if (result == -1) {
             fprintf(stderr, "[%s:%u] - Error calling select: %s\n", __FILE__, __LINE__, strerror(errno));
-            return NULL;
+            return false;
          }
 
          if (sockfd != -1 && FD_ISSET(sockfd, &rset)) {
