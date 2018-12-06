@@ -27,8 +27,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 */
 
 #include <string>
-#include <vector>
-#include <set>
 #include <map>
 #include <cstring>
 #include <cassert>
@@ -47,13 +45,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <signal.h>
 #include <pthread.h>
 
-using namespace std;
-
 //Seconds to live without a child
 #define TIMEOUT 10
 
-string tmpdir;
-string debug_fname;
+std::string tmpdir;
+std::string debug_fname;
 
 void clean();
 void cleanFiles();
@@ -74,13 +70,13 @@ class UniqueProcess
 {
 private:
    int fd;
-   string logFileLock;
+   std::string logFileLock;
    bool unique;
 public:
    UniqueProcess()
    {
       unique = false;
-      logFileLock = tmpdir + string("/umap_log_lock");
+      logFileLock = tmpdir + std::string("/umap_log_lock");
       fd = open(logFileLock.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
       if (fd != -1) {
          char pid_str[32];
@@ -155,9 +151,9 @@ public:
 class OutputLog : public OutputInterface
 {
    int fd;
-   string output_file;
+   std::string output_file;
 public:
-   OutputLog(string fname) :
+   OutputLog(std::string fname) :
       output_file(fname)
    {
       char hostname[1024];
@@ -165,12 +161,12 @@ public:
       int result = gethostname(hostname, 1024);
       hostname[1023] = '\0';
       if (result != -1) {
-         output_file += string(".");
-         output_file += string(hostname);
+         output_file += std::string(".");
+         output_file += std::string(hostname);
       }
       snprintf(pid, 16, "%d", getpid());
-      output_file += string(".");
-      output_file += string(pid);
+      output_file += std::string(".");
+      output_file += std::string(pid);
       
       printf("OutputLog: Opening %s\n", output_file.c_str());
       fd = creat(output_file.c_str(), 0660);
@@ -215,11 +211,11 @@ private:
    };
 
    int sockfd;
-   map<int, Connection *> conns;
+   std::map<int, Connection *> conns;
    char recv_buffer[MAX_MESSAGE];
    size_t recv_buffer_size, named_buffer_size;
    bool error;
-   string socket_path;
+   std::string socket_path;
    pthread_t thrd;
    OutputInterface *log;
 
@@ -239,7 +235,7 @@ private:
       fcntl(con->fd, F_SETFL, flags | O_NONBLOCK);
 
       con->unfinished_msg[0] = '\0';
-      conns.insert(make_pair(con->fd, con));
+      conns.insert(std::make_pair(con->fd, con));
       return true;
    }
    
@@ -254,7 +250,7 @@ private:
             max_fd = sockfd;
          }
          
-         for (map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
+         for (std::map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
             int fd = i->first;
             FD_SET(fd, &rset);
             if (fd > max_fd)
@@ -282,7 +278,7 @@ private:
             addNewConnection();
          }
 
-         for (map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
+         for (std::map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
             int fd = i->first;
             if (FD_ISSET(fd, &rset)) {
                readMessage(i->second);
@@ -292,7 +288,7 @@ private:
          bool foundShutdownProc;
          do {
             foundShutdownProc = false;
-            for (map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
+            for (std::map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
                if (i->second->shutdown) {
                   conns.erase(i);
                   foundShutdownProc = true;
@@ -314,7 +310,7 @@ private:
 
       if (result == 0) {
          //A client shutdown
-         map<int, Connection *>::iterator i = conns.find(con->fd);
+         std::map<int, Connection *>::iterator i = conns.find(con->fd);
          assert(i != conns.end());
          i->second->shutdown = true;
          if (con->unfinished_msg[0] != '\0')
@@ -365,7 +361,7 @@ private:
 
 public:
    
-   MsgReader(string socket_suffix, OutputInterface *log_) :
+   MsgReader(std::string socket_suffix, OutputInterface *log_) :
       log(log_)
    {
       error = true;
@@ -379,7 +375,7 @@ public:
       struct sockaddr_un saddr;
       bzero(&saddr, sizeof(saddr));
       int pathsize = sizeof(saddr.sun_path);
-      socket_path = tmpdir + string("/umap_") + socket_suffix;
+      socket_path = tmpdir + std::string("/umap_") + socket_suffix;
       saddr.sun_family = AF_UNIX;
       if (socket_path.length() > (unsigned) pathsize-1) {
          fprintf(stderr, "[%s:%u] - Socket path overflows AF_UNIX size (%d): %s\n",
@@ -407,7 +403,7 @@ public:
 
    ~MsgReader()
    {
-      for (map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
+      for (std::map<int, Connection *>::iterator i = conns.begin(); i != conns.end(); i++) {
          int fd = i->first;
          close(fd);
       }

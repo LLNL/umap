@@ -14,11 +14,20 @@
  */
 #ifndef _UMAP_H_
 #define _UMAP_H_
-#include <cstdint>
-#include <unistd.h>
-#include <sys/mman.h>
-#include "umap/Store.h"
 
+#ifdef __cplusplus
+  #include <cstdint>
+  #include "umap/Store.h"
+  #include <unistd.h>
+  #include <sys/mman.h>
+#else // __cplusplus
+  #include <stdint.h>
+  #include <unistd.h>
+  #include <sys/mman.h>
+#endif // __cplusplus
+
+
+#ifdef __cplusplus
 /** Allow application to create region of memory to a peristant store
  * \param addr Same as input argument for mmap(2)
  * \param length Same as input argument of mmap(2)
@@ -38,6 +47,7 @@ void* umap_ex(
     off_t offset,
     Store*
 );
+#endif // __cplusplus
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,7 +64,7 @@ extern "C" {
  */
 void* umap(
     void* addr,
-    std::size_t length,
+    size_t length,
     int prot,               /* See mmap(2) - Subset supported, rest ignored */
     int flags,              /* See mmap(2) - Subset supported, rest ignored */
     int fd,                 /* See mmap(2) */
@@ -62,7 +72,7 @@ void* umap(
 );
 
 int uunmap( void*  addr,         /* See mmap(2) */
-            std::size_t length   /* See mmap(2) */
+            size_t length        /* See mmap(2) */
         );
 
 uint64_t* umap_cfg_readenv(const char* env, uint64_t* val);

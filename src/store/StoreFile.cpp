@@ -22,7 +22,9 @@
 #include <sstream>
 #include <string>
 
-using namespace std;
+#ifdef UMAP_DEBUG_LOGGING
+#include <string.h>
+#endif
 
 StoreFile::StoreFile(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd_)
   : region{_region_}, rsize{_rsize_}, alignsize{_alignsize_}, fd{_fd_}
@@ -31,39 +33,46 @@ StoreFile::StoreFile(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd
 
 ssize_t StoreFile::read_from_store(char* buf, size_t nb, off_t off)
 {
-  ssize_t rval;
-  stringstream ss;
+  size_t rval = 0;
+#ifdef UMAP_DEBUG_LOGGING
+  std::stringstream ss;
   ss << "pread(fd=" << fd
     << ", buf=" << (void*)buf
     << ", nb=" << nb
     << ", off=" << off
     << ")";
-
   debug_printf("%s\n", ss.str().c_str());
-
-  if ( ( rval = pread(fd, buf, nb, off) ) == -1) {
+#endif
+  rval = pread(fd, buf, nb, off);
+#ifdef UMAP_DEBUG_LOGGING
+  if (rval == -1) {
     int eno = errno;
-    cerr << ss.str() << ": " << strerror(eno) << endl;
+    std::cerr << ss.str() << ": " << strerror(eno) << std::endl;
     _exit(1);
   }
+#endif
   return rval;
 }
 
 ssize_t  StoreFile::write_to_store(char* buf, size_t nb, off_t off)
 {
-  ssize_t rval;
-  stringstream ss;
+  size_t rval = 0;
+#ifdef UMAP_DEBUG_LOGGING
+  std::stringstream ss;
   ss << "pwrite(fd=" << fd
     << ", buf=" << (void*)buf
     << ", nb=" << nb
     << ", off=" << off
     << ")";
-
   debug_printf("%s\n", ss.str().c_str());
-  if ( ( rval = pwrite(fd, buf, nb, off) ) == -1) {
+#endif
+  rval = pwrite(fd, buf, nb, off);
+#ifdef UMAP_DEBUG_LOGGING
+  if (rval == -1) {
     int eno = errno;
-    cerr << ss.str() << ": " << strerror(eno) << endl;
+    std::cerr << ss.str() << ": " << strerror(eno) << std::endl;
     _exit(1);
   }
+#endif
   return rval;
 }
