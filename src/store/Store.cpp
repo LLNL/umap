@@ -17,8 +17,6 @@
 #include "umap/Store.h"
 #include "StoreFile.h"
 
-using namespace std;
-
 Store* Store::make_store(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd_)
 {
   return new StoreFile{_region_, _rsize_, _alignsize_, _fd_};
