@@ -1,0 +1,48 @@
+$ uname -a
+Linux dst-intel 4.13.0uffdio-ge561891-dirty #1 SMP Fri Oct 13 13:51:34 PDT 2017 x86_64 x86_64 x86_64 GNU/Linux
+
+$ lscpu
+Architecture:          x86_64
+CPU op-mode(s):        32-bit, 64-bit
+Byte Order:            Little Endian
+CPU(s):                48
+On-line CPU(s) list:   0-47
+Thread(s) per core:    2
+Core(s) per socket:    12
+Socket(s):             2
+NUMA node(s):          2
+Vendor ID:             GenuineIntel
+CPU family:            6
+Model:                 63
+Model name:            Intel(R) Xeon(R) CPU E5-2670 v3 @ 2.30GHz
+Stepping:              2
+CPU MHz:               2294.734
+BogoMIPS:              4589.03
+Virtualization:        VT-x
+L1d cache:             32K
+L1i cache:             32K
+L2 cache:              256K
+L3 cache:              30720K
+NUMA node0 CPU(s):     0-11,24-35
+NUMA node1 CPU(s):     12-23,36-47
+
+$ lspci | grep -i nvme
+83:00.0 Non-Volatile memory controller: HGST, Inc. Ultrastar SN100 Series NVMe SSD (rev 05)
+
+$ sudo lspci -s 83:00.0 -v
+83:00.0 Non-Volatile memory controller: HGST, Inc. Ultrastar SN100 Series NVMe SSD (rev 05) (prog-if 02 [NVM Express])
+	Subsystem: HGST, Inc. Ultrastar SN100 Series NVMe SSD
+	Physical Slot: 803
+	Flags: bus master, fast devsel, latency 0, IRQ 36, NUMA node 1
+	Memory at c8010000 (64-bit, non-prefetchable) [size=16K]
+	Memory at c8000000 (64-bit, non-prefetchable) [size=64K]
+	Expansion ROM at c8020000 [disabled] [size=128K]
+	Capabilities: [c0] Power Management version 3
+	Capabilities: [70] Express Endpoint, MSI 00
+	Capabilities: [c8] MSI: Enable- Count=1/32 Maskable+ 64bit+
+	Capabilities: [e0] MSI-X: Enable+ Count=129 Masked-
+	Capabilities: [100] Advanced Error Reporting
+	Capabilities: [180] #19
+	Kernel driver in use: nvme
+	Kernel modules: nvme
+
