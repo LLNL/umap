@@ -1,4 +1,4 @@
-# UMAP v0.0.3 (alpha)
+# UMAP v0.0.4 (alpha)
 
 [![Documentation Status](https://readthedocs.org/projects/llnl-umap/badge/?version=develop)](https://llnl-umap.readthedocs.io/en/develop/?badge=develop)
 
