@@ -1,14 +1,17 @@
-add_subdirectory(lib)
-
-if ( ENABLE_FITS_TESTS )
-  add_subdirectory(FITS)
-  add_subdirectory(median_calculation)
-endif()
-
-add_subdirectory(umapsort)
-add_subdirectory(umapcpu)
-add_subdirectory(umapmillions)
-add_subdirectory(median)
-add_subdirectory(readload)
+#############################################################################
+# Copyright (c) 2018, Lawrence Livermore National Security, LLC.
+# Produced at the Lawrence Livermore National Laboratory
+#
+# Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
+# LLNL-CODE-733797
+#
+# All rights reserved.
+#
+# This file is part of UMAP.
+#
+# For details, see https://github.com/LLNL/umap
+# Please also see the COPYRIGHT and LICENSE files for LGPL license.
+#############################################################################
 add_subdirectory(churn)
-add_subdirectory(rwseq)
+add_subdirectory(pfbenchmark)
+add_subdirectory(umapsort)

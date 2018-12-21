@@ -1,4 +1,17 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
+//////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2018, Lawrence Livermore National Security, LLC.
+// Produced at the Lawrence Livermore National Laboratory
+//
+// Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
+// LLNL-CODE-733797
+//
+// All rights reserved.
+//
+// This file is part of UMAP.
+//
+// For details, see https://github.com/LLNL/umap
+// Please also see the COPYRIGHT and LICENSE files for LGPL license.
+//////////////////////////////////////////////////////////////////////////////
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
@@ -7,7 +20,7 @@
 #include <unistd.h>     // getopt()
 #include <getopt.h>     // duh...
 #include "options.h"
-#include "umap.h"
+#include "umap/umap.h"
 
 static char const* FILENAME = "/tmp/abc";
 static const uint64_t NUMCHURNPAGES = 99;
@@ -101,18 +114,15 @@ void getoptions(options_t& testops, int& argc, char **argv)
         testops.fn = optarg;
         break;
       case 'w':
-        if ((testops.num_load_writer_threads = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
-        goto R0;
+        testops.num_load_writer_threads = strtoull(optarg, nullptr, 0);
+        break;
       case 'r':
-        if ((testops.num_load_reader_threads = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
+        testops.num_load_reader_threads = strtoull(optarg, nullptr, 0);
+        break;
         goto R0;
       case 't':
-        if ((testops.num_churn_threads = strtoull(optarg, nullptr, 0)) >= 0)
-          break;
-        goto R0;
-
+        testops.num_churn_threads = strtoull(optarg, nullptr, 0);
+        break;
       default:
       R0:
         usage(pname);
@@ -128,15 +138,5 @@ void getoptions(options_t& testops, int& argc, char **argv)
   }
 
   umap_cfg_set_bufsize(testops.page_buffer_size);
-}
-
-long umt_getpagesize(void)
-{
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (page_size == -1) {
-        perror("sysconf/page_size");
-        exit(1);
-    }
-    return page_size;
 }
 

@@ -1,3 +1,17 @@
+#############################################################################
+# Copyright (c) 2018, Lawrence Livermore National Security, LLC.
+# Produced at the Lawrence Livermore National Laboratory
+#
+# Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
+# LLNL-CODE-733797
+#
+# All rights reserved.
+#
+# This file is part of UMAP.
+#
+# For details, see https://github.com/LLNL/umap
+# Please also see the COPYRIGHT and LICENSE files for LGPL license.
+#############################################################################
 project(churn)
 
 FIND_PACKAGE( OpenMP REQUIRED )
@@ -12,17 +26,16 @@ if(OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     add_executable(churn churn.cpp options.cpp)
 
-    target_link_libraries(churn libumap_static)
-    target_link_libraries(churn libtestoptions_static)
-    target_link_libraries(churn libPerFile_static)
+    add_dependencies(churn umap)
+    target_link_libraries(churn umap)
 
-    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
+    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
     install(TARGETS churn
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
 else()
-    message("Skpping churn, OpenMP required")
+  message("Skipping churn, OpenMP required")
 endif()
 

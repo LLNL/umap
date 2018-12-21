@@ -1,4 +1,17 @@
-/* This file is part of UMAP.  For copyright information see the COPYRIGHT file in the top level directory, or at https://github.com/LLNL/umap/blob/master/COPYRIGHT This program is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License (as published by the Free Software Foundation) version 2.1 dated February 1999.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the GNU Lesser General Public License for more details.  You should have received a copy of the GNU Lesser General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA */
+//////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2018, Lawrence Livermore National Security, LLC.
+// Produced at the Lawrence Livermore National Laboratory
+//
+// Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
+// LLNL-CODE-733797
+//
+// All rights reserved.
+//
+// This file is part of UMAP.
+//
+// For details, see https://github.com/LLNL/umap
+// Please also see the COPYRIGHT and LICENSE files for LGPL license.
+//////////////////////////////////////////////////////////////////////////////
 
 /*
    The idea is that we have a single "Load Page" and a set
@@ -26,11 +39,16 @@
    |                                                  |
    +==================================================+
   
-   We then have a smaller page_buffer_size that these pages will be faulted into and madvised out of via umap().
+   We then have a smaller page_buffer_size that these pages will be faulted
+   into and madvised out of via umap().
   
-   The LoadPage will have a set of num_load_reader and num_load_writer threads focussed exclusively on making reads and writes to locations constrained to the Load Page.
+   The LoadPage will have a set of num_load_reader and num_load_writer threads
+   focussed exclusively on making reads and writes to locations constrained to
+   the Load Page.
 
-   The the Churn Pages will have num_churn_reader threads performing random byte read accesses across all of the Churn Pages effectively causing the Load Page to be paged in and out of the smaller Page_Buffer.
+   The the Churn Pages will have num_churn_reader threads performing random
+   byte read accesses across all of the Churn Pages effectively causing the
+   Load Page to be paged in and out of the smaller Page_Buffer.
 */
 #include <iostream>
 #include <cassert>
@@ -44,10 +62,10 @@
 #include <utmpx.h>  // sched_getcpu()
 #include <omp.h>
 
-#include "umap.h"
+#include "umap/umap.h"
 #include "options.h"
-#include "testoptions.h"
-#include "PerFile.h"
+#include "../utility/commandline.hpp"
+#include "../utility/umap_file.hpp"
 
 uint64_t g_count = 0;
 using namespace std;
@@ -55,10 +73,9 @@ using namespace chrono;
 
 class pageiotest {
 public:
-    pageiotest(int _ac, char** _av): time_to_stop{false}, pagesize{umt_getpagesize()} {
+    pageiotest(int _ac, char** _av): time_to_stop{false}, pagesize{utility::umt_getpagesize()} {
         getoptions(options, _ac, _av);
 
-        umt_options.iodirect = options.iodirect;
         umt_options.usemmap = options.usemmap;
         umt_options.filename = options.fn;
         umt_options.noinit = options.noinit;
@@ -67,7 +84,14 @@ public:
         num_rw_load_pages = num_read_load_pages = options.num_load_pages;
         num_churn_pages = options.num_churn_pages;
 
-        base_addr = PerFile_openandmap(&umt_options, (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
+        base_addr = utility::map_in_file(options.fn, options.initonly,
+            options.noinit, options.usemmap,
+            (num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize);
+
+        if ( base_addr == nullptr ) {
+          exit(1);
+        }
+
         assert(base_addr != NULL);
 
         read_load_pages = base_addr;
@@ -89,11 +113,13 @@ public:
             << options.fn << " Backing file\n\t"
             << options.testduration << " seconds for test duration.\n\n";
 
-        //check();
+        check();
     }
 
     ~pageiotest( void ) {
-        PerFile_closeandunmap(&umt_options, (options.num_churn_pages + num_rw_load_pages + num_read_load_pages) * pagesize, base_addr);
+        utility::unmap_file(umt_options.usemmap,
+            (options.num_churn_pages + num_rw_load_pages
+             + num_read_load_pages) * pagesize, base_addr);
     }
 
     void start( void ) {
@@ -134,7 +160,7 @@ public:
 
 private:
     bool time_to_stop;
-    umt_optstruct_t umt_options;
+    utility::umt_optstruct_t umt_options;
     options_t options;
 
     long pagesize;
@@ -160,7 +186,7 @@ private:
           for (uint64_t i = 0; i < num_churn_pages * (pagesize/sizeof(*p)); i += (pagesize/sizeof(*p)))
               if (p[i] != i) {
                 cerr << "check(CHURN): *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (unsigned long long)i << endl;
-                return;
+                exit(1);
               }
         }
         cout << "Checking read load pages\n";
@@ -169,7 +195,7 @@ private:
           for (uint64_t i = 0; i < num_read_load_pages * (pagesize/sizeof(*p)); ++i)
               if (p[i] != i) {
                 cerr << "check(READER): *(uint64_t*)" << &p[i] << "=" << p[i] << " != " << (unsigned long long)i << endl;
-                break;
+                exit(1);
               }
         }
         cerr << "Check Complete\n";

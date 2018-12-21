@@ -1,4 +1,6 @@
-# UMAP v0.0.3 (alpha)
+# UMAP v0.0.4 (alpha)
+
+[![Documentation Status](https://readthedocs.org/projects/llnl-umap/badge/?version=develop)](https://llnl-umap.readthedocs.io/en/develop/?badge=develop)
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
@@ -11,10 +13,6 @@ The tests directory contains various tests written to test the library
 including a hello world program for userfaultfd based upon code from the
 [userfaultfd-hello-world project](http://noahdesu.github.io/2016/10/10/userfaultfd-hello-world.html).
 
-
-The sortbenchmark directory is the original sort benchmark, modified to use
-threads rather than forking processes.
-
 ## Quick Start
 
 *Building umap* is trivial. In the root directory of the repo
@@ -26,15 +24,19 @@ cmake -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
 make install
 ```
 
-The default for cmake is to build a Debug version of the software.  If you would like to build an optimized (-O3)
-version, simply run 
+The default for cmake is to build a Debug version of the software.  If you
+would like to build an optimized (-O3) version, simply run 
 ```bash
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 ```
 
-## umap() Interface
+## Documentation
 
-The interface is currently a work in progress (see [umap.h](include/umap.h)).
+Both user and code documentation is available
+[here](http://llnl-umap.readthedocs.io/).
+
+If you have build problems, we have comprehensive
+[build sytem documentation](https://llnl-umap.readthedocs.io/en/develop/advanced_configuration.html) too!
 
 ## License
 
@@ -43,11 +45,6 @@ The interface is currently a work in progress (see [umap.h](include/umap.h)).
 
 ## Contact
 
-Primary contact/Lead developer
-
-- Maya Gokhale (gokhale2@llnl.gov)
-
-Other developers
-
 - Marty McFadden  (mcfadden8@llnl.gov)
-- Xiao Liu  (liu61@llnl.gov)
+- Maya Gokhale (gokhale2@llnl.gov)
+- Eric Green (green77@llnl.gov)
