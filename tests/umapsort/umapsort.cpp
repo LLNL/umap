@@ -41,19 +41,35 @@ using namespace std;
 bool sort_ascending = true;
 
 void initdata(uint64_t *region, uint64_t rlen) {
-  fprintf(stdout, "initdata: %p, %lu\n", region, rlen);
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<uint64_t> rnd_int;
+  fprintf(stdout, "initdata: %p, from %lu to %lu\n", region, (rlen), (rlen - rlen));
 #pragma omp parallel for
-  for(uint64_t i=0; i < rlen; ++i) {
+  for(uint64_t i=0; i < rlen; ++i)
     region[i] = (uint64_t) (rlen - i);
+}
+
+uint64_t dump_page( uint64_t* region, uint64_t index )
+{
+  uint64_t pageSize = (uint64_t)utility::umt_getpagesize();
+  uint64_t elemsPerPage = pageSize / sizeof(uint64_t);
+  uint64_t pageNumber = index / elemsPerPage;
+  uint64_t pageStartIndex = pageNumber*elemsPerPage;
+  uint64_t* page = &region[pageStartIndex];
+
+  fprintf(stderr, "Data miscompare in page %lu\n", pageNumber);
+
+  for ( uint64_t i = pageStartIndex; i < (pageStartIndex + elemsPerPage); ++i ) {
+    if ( i == index )
+      fprintf(stderr, "**%8lu %8lu\n", i, region[i]);
+    else
+      fprintf(stderr, "  %8lu %8lu\n", i, region[i]);
   }
+
+  return pageStartIndex + elemsPerPage; // got to next page
 }
 
 void validatedata(uint64_t *region, uint64_t rlen) {
   if (sort_ascending == true) {
-#pragma omp parallel for
+// #pragma omp parallel for
     for(uint64_t i = 0; i < rlen; ++i) {
         if (region[i] != (i+1)) {
             fprintf(stderr, "Worker %d found an error at index %lu, %lu != lt %lu!\n",
@@ -78,11 +94,12 @@ void validatedata(uint64_t *region, uint64_t rlen) {
                     "Context i-3 i-2 i-1 i i+1 i+2 i+3:%lu %lu %lu %lu %lu %lu %lu\n",
                     region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
             }
+            i = dump_page( region, i ) - 1;
         }
     }
   }
   else {
-#pragma omp parallel for
+// #pragma omp parallel for
     for(uint64_t i = 0; i < rlen; ++i) {
         if(region[i] != (rlen - i)) {
             fprintf(stderr, "Worker %d found an error at index %lu, %lu != %lu!\n",
@@ -107,102 +124,8 @@ void validatedata(uint64_t *region, uint64_t rlen) {
                     "Context i-3 i-2 i-1 i i+1 i+2 i+3:%lu %lu %lu %lu %lu %lu %lu\n",
                     region[i-3], region[i-2], region[i-1], region[i], region[i+1], region[i+2], region[i+3]);
             }
+            exit(1);
         }
-    }
-  }
-}
-
-void* map_in_file(const utility::umt_optstruct_t* testops, uint64_t numbytes)
-{
-  void* region = NULL;
-  int open_options = O_RDWR | O_LARGEFILE | O_DIRECT;
-  int fd;
-  string filename(testops->filename);
-
-  if ( testops->initonly || !testops->noinit ) {
-    open_options |= O_CREAT;
-    unlink(filename.c_str());   // Remove the file if it exists
-  }
-
-  if ( ( fd = open(filename.c_str(), open_options, S_IRUSR | S_IWUSR) ) == -1 ) {
-    string estr = "Failed to open/create " + filename + ": ";
-    perror(estr.c_str());
-    return NULL;
-  }
-
-  if ( open_options & O_CREAT ) { // If we are initializing, attempt to pre-allocate disk space for the file.
-    try {
-      int x;
-      if ( ( x = posix_fallocate(fd, 0, numbytes) != 0 ) ) {
-        ostringstream ss;
-        ss << "Failed to pre-allocate " << numbytes << " bytes in " << filename << ": ";
-        perror(ss.str().c_str());
-        return NULL;
-      }
-    } catch(const std::exception& e) {
-      cerr << "posix_fallocate: " << e.what() << endl;
-      return NULL;
-    } catch(...) {
-      cerr << "posix_fallocate failed to allocate backing store\n";
-      return NULL;
-    }
-  }
-
-  struct stat sbuf;
-  if (fstat(fd, &sbuf) == -1) {
-    string estr = "Failed to get status (fstat) for " + filename + ": ";
-    perror(estr.c_str());
-    return NULL;
-  }
-
-  if ( (off_t)sbuf.st_size != (numbytes) ) {
-    cerr << filename << " size " << sbuf.st_size << " does not match specified data size of " << (numbytes) << endl;
-    return NULL;
-  }
-
-  const int prot = PROT_READ|PROT_WRITE;
-
-  if ( testops->usemmap ) {
-    region = mmap(NULL, numbytes, prot, MAP_SHARED | MAP_NORESERVE, fd, 0);
-
-    if (region == MAP_FAILED) {
-      ostringstream ss;
-      ss << "mmap of " << numbytes << " bytes failed for " << filename << ": ";
-      perror(ss.str().c_str());
-      return NULL;
-    }
-  }
-  else {
-    int flags = UMAP_PRIVATE;
-
-    region = umap(NULL, numbytes, prot, flags, fd, 0);
-    if ( region == UMAP_FAILED ) {
-        ostringstream ss;
-        ss << "umap_mf of " << numbytes << " bytes failed for " << filename << ": ";
-        perror(ss.str().c_str());
-        return NULL;
-    }
-  }
-
-  return region;
-}
-
-void unmap_file(const utility::umt_optstruct_t* testops, uint64_t numbytes, void* region)
-{
-  if ( testops->usemmap ) {
-    if ( munmap(region, numbytes) < 0 ) {
-      ostringstream ss;
-      ss << "munmap failure: ";
-      perror(ss.str().c_str());
-      exit(-1);
-    }
-  }
-  else {
-    if (uunmap(region, numbytes) < 0) {
-      ostringstream ss;
-      ss << "uunmap of failure: ";
-      perror(ss.str().c_str());
-      exit(-1);
     }
   }
 }

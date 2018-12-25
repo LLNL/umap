@@ -16,35 +16,25 @@
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
 
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
+#define UMAP_SHA_DATA 1
 
 #include <iostream>
-#include <cstdint>
 #include <cinttypes>
 #include <vector>
-#include <algorithm>
 #include <thread>
 #include <unordered_map>
 #include <sstream>
 #include <fstream>
-#include <string>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>              // open/close
-#include <unistd.h>             // sysconf()
 #include <sys/syscall.h>        // syscall()
-#include <sys/mman.h>           // mmap()
 #include <poll.h>               // poll()
-#include <assert.h>
+#include <cassert>
 #include <linux/userfaultfd.h>
-#include <utmpx.h>              // sched_getcpu()
-#include <signal.h>
-#include <cstring>
 #include <sys/prctl.h>
+#ifdef UMAP_SHA_DATA
+#include <openssl/sha.h>
+#endif
 #include "umap/umap.h"               // API to library
 #include "umap/Store.h"
 #include "config.h"
@@ -142,6 +132,9 @@ class UserFaultHandler {
     void enable_wp_on_pages_and_wake(uint64_t, int64_t);
     void disable_wp_on_pages(uint64_t, int64_t, bool);
 #endif
+#ifdef UMAP_SHA_DATA
+    void print_event( const struct uffd_msg& );
+#endif
 };
 
 class umap_stats {
@@ -195,13 +188,42 @@ class umap_page_buffer {
 };
 
 struct umap_page {
-    bool page_is_dirty() { return dirty; }
-    void mark_page_dirty() { dirty = true; }
-    void mark_page_clean() { dirty = false; }
-    void* get_page(void) { return page; }
-    void set_page(void* _p);
-    void* page;
-    bool dirty;
+#ifdef UMAP_SHA_DATA
+  struct sha1bucket_t {
+    unsigned char sha1hash[SHA_DIGEST_LENGTH];
+  };
+#endif
+  bool page_is_dirty() { 
+#ifdef UMAP_SHA_DATA
+    if ( ! dirty ) { // No need to check again if already marked as dirty due to WRITE FAULT
+      sha1bucket_t tmphash;
+      SHA1((const unsigned char*)page, umapPageSize, hash.sha1hash);
+      dirty = ( strncmp((const char*)tmphash.sha1hash, (const char*)hash.sha1hash, SHA_DIGEST_LENGTH) != 0 );
+      if ( dirty ) {
+        std::cerr 
+          << (void*)page << " " 
+          << (void*)this << " " 
+          << "Dirty page found that was not previously marked dirty!\n";
+        exit(1);
+      }
+    }
+#endif
+    return dirty;
+  }
+#ifdef UMAP_SHA_DATA
+  void set_hash(const char* buf) { 
+    SHA1((const unsigned char*)buf, umapPageSize, hash.sha1hash);
+  }
+#endif
+  void mark_page_dirty() { dirty = true; }
+  void mark_page_clean() { dirty = false; }
+  void* get_page(void) { return page; }
+  void set_page(void* _p) { page = _p; }
+  void* page;
+  bool dirty;
+#ifdef UMAP_SHA_DATA
+  sha1bucket_t hash;
+#endif
 };
 
 static std::unordered_map<void*, _umap*> active_umaps;
@@ -503,43 +525,8 @@ void umap_cfg_reset_stats(void* region)
   }
 }
 
-//
-// Signal Handlers
-//
-static struct sigaction saved_sa;
-
-void sighandler(int signum, siginfo_t *info, void* buf)
-{
-  if (signum != SIGBUS) {
-    err_printf("Unexpected signal: %d received\n", signum);
-    exit(1);
-  }
-
-  //assert("UMAP: SIGBUS Error Unexpected" && 0);
-
-  void* page_begin = _umap::UMAP_PAGE_BEGIN(info->si_addr);
-
-  for (auto it : active_umaps) {
-    for (auto ufh : it.second->ufault_handlers) {
-      if (ufh->page_is_in_umap(page_begin)) {
-        ufh->stat->sigbus++;
-
-        if (ufh->get_pagebuffer()->find_inmem_page_desc(page_begin) != nullptr)
-          debug_printf("SIGBUS %p (page=%p) present\n", info->si_addr, page_begin);
-        else
-          debug_printf("SIGBUS %p (page=%p) not present\n", info->si_addr, page_begin);
-        return;
-      }
-    }
-  }
-  err_printf("SIGBUS %p (page=%p) ADDRESS OUTSIDE OF UMAP RANGE\n", info->si_addr, page_begin);
-  assert("UMAP: SIGBUS for out of range address" && 0);
-}
-
 void __attribute ((constructor)) init_umap_lib( void )
 {
-  struct sigaction act;
-
   LOGGING_INIT;
 
   if ((umapPageSize = sysconf(_SC_PAGESIZE)) == -1) {
@@ -552,34 +539,14 @@ void __attribute ((constructor)) init_umap_lib( void )
   unsigned int n = std::thread::hardware_concurrency();
   uffd_threads = (n == 0) ? 16 : n;
 
-  act.sa_handler = NULL;
-  act.sa_sigaction = sighandler;
-  if (sigemptyset(&act.sa_mask) == -1) {
-    perror("ERROR: sigemptyset: ");
-    exit(1);
-  }
-
-  act.sa_flags = SA_NODEFER | SA_SIGINFO;
-
-  if (sigaction(SIGBUS, &act, &saved_sa) == -1) {
-    perror("ERROR: sigaction: ");
-    exit(1);
-  }
-
   umap_cfg_getenv();
   LOGGING_FINI;
 }
 
 void __attribute ((destructor)) fine_umap_lib( void )
 {
-  if (sigaction(SIGBUS, &saved_sa, NULL) == -1) {
-    perror("ERROR: sigaction restore: ");
-    exit(1);
-  }
-
-  for (auto it : active_umaps) {
+  for (auto it : active_umaps)
     delete it.second;
-  }
 }
 
 //
@@ -835,25 +802,49 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
-    sort(umessages.begin(), umessages.begin()+msgs, less_than_key());
-
-    uint64_t last_addr = 0;
     for (int i = 0; i < msgs; ++i) {
-      if (umessages[i].event != UFFD_EVENT_PAGEFAULT) {
-        std::cerr << __FUNCTION__ << " Unexpected event " << std::hex << umessages[i].event << std::endl;
-        continue;
-      }
-
-      if (umessages[i].arg.pagefault.address == last_addr) {
-        stat->dropped_dups++;
-        continue;   // Skip pages we have already copied in
-      }
-
-      last_addr = umessages[i].arg.pagefault.address;
+      assert("uffd_hander: Unexpected event" && (umessages[i].event == UFFD_EVENT_PAGEFAULT));
+#ifdef UMAP_SHA_DATA
+      print_event(umessages[i]);
+#endif
       pagefault_event(umessages[i]);       // At this point, we know we have had a page fault.  Let's handle it.
     }
   }
 }
+
+#ifdef UMAP_SHA_DATA
+void UserFaultHandler::print_event(const struct uffd_msg& 
+#ifdef UMAP_DEBUG_LOGGING
+    msg
+#endif
+)
+{
+#ifdef UMAP_DEBUG_LOGGING
+  void* page_begin = _umap::UMAP_PAGE_BEGIN( (void*)msg.arg.pagefault.address );
+  umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
+  std::stringstream ss;
+
+  ss << page_begin << " " << (void*)pm << " ";
+  if ( pm == nullptr )
+    ss << "NOT Present ";
+  else
+    ss << "    Present ";
+
+  ss << "{ " << std::hex << msg.arg.pagefault.flags, " ";
+  
+  if ( ! ( msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) )
+    ss << " READ ";
+  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP)
+    ss << " WP ";
+  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
+    ss << " WRITE ";
+  ss << "}\n";
+
+  std::cerr << ss.str();
+  debug_printf2("%s", ss.str().c_str());
+#endif
+}
+#endif
 
 void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 {
@@ -863,33 +854,11 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   if (pm != nullptr) {
 #ifndef UMAP_RO_MODE
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-      if (!pm->page_is_dirty()) {
-        pm->mark_page_dirty();
-        disable_wp_on_pages((uint64_t)page_begin, 1, false);
-        stat->wp_messages++;
-        debug_printf2("Present page written, marking %p dirty\n", page_begin);
-      }
-      else if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) {
-        struct uffdio_copy copy;
-        copy.src = (uint64_t)copyin_buf;
-        copy.dst = (uint64_t)page_begin;
-        copy.len = umapPageSize;
-        copy.mode = 0;  // No WP
-
-        stat->stuck_wp++;
-
-        pm->mark_page_clean();
-        memcpy(copyin_buf, page_begin, umapPageSize);   // Save our data
-        evict_page(pm);                              // Evict ourselves
-        pm->set_page(page_begin);                    // Bring ourselves back in
-        pm->mark_page_dirty();                       // Will be dirty when write retries
-
-        if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-          perror("ERROR WP Workaround: ioctl(UFFDIO_COPY)");
-          exit(1);
-        }
-        debug_printf2("Present page stuck, EVICT WORKAROUND %p\n", page_begin);
-      }
+      pm->mark_page_dirty();
+      disable_wp_on_pages((uint64_t)page_begin, 1, false);
+      stat->wp_messages++;
+      debug_printf2("Present page written, marking %p dirty\n", page_begin);
+      assert("Stuck WP Condition Found" && !(msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP));
     }
 #else
     if ( msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE ) {
@@ -922,6 +891,11 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   {
     pagebuffer->dealloc_page_desc();
   }
+
+#ifdef UMAP_SHA_DATA
+  std::cerr << (void*)pm << "\n";
+  pm->set_hash(copyin_buf);
+#endif
 
   struct uffdio_copy copy;
   copy.src = (uint64_t)copyin_buf;
@@ -959,8 +933,6 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       perror("ERROR: ioctl(UFFDIO_COPY nowake)");
       exit(1);
     }
-
-    assert(memcmp(copyin_buf, page_begin, umapPageSize) == 0);
   }
 }
 
@@ -995,6 +967,9 @@ void UserFaultHandler::evict_page(umap_page* pb)
 {
   uint64_t* page = (uint64_t*)pb->get_page();
 
+#ifdef UMAP_SHA_DATA
+  std::cerr << (void*)page << " " << (void*)pb << " EVICT\n";
+#endif
   stat->evict_victims++;
   if (pb->page_is_dirty()) {
 #ifdef UMAP_RO_MODE
@@ -1005,6 +980,7 @@ void UserFaultHandler::evict_page(umap_page* pb)
     // Prevent further writes.  No need to do this if not dirty because WP is already on.
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
+
     if (_u->store->write_to_store((char*)page, umapPageSize, (off_t)((uint64_t)page - (uint64_t)_u->umapRegion)) == -1) {
       perror("ERROR: write_to_store failed");
       assert(0);
@@ -1122,12 +1098,4 @@ umap_page* umap_page_buffer::find_inmem_page_desc(void* page_addr)
 {
   auto it = inmem_page_map.find(page_addr);
   return((it == inmem_page_map.end()) ? nullptr : it->second);
-}
-
-//
-// umap_page class implementation
-//
-void umap_page::set_page(void* _p)
-{
-  page = _p;
 }

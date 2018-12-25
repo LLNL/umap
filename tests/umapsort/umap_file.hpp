@@ -24,6 +24,9 @@
 #include <sstream>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <cstdio>
+#include <cstring>
+#include <errno.h>
 #include "umap/umap.h"
 
 namespace utility {
@@ -41,7 +44,14 @@ void* map_in_file(
 
   if ( initonly || !noinit ) {
     o_opts |= O_CREAT;
-    unlink(filename.c_str());   // Remove the file if it exists
+    std::cout << "Deleting " << filename << "\n";
+    if ( unlink(filename.c_str()) ) {
+      int eno = errno;
+      if ( eno != ENOENT ) {
+        cerr << "Failed to unlink " << filename << ": " 
+          << strerror(eno) << " Errno=" << eno << endl;
+      }
+    }
   }
 
   if ( ( fd = open(filename.c_str(), o_opts, S_IRUSR | S_IWUSR) ) == -1 ) {
