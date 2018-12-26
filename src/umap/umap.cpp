@@ -197,7 +197,7 @@ struct umap_page {
 #ifdef UMAP_SHA_DATA
     if ( ! dirty ) { // No need to check again if already marked as dirty due to WRITE FAULT
       sha1bucket_t tmphash;
-      SHA1((const unsigned char*)page, umapPageSize, hash.sha1hash);
+      SHA1((const unsigned char*)page, umapPageSize, tmphash.sha1hash);
       dirty = ( strncmp((const char*)tmphash.sha1hash, (const char*)hash.sha1hash, SHA_DIGEST_LENGTH) != 0 );
       if ( dirty ) {
         std::cerr 
@@ -802,6 +802,10 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
+#ifdef UMAP_SHA_DATA
+    std::cerr << "Processing " << msgs << "/" << UMAP_UFFD_MAX_MESSAGES << " UFFD messages\n";
+#endif
+
     for (int i = 0; i < msgs; ++i) {
       assert("uffd_hander: Unexpected event" && (umessages[i].event == UFFD_EVENT_PAGEFAULT));
 #ifdef UMAP_SHA_DATA
@@ -854,11 +858,12 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   if (pm != nullptr) {
 #ifndef UMAP_RO_MODE
     if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+      if (pm->page_is_dirty())
+        return;
       pm->mark_page_dirty();
       disable_wp_on_pages((uint64_t)page_begin, 1, false);
       stat->wp_messages++;
       debug_printf2("Present page written, marking %p dirty\n", page_begin);
-      assert("Stuck WP Condition Found" && !(msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP));
     }
 #else
     if ( msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE ) {
@@ -893,7 +898,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   }
 
 #ifdef UMAP_SHA_DATA
-  std::cerr << (void*)pm << "\n";
+  std::cerr << (void*)page_begin << " Assigned to " << (void*)pm << "\n";
   pm->set_hash(copyin_buf);
 #endif
 
