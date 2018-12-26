@@ -41,7 +41,7 @@ using namespace std;
 bool sort_ascending = true;
 
 void initdata(uint64_t *region, uint64_t rlen) {
-  fprintf(stdout, "initdata: %p, from %lu to %lu\n", region, (rlen), (rlen - rlen));
+  fprintf(stderr, "initdata: %p, from %lu to %lu\n", region, (rlen), (rlen - rlen));
 #pragma omp parallel for
   for(uint64_t i=0; i < rlen; ++i)
     region[i] = (uint64_t) (rlen - i);
@@ -150,8 +150,8 @@ int main(int argc, char **argv)
   if (base_addr == nullptr)
     return -1;
 
-  fprintf(stdout, "umap INIT took %f seconds\n", utility::elapsed_time_sec(start));
-  fprintf(stdout, "%lu pages, %lu bytes, %lu threads\n", options.numpages, totalbytes, options.numthreads);
+  fprintf(stderr, "umap INIT took %f seconds\n", utility::elapsed_time_sec(start));
+  fprintf(stderr, "%lu pages, %lu bytes, %lu threads\n", options.numpages, totalbytes, options.numthreads);
 
   uint64_t *arr = (uint64_t *) base_addr;
   arraysize = totalbytes/sizeof(uint64_t);
@@ -160,7 +160,7 @@ int main(int argc, char **argv)
   if ( !options.noinit ) {
     // init data
     initdata(arr, arraysize);
-    fprintf(stdout, "INIT took %f seconds\n", utility::elapsed_time_sec(start));
+    fprintf(stderr, "INIT took %f seconds\n", utility::elapsed_time_sec(start));
   }
 
   if ( !options.initonly )
@@ -177,16 +177,16 @@ int main(int argc, char **argv)
       __gnu_parallel::sort(arr, &arr[arraysize], std::greater<uint64_t>(), __gnu_parallel::quicksort_tag());
     }
 
-    fprintf(stdout, "Sort took %f seconds\n", utility::elapsed_time_sec(start));
+    fprintf(stderr, "Sort took %f seconds\n", utility::elapsed_time_sec(start));
 
     start = utility::elapsed_time_sec();
     validatedata(arr, arraysize);
-    fprintf(stdout, "Validate took %f seconds\n", utility::elapsed_time_sec(start));
+    fprintf(stderr, "Validate took %f seconds\n", utility::elapsed_time_sec(start));
   }
 
   start = utility::elapsed_time_sec();
   utility::unmap_file(options.usemmap, totalbytes, base_addr);
-  fprintf(stdout, "umap TERM took %f seconds\n", utility::elapsed_time_sec(start));
+  fprintf(stderr, "umap TERM took %f seconds\n", utility::elapsed_time_sec(start));
 
   return 0;
 }
