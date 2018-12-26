@@ -227,6 +227,7 @@ struct umap_page {
   }
   sha1bucket_t hash;
 #else
+  bool page_is_valid( void ) { return true; };
   void stop_if_page_invalid( void ) {};
   void set_hash(const char*) {};
 #endif
