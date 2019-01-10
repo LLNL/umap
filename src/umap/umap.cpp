@@ -16,7 +16,7 @@
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
 
-#define UMAP_CHECK_BUFFER_CONSISTENCY 1
+//#define UMAP_CHECK_BUFFER_CONSISTENCY 1
 
 #include <iostream>
 #include <cinttypes>
