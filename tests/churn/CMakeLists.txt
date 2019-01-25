@@ -14,30 +14,28 @@
 #############################################################################
 project(churn)
 
-FIND_PACKAGE( OpenSSL REQUIRED )
-if(OPENSSL_FOUND)
-  FIND_PACKAGE( OpenMP REQUIRED )
-  if(OPENMP_FOUND)
-      configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/churntest_umap.sh"
-        "${CMAKE_CURRENT_BINARY_DIR}/churntest_umap.sh"
-        COPYONLY
-        )
-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-      add_executable(churn churn.cpp options.cpp)
+FIND_PACKAGE( OpenMP REQUIRED )
+if(OPENMP_FOUND)
+    configure_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/churntest_umap.sh"
+      "${CMAKE_CURRENT_BINARY_DIR}/churntest_umap.sh"
+      COPYONLY
+      )
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+    add_executable(churn churn.cpp options.cpp)
 
-      add_dependencies(churn umap)
-      target_link_libraries(churn umap ${OPENSSL_LIBRARIES})
+    add_dependencies(churn umap)
+    target_link_libraries(churn umap)
 
-      include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
+    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
-      install(TARGETS churn
-              LIBRARY DESTINATION lib
-              ARCHIVE DESTINATION lib/static
-              RUNTIME DESTINATION bin )
-  else()
-    message("Skipping churn, OpenMP required")
-  endif()
+    install(TARGETS churn
+            LIBRARY DESTINATION lib
+            ARCHIVE DESTINATION lib/static
+            RUNTIME DESTINATION bin )
+else()
+  message("Skipping churn, OpenMP required")
 endif()
+
