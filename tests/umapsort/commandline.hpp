@@ -41,7 +41,6 @@ typedef struct {
 
 static char const* FILENAME = "testfile";
 const uint64_t NUMPAGES = 10000000;
-const uint64_t BUF_PER_UFFD_THREAD = 1024;
 const uint64_t NUMTHREADS = 2;
 
 using namespace std;
@@ -58,7 +57,7 @@ static void usage(char* pname)
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
-  << " -b # page buffer size  - default: " << umap_cfg_get_uffdthreads() * BUF_PER_UFFD_THREAD << " Pages\n"
+  << " -b # page buffer size  - default: " << umap_cfg_get_bufsize() << " Pages\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.\n"
   << " -P # page size         - default: " << umap_cfg_get_pagesize() << endl;
@@ -75,7 +74,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
   testops->usemmap = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
-  testops->bufsize = umap_cfg_get_uffdthreads() * BUF_PER_UFFD_THREAD;
+  testops->bufsize = umap_cfg_get_bufsize();
   testops->uffdthreads = umap_cfg_get_uffdthreads();
   testops->filename = FILENAME;
   testops->pagesize = umap_cfg_get_pagesize();
