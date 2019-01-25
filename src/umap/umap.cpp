@@ -16,8 +16,6 @@
 #define _GNU_SOURCE
 #endif // _GNU_SOURCE
 
-//#define UMAP_CHECK_BUFFER_CONSISTENCY 1
-
 #include <iostream>
 #include <cinttypes>
 #include <vector>
@@ -33,9 +31,6 @@
 #include <cassert>
 #include <linux/userfaultfd.h>
 #include <sys/prctl.h>
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-#include <openssl/sha.h>
-#endif
 #include "umap/umap.h"               // API to library
 #include "umap/Store.h"
 #include "config.h"
@@ -133,9 +128,6 @@ class UserFaultHandler {
     void enable_wp_on_pages_and_wake(uint64_t, int64_t);
     void disable_wp_on_pages(uint64_t, int64_t, bool);
 #endif
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-    void print_event( const struct uffd_msg& );
-#endif
 };
 
 class umap_stats {
@@ -177,7 +169,6 @@ class umap_page_buffer {
     bool pages_still_present( void );
 
     umap_page* find_inmem_page_desc(void* page_addr);
-    void buffer_consistency_check( void );
 
   private:
     uint64_t page_buffer_size;
@@ -191,7 +182,6 @@ class umap_page_buffer {
 
 struct umap_page {
   bool page_is_dirty() { 
-    stop_if_page_invalid();
     return dirty;
   }
   void mark_page_dirty() { dirty = true; }
@@ -200,46 +190,7 @@ struct umap_page {
   void set_page(void* _p) { page = _p; }
   void* page;
   bool dirty;
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-  struct sha1bucket_t {
-    unsigned char sha1hash[SHA_DIGEST_LENGTH];
-  };
-  void set_hash(const char* buf) { 
-    SHA1((const unsigned char*)buf, umapPageSize, hash.sha1hash);
-  }
-  bool page_is_valid( void ) {
-    if ( page != nullptr && !dirty ) {
-      sha1bucket_t tmphash;
-      SHA1((const unsigned char*)page, umapPageSize, tmphash.sha1hash);
-      if (strncmp((const char*)tmphash.sha1hash, (const char*)hash.sha1hash, SHA_DIGEST_LENGTH) != 0) {
-        std::cerr << (void*)page << " WARNING: Dirty page found that was not previously marked dirty!\n";
-        return false;
-      }
-    }
-    return true;
-  }
-  void stop_if_page_invalid( void ) {
-    if ( ! page_is_valid() ) {
-      std::cerr << (void*)page << " " 
-        << "Dirty page found that was not previously marked dirty! Exiting\n";
-        exit(1);
-    }
-  }
-  sha1bucket_t hash;
-#else
-  bool page_is_valid( void ) { return true; };
-  void stop_if_page_invalid( void ) {};
-  void set_hash(const char*) {};
-#endif
 };
-
-void umap_page_buffer::buffer_consistency_check( void )
-{
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-  for (uint64_t i = 0; i < page_buffer_size; ++i)
-    (void)page_descriptor_array[i].page_is_valid();
-#endif
-}
 
 static std::unordered_map<void*, _umap*> active_umaps;
 
@@ -817,56 +768,12 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
-    pagebuffer->buffer_consistency_check();
-
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-    std::cerr << "Processing " << msgs << "/" << UMAP_UFFD_MAX_MESSAGES << " UFFD messages\n";
-#endif
-
     for (int i = 0; i < msgs; ++i) {
       assert("uffd_hander: Unexpected event" && (umessages[i].event == UFFD_EVENT_PAGEFAULT));
-
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-      print_event(umessages[i]);
-#endif
       pagefault_event(umessages[i]);       // At this point, we know we have had a page fault.  Let's handle it.
     }
   }
 }
-
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-void UserFaultHandler::print_event(const struct uffd_msg& 
-#ifdef UMAP_DEBUG_LOGGING
-    msg
-#endif
-)
-{
-#ifdef UMAP_DEBUG_LOGGING
-  void* page_begin = _umap::UMAP_PAGE_BEGIN( (void*)msg.arg.pagefault.address );
-  umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
-  std::stringstream ss;
-
-  ss << page_begin << " ";
-  if ( pm == nullptr )
-    ss << "NOT Present ";
-  else
-    ss << "    Present ";
-
-  ss << "{ " << std::hex << msg.arg.pagefault.flags, " ";
-  
-  if ( ! ( msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) )
-    ss << " READ ";
-  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP)
-    ss << " WP ";
-  if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)
-    ss << " WRITE ";
-  ss << "}\n";
-
-  std::cerr << ss.str();
-  debug_printf2("%s", ss.str().c_str());
-#endif
-}
-#endif
 
 void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 {
@@ -952,11 +859,6 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       exit(1);
     }
   }
-
-  if (!pm->page_is_valid()) {
-    std::cerr << page_begin << " Inconsistant right after UFFDIO_COPY(UFFDIO_COPY_MODE_WP)!\n";
-    exit(2);
-  }
 }
 
 bool UserFaultHandler::page_is_in_umap(const void* page_begin)
@@ -990,9 +892,6 @@ void UserFaultHandler::evict_page(umap_page* pb)
 {
   uint64_t* page = (uint64_t*)pb->get_page();
 
-#ifdef UMAP_CHECK_BUFFER_CONSISTENCY
-  std::cerr << (void*)page << " EVICT\n";
-#endif
   stat->evict_victims++;
   if (pb->page_is_dirty()) {
 #ifdef UMAP_RO_MODE
@@ -1084,7 +983,6 @@ umap_page* umap_page_buffer::alloc_page_desc(void* page, const char* input_buf)
     umap_page* p = page_descriptor_array + page_buffer_alloc_idx;
     page_buffer_alloc_idx = (page_buffer_alloc_idx + 1) % page_buffer_size;
     page_buffer_alloc_cnt++;
-    p->set_hash(input_buf);
     p->set_page(page);
     inmem_page_map[page] = p;
     debug_printf3("%p allocated for %p, free idx=%" PRIu64 " alloc idx=%" PRIu64 " cnt=%" PRIu64 "\n",
