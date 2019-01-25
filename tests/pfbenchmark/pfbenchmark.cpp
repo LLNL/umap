@@ -192,14 +192,23 @@ int main(int argc, char **argv)
   glb_array = (uint64_t*) utility::map_in_file(options.filename, options.initonly,
       options.noinit, options.usemmap, pagesize * options.numpages);
 
-  if (strcmp(argv[0], "pfbenchmark-read") == 0)
+  /*
+   * Get the program name
+   */
+  char* pname = strrchr(argv[0], '/');
+  if ( pname != NULL )
+    pname += 1;
+  else
+    pname = argv[0];
+
+  if (strcmp(pname, "pfbenchmark-read") == 0)
     rval = read_test(argc, argv);
-  else if (strcmp(argv[0], "pfbenchmark-write") == 0)
+  else if (strcmp(pname, "pfbenchmark-write") == 0)
     rval = write_test(argc, argv);
-  else if (strcmp(argv[0], "pfbenchmark-readmodifywrite") == 0)
+  else if (strcmp(pname, "pfbenchmark-readmodifywrite") == 0)
     rval = read_modify_write_test(argc, argv);
   else
-    cerr << "Unknown test mode " << argv[0] << "\n";
+    cerr << "Unknown test mode " << pname << "\n";
 
   print_stats();
   utility::unmap_file(options.usemmap, pagesize * options.numpages, glb_array);
