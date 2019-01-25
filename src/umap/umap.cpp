@@ -72,7 +72,7 @@ class UserFaultHandler;
 class _umap {
   friend UserFaultHandler;
   public:
-    _umap(void* _mmap_region, uint64_t _mmap_rsize, 
+    _umap(void* _mmap_region, uint64_t _mmap_rsize,
           void* _umap_region, uint64_t _umap_rsize,
           int fd, Store* _store_);
     ~_umap();
@@ -134,25 +134,17 @@ class umap_stats {
   public:
     umap_stats():
       dirty_evicts{0},
-      clean_evicts{0},
       evict_victims{0},
       wp_messages{0},
       read_faults{0},
-      write_faults{0},
-      sigbus{0},
-      stuck_wp{0},
-      dropped_dups{0}
+      write_faults{0}
       {};
 
     uint64_t dirty_evicts;
-    uint64_t clean_evicts;
     uint64_t evict_victims;
     uint64_t wp_messages;
     uint64_t read_faults;
     uint64_t write_faults;
-    uint64_t sigbus;
-    uint64_t stuck_wp;
-    uint64_t dropped_dups;
 };
 
 struct umap_PageBlock {
@@ -164,7 +156,7 @@ class umap_page_buffer {
   public:
     umap_page_buffer(UserFaultHandler* _ufh_, uint64_t pbuffersize);
     ~umap_page_buffer();
-    umap_page* alloc_page_desc(void* page, const char* input_buf);
+    umap_page* alloc_page_desc(void* page);
     void dealloc_page_desc( void );
     bool pages_still_present( void );
 
@@ -181,9 +173,7 @@ class umap_page_buffer {
 };
 
 struct umap_page {
-  bool page_is_dirty() { 
-    return dirty;
-  }
+  bool page_is_dirty() { return dirty; }
   void mark_page_dirty() { dirty = true; }
   void mark_page_clean() { dirty = false; }
   void* get_page(void) { return page; }
@@ -305,7 +295,7 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
   //
   uint64_t mmap_size = region_size + umapPageSize;
 
-  void* mmap_region = mmap(base_addr, mmap_size, 
+  void* mmap_region = mmap(base_addr, mmap_size,
                         prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
 
   if (mmap_region == MAP_FAILED) {
@@ -316,7 +306,7 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
   uint64_t umap_size = region_size;
 
   try {
-    active_umaps[umap_region] = new _umap{mmap_region, mmap_size, 
+    active_umaps[umap_region] = new _umap{mmap_region, mmap_size,
                                       umap_region, umap_size, fd, _store_};
   } catch(const std::exception& e) {
     std::cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << std::endl;
@@ -338,23 +328,15 @@ int uunmap(void*  addr, uint64_t length)
 
     debug_printf( "\n\t"
                 "Dirty Evictions: %" PRIu64 "\n\t"
-                "Clean Evictions: %" PRIu64 "\n\t"
                 "  Evict Victims: %" PRIu64 "\n\t"
                 "    WP Messages: %" PRIu64 "\n\t"
                 "    Read Faults: %" PRIu64 "\n\t"
-                "   Write Faults: %" PRIu64 "\n\t"
-                "  SIGBUS Errors: %" PRIu64 "\n\t"
-                "       Stuck WP: %" PRIu64 "\n\t"
-                "   Dropped Dups: %" PRIu64 "\n",
-                st.dirty_evicts, 
-                st.clean_evicts, 
+                "   Write Faults: %" PRIu64 "\n",
+                st.dirty_evicts,
                 st.evict_victims,
-                st.wp_messages, 
-                st.read_faults, 
-                st.write_faults,
-                st.sigbus, 
-                st.stuck_wp, 
-                st.dropped_dups);
+                st.wp_messages,
+                st.read_faults,
+                st.write_faults);
 
       delete it->second;
       active_umaps.erase(it);
@@ -401,7 +383,7 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize )
   uint64_t old_size = umap_buffer_size;
 
   if ( page_bufsize > max_size ) {
-    debug_printf("Bufsize of %" PRIu64 " larger than maximum of %ld.  Setting to %ld\n", 
+    debug_printf("Bufsize of %" PRIu64 " larger than maximum of %ld.  Setting to %ld\n",
         page_bufsize, max_size, max_size);
     umap_buffer_size = max_size;
   }
@@ -458,25 +440,17 @@ void umap_cfg_get_stats(void* region, struct umap_cfg_stats* stats)
 
   if (it != active_umaps.end()) {
     stats->dirty_evicts = 0;
-    stats->clean_evicts = 0;
     stats->evict_victims = 0;
     stats->wp_messages = 0;
     stats->read_faults = 0;
     stats->write_faults = 0;
-    stats->sigbus = 0;
-    stats->stuck_wp = 0;
-    stats->dropped_dups = 0;
 
     for ( auto handler : it->second->ufault_handlers ) {
       stats->dirty_evicts += handler->stat->dirty_evicts;
-      stats->clean_evicts += handler->stat->clean_evicts;
       stats->evict_victims += handler->stat->evict_victims;
       stats->wp_messages += handler->stat->wp_messages;
       stats->read_faults += handler->stat->read_faults;
       stats->write_faults += handler->stat->write_faults;
-      stats->sigbus += handler->stat->sigbus;
-      stats->stuck_wp += handler->stat->stuck_wp;
-      stats->dropped_dups += handler->stat->dropped_dups;
     }
   }
 }
@@ -660,8 +634,8 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const std::vector<umap_PageBlock>
 #endif
     };
 
-    debug_printf2("Register %lu Pages from: %p - %p\n", 
-        (seg.length / umapPageSize), seg.base, 
+    debug_printf2("Register %lu Pages from: %p - %p\n",
+        (seg.length / umapPageSize), seg.base,
         (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
     if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
@@ -815,9 +789,9 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   /*
    * Keep trying to obtain a free page descriptor until we get one..
    */
-  for ( pm = pagebuffer->alloc_page_desc(page_begin, copyin_buf); 
-        pm == nullptr; 
-        pm = pagebuffer->alloc_page_desc(page_begin, copyin_buf))
+  for ( pm = pagebuffer->alloc_page_desc(page_begin);
+        pm == nullptr;
+        pm = pagebuffer->alloc_page_desc(page_begin))
   {
     pagebuffer->dealloc_page_desc();
   }
@@ -878,14 +852,10 @@ void UserFaultHandler::flushbuffers( void )
 void UserFaultHandler::resetstats( void )
 {
   stat->dirty_evicts = 0;
-  stat->clean_evicts = 0;
   stat->evict_victims = 0;
   stat->wp_messages = 0;
   stat->read_faults = 0;
   stat->write_faults = 0;
-  stat->sigbus = 0;
-  stat->stuck_wp = 0;
-  stat->dropped_dups = 0;
 }
 
 void UserFaultHandler::evict_page(umap_page* pb)
@@ -908,9 +878,6 @@ void UserFaultHandler::evict_page(umap_page* pb)
       assert(0);
     }
 #endif
-  }
-  else {
-    stat->clean_evicts++;
   }
 
   if (madvise((void*)page, umapPageSize, MADV_DONTNEED) == -1) {
@@ -963,7 +930,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
 // umap_page_buffer class implementation
 //
 umap_page_buffer::umap_page_buffer(UserFaultHandler* _ufh_, uint64_t pbuffersize)
-  : ufh{_ufh_}, page_buffer_size{pbuffersize}, page_buffer_alloc_idx{0}, 
+  : ufh{_ufh_}, page_buffer_size{pbuffersize}, page_buffer_alloc_idx{0},
     page_buffer_free_idx{0}, page_buffer_alloc_cnt{0}
 {
   page_descriptor_array = (umap_page *)calloc(page_buffer_size, sizeof(umap_page));
@@ -977,7 +944,7 @@ umap_page_buffer::~umap_page_buffer()
   free(page_descriptor_array);
 }
 
-umap_page* umap_page_buffer::alloc_page_desc(void* page, const char* input_buf)
+umap_page* umap_page_buffer::alloc_page_desc(void* page)
 {
   if ( page_buffer_alloc_cnt < page_buffer_size ) {
     umap_page* p = page_descriptor_array + page_buffer_alloc_idx;
@@ -999,12 +966,12 @@ bool umap_page_buffer::pages_still_present( void )
 
 void umap_page_buffer::dealloc_page_desc( void )
 {
-  umap_page* p = page_buffer_alloc_cnt ? 
+  umap_page* p = page_buffer_alloc_cnt ?
                     page_descriptor_array + page_buffer_free_idx : nullptr;
 
   if ( p != nullptr ) {
     debug_printf3("%p freed for %p, free idx=%" PRIu64 " alloc idx=%" PRIu64 " cnt=%" PRIu64 "\n",
-        p, p->get_page(), page_buffer_alloc_idx, 
+        p, p->get_page(), page_buffer_alloc_idx,
         page_buffer_free_idx, page_buffer_alloc_cnt);
     page_buffer_free_idx = (page_buffer_free_idx + 1) % page_buffer_size;
     page_buffer_alloc_cnt--;

@@ -108,17 +108,11 @@ void print_stats( void )
     struct umap_cfg_stats s;
     umap_cfg_get_stats(glb_array, &s);
 
-    //cout << s.dirty_evicts << " Dirty Evictions\n";
-    //cout << s.clean_evicts << " Clean Evictions\n";
-    //cout << s.evict_victims << " Victims\n";
-    //cout << s.wp_messages << " WP Faults\n";
-    //cout << s.read_faults << " Read Faults\n";
-    //cout << s.write_faults << " Write Faults\n";
-    if (s.sigbus)
-      cout << s.sigbus << " SIGBUS Signals\n";
-    if (s.stuck_wp)
-      cout << s.stuck_wp << " Stuck WP Workarounds\n";
-    //cout << s.dropped_dups << " Dropped Duplicates\n";
+    cout << s.dirty_evicts << " Dirty Evictions\n";
+    cout << s.evict_victims << " Victims\n";
+    cout << s.wp_messages << " WP Faults\n";
+    cout << s.read_faults << " Read Faults\n";
+    cout << s.write_faults << " Write Faults\n";
   }
 }
 
