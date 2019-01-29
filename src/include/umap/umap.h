@@ -87,14 +87,10 @@ int umap_cfg_set_pagesize( long psize );
 
 struct umap_cfg_stats {
     uint64_t dirty_evicts;
-    uint64_t clean_evicts;
     uint64_t evict_victims;
     uint64_t wp_messages;
     uint64_t read_faults;
     uint64_t write_faults;
-    uint64_t sigbus;
-    uint64_t stuck_wp;
-    uint64_t dropped_dups;
 };
 
 void umap_cfg_get_stats(void* region, struct umap_cfg_stats* stats);
