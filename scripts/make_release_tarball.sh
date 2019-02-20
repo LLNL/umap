@@ -7,7 +7,7 @@
 #############################################################################
 
 TAR_CMD=tar
-VERSION=0.0.4
+VERSION=1.0.0
 
 git archive --prefix=umap-${VERSION}/ -o umap-${VERSION}.tar HEAD 2> /dev/null
 
