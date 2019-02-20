@@ -1,16 +1,8 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2018, Lawrence Livermore National Security, LLC.
-// Produced at the Lawrence Livermore National Laboratory
+// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// UMAP Project Developers. See the top-level LICENSE file for details.
 //
-// Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
-// LLNL-CODE-733797
-//
-// All rights reserved.
-//
-// This file is part of UMAP.
-//
-// For details, see https://github.com/LLNL/umap
-// Please also see the COPYRIGHT and LICENSE files for LGPL license.
+// SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
 #ifndef _COMMANDLING_HPP
 #define _COMMANDLING_HPP
@@ -30,22 +22,17 @@ typedef struct {
   int initonly;       // Just perform initialization, then quit
   int noinit;         // Init already done, so skip it
   int usemmap;
-  int shuffle;
 
   long pagesize;
   uint64_t numpages;
   uint64_t numthreads;
   uint64_t bufsize;
   uint64_t uffdthreads;
-  uint64_t pages_to_access;  // 0 (default) - access all pages
   char const* filename; // file name or basename
-  char const* dirname; // dir name or basename
 } umt_optstruct_t;
 
-static char const* DIRNAME = "/mnt/intel/";
-static char const* FILENAME = "abc";
+static char const* FILENAME = "testfile";
 const uint64_t NUMPAGES = 10000000;
-const uint64_t BUF_PER_UFFD_THREAD = 1024;
 const uint64_t NUMTHREADS = 2;
 
 using namespace std;
@@ -59,14 +46,12 @@ static void usage(char* pname)
   << " --initonly             - Initialize file, then stop\n"
   << " --noinit               - Use previously initialized file\n"
   << " --usemmap              - Use mmap instead of umap\n"
-  << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
   << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
-  << " -b # page buffer size  - default: " << umap_cfg_get_uffdthreads() * BUF_PER_UFFD_THREAD << " Pages\n"
+  << " -b # page buffer size  - default: " << umap_cfg_get_bufsize() << " Pages\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
-  << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
-  << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n"
+  << " -f [file name]         - backing file name.\n"
   << " -P # page size         - default: " << umap_cfg_get_pagesize() << endl;
   exit(1);
 }
@@ -79,14 +64,11 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
   testops->initonly = 0;
   testops->noinit = 0;
   testops->usemmap = 0;
-  testops->shuffle = 0;
-  testops->pages_to_access = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
-  testops->bufsize = umap_cfg_get_uffdthreads() * BUF_PER_UFFD_THREAD;
+  testops->bufsize = umap_cfg_get_bufsize();
   testops->uffdthreads = umap_cfg_get_uffdthreads();
   testops->filename = FILENAME;
-  testops->dirname = DIRNAME;
   testops->pagesize = umap_cfg_get_pagesize();
 
   while (1) {
@@ -95,12 +77,11 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
       {"initonly",  no_argument,  &testops->initonly, 1 },
       {"noinit",    no_argument,  &testops->noinit,   1 },
       {"usemmap",   no_argument,  &testops->usemmap,  1 },
-      {"shuffle",   no_argument,  &testops->shuffle,  1 },
       {"help",      no_argument,  NULL,  0 },
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:d:u:a:P:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:b:u:P:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -136,12 +117,6 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
         if ((testops->uffdthreads = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
-      case 'a':
-        testops->pages_to_access = strtoull(optarg, nullptr, 0);
-        break;
-      case 'd':
-        testops->dirname = optarg;
-        break;
       case 'f':
         testops->filename = optarg;
         break;
@@ -149,11 +124,6 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
       R0:
         usage(pname);
     }
-  }
-
-  if (testops->numpages < testops->pages_to_access) {
-    cerr << "Invalid -a argument " << testops->pages_to_access << "\n";
-    usage(pname);
   }
 
   if (optind < argc) {

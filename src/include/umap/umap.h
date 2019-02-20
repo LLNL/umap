@@ -1,16 +1,8 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2018, Lawrence Livermore National Security, LLC.
-// Produced at the Lawrence Livermore National Laboratory
+// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// UMAP Project Developers. See the top-level LICENSE file for details.
 //
-// Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
-// LLNL-CODE-733797
-//
-// All rights reserved.
-//
-// This file is part of UMAP.
-//
-// For details, see https://github.com/LLNL/umap
-// Please also see the COPYRIGHT and LICENSE files for LGPL license.
+// SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
 #ifndef _UMAP_H_
 #define _UMAP_H_
@@ -87,14 +79,10 @@ int umap_cfg_set_pagesize( long psize );
 
 struct umap_cfg_stats {
     uint64_t dirty_evicts;
-    uint64_t clean_evicts;
     uint64_t evict_victims;
     uint64_t wp_messages;
     uint64_t read_faults;
     uint64_t write_faults;
-    uint64_t sigbus;
-    uint64_t stuck_wp;
-    uint64_t dropped_dups;
 };
 
 void umap_cfg_get_stats(void* region, struct umap_cfg_stats* stats);

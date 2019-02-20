@@ -1,16 +1,8 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright (c) 2018, Lawrence Livermore National Security, LLC.
-// Produced at the Lawrence Livermore National Laboratory
+// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// UMAP Project Developers. See the top-level LICENSE file for details.
 //
-// Created by Marty McFadden, 'mcfadden8 at llnl dot gov'
-// LLNL-CODE-733797
-//
-// All rights reserved.
-//
-// This file is part of UMAP.
-//
-// For details, see https://github.com/LLNL/umap
-// Please also see the COPYRIGHT and LICENSE files for LGPL license.
+// SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -108,17 +100,11 @@ void print_stats( void )
     struct umap_cfg_stats s;
     umap_cfg_get_stats(glb_array, &s);
 
-    //cout << s.dirty_evicts << " Dirty Evictions\n";
-    //cout << s.clean_evicts << " Clean Evictions\n";
-    //cout << s.evict_victims << " Victims\n";
-    //cout << s.wp_messages << " WP Faults\n";
-    //cout << s.read_faults << " Read Faults\n";
-    //cout << s.write_faults << " Write Faults\n";
-    if (s.sigbus)
-      cout << s.sigbus << " SIGBUS Signals\n";
-    if (s.stuck_wp)
-      cout << s.stuck_wp << " Stuck WP Workarounds\n";
-    //cout << s.dropped_dups << " Dropped Duplicates\n";
+    cout << s.dirty_evicts << " Dirty Evictions\n";
+    cout << s.evict_victims << " Victims\n";
+    cout << s.wp_messages << " WP Faults\n";
+    cout << s.read_faults << " Read Faults\n";
+    cout << s.write_faults << " Write Faults\n";
   }
 }
 
@@ -198,14 +184,23 @@ int main(int argc, char **argv)
   glb_array = (uint64_t*) utility::map_in_file(options.filename, options.initonly,
       options.noinit, options.usemmap, pagesize * options.numpages);
 
-  if (strcmp(argv[0], "pfbenchmark-read") == 0)
+  /*
+   * Get the program name
+   */
+  char* pname = strrchr(argv[0], '/');
+  if ( pname != NULL )
+    pname += 1;
+  else
+    pname = argv[0];
+
+  if (strcmp(pname, "pfbenchmark-read") == 0)
     rval = read_test(argc, argv);
-  else if (strcmp(argv[0], "pfbenchmark-write") == 0)
+  else if (strcmp(pname, "pfbenchmark-write") == 0)
     rval = write_test(argc, argv);
-  else if (strcmp(argv[0], "pfbenchmark-readmodifywrite") == 0)
+  else if (strcmp(pname, "pfbenchmark-readmodifywrite") == 0)
     rval = read_modify_write_test(argc, argv);
   else
-    cerr << "Unknown test mode " << argv[0] << "\n";
+    cerr << "Unknown test mode " << pname << "\n";
 
   print_stats();
   utility::unmap_file(options.usemmap, pagesize * options.numpages, glb_array);
