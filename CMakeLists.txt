@@ -20,14 +20,9 @@ include(cmake/SetupUmapThirdParty.cmake)
 set(UMAP_DEBUG_LOGGING ${ENABLE_LOGGING})
 configure_file(
   ${PROJECT_SOURCE_DIR}/config/config.h.in
-  ${PROJECT_BINARY_DIR}/src/include/config.h)
+  ${PROJECT_BINARY_DIR}/src/umap/config.h)
 
-set (UMAPINCLUDEDIRS
-    "${CMAKE_BINARY_DIR}/src/include"
-    "${CMAKE_SOURCE_DIR}/src/include"
-    "${CMAKE_SOURCE_DIR}/src/logging"
-    "${CMAKE_SOURCE_DIR}/src/store"
-    )
+include_directories ( "${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src")
 
 add_subdirectory(src)
 add_subdirectory(examples)

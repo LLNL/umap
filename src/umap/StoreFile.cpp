@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include "umap/Store.h"
 #include "StoreFile.h"
-#include "spindle_debug.h"
 #include <iostream>
 #include <sstream>
 #include <string>

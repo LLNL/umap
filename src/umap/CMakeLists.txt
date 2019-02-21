@@ -5,17 +5,25 @@
 # SPDX-License-Identifier: LGPL-2.1-only
 #############################################################################
 project(umap_libraries)
+
+set(umapheaders
+      config.h
+      Exception.hpp
+      Logger.hpp
+      Macros.hpp
+      StoreFile.h
+      Store.h
+      umap.h)
+
 set(umapsrc
+    Exception.cpp
+    Logger.cpp
+    Store.cpp
+    StoreFile.cpp
     umap.cpp
-    ../store/Store.cpp
-    ../store/StoreFile.cpp
-)
+    ${umapheaders})
 
 if ( ENABLE_LOGGING )
-  set(umapsrc ${umapsrc}
-    ../logging/spindle_logc.c
-    ../logging/spindle_mkdir.c
-  )
 endif()
 
 find_package(Threads REQUIRED)
@@ -26,27 +34,9 @@ target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
-include_directories( AFTER
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${UMAPINCLUDEDIRS}
-)
-
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin )
 
-install(FILES
-  ${CMAKE_SOURCE_DIR}/src/include/umap/umap.h
-  ${CMAKE_SOURCE_DIR}/src/include/umap/Store.h
-  DESTINATION include/umap)
-
-if ( ENABLE_LOGGING )
-  add_executable(umap_logd ../logging/spindle_logd.cpp)
-  target_link_libraries (umap_logd ${CMAKE_THREAD_LIBS_INIT})
-
-  install(FILES ${PROJECT_BINARY_DIR}/umap_logd
-    DESTINATION libexec
-    PERMISSIONS OWNER_EXECUTE OWNER_READ GROUP_EXECUTE GROUP_READ
-  )
-endif()
+install(FILES umap.h Store.h DESTINATION include/umap)

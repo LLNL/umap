@@ -23,10 +23,11 @@
 #include <cassert>
 #include <linux/userfaultfd.h>
 #include <sys/prctl.h>
+
 #include "umap/umap.h"               // API to library
 #include "umap/Store.h"
-#include "config.h"
-#include "spindle_debug.h"
+#include "umap/config.h"
+#include "umap/Macros.hpp"
 
 #ifndef UFFDIO_COPY_MODE_WP
 #define UMAP_RO_MODE
@@ -189,15 +190,13 @@ static inline bool required_uffd_features_present(int fd)
   };
 
   if (ioctl(fd, UFFDIO_API, &uffdio_api) == -1) {
-    perror("ERROR: UFFDIO_API Failed: ");
+    UMAP_ERROR("UFFDIO_API Failed: ");
     return false;
   }
 
 #ifndef UMAP_RO_MODE
-  if ( !(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) ) {
-    std::cerr << "UFFD Compatibilty Check - unsupported userfaultfd WP\n";
-    return false;
-  }
+  if ( !(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) )
+    UMAP_ERROR("UFFD Compatibilty Check - unsupported userfaultfd WP");
 #endif
 
   return true;
@@ -238,7 +237,7 @@ static inline long get_max_buf_size( void )
         if (file >> mem) {
           total_mem_kb = mem;
         } else {
-          std::cerr << "UMAP unable to determine system memory size\n";
+          UMAP_ERROR("UMAP unable to determine system memory size\n");
           total_mem_kb = oneK * oneK;
         }
       }
@@ -261,21 +260,15 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
   if (check_uffd_compatibility() < 0)
     return NULL;
 
-  if ( (region_size % umapPageSize) ) {
-    std::cerr << "UMAP: Region size " << region_size << " is not a multple of umapPageSize (" << umapPageSize << ")\n";
-    return NULL;
-  }
+  if ( (region_size % umapPageSize) )
+    UMAP_ERROR("UMAP: Region size " << region_size << " is not a multple of umapPageSize (" << umapPageSize << ")");
 
-  if ( ((uint64_t)base_addr & (umapPageSize - 1)) ) {
-    std::cerr << "umap: base_addr must be page aligned: " << base_addr
-      << ", page size is: " << umapPageSize << std::endl;
-    return NULL;
-  }
+  if ( ((uint64_t)base_addr & (umapPageSize - 1)) )
+    UMAP_ERROR("umap: base_addr must be page aligned: " << base_addr
+      << ", page size is: " << umapPageSize);
 
-  if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
-    std::cerr << "umap: Invalid flags: " << std::hex << flags << std::endl;
-    return UMAP_FAILED;
-  }
+  if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED))
+    UMAP_ERROR("umap: Invalid flags: " << std::hex << flags);
 
   //
   // When dealing with umap-page-sizes that could be multiples of the actual
@@ -291,7 +284,7 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
                         prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
 
   if (mmap_region == MAP_FAILED) {
-    perror("ERROR: mmap failed: ");
+    UMAP_ERROR("mmap failed: ");
     return UMAP_FAILED;
   }
   void* umap_region = _umap::UMAP_PAGE_BEGIN((void*)((uint64_t)mmap_region + (umapPageSize-1)));
@@ -301,11 +294,9 @@ void* umap_ex(void* base_addr, uint64_t region_size, int prot, int flags,
     active_umaps[umap_region] = new _umap{mmap_region, mmap_size,
                                       umap_region, umap_size, fd, _store_};
   } catch(const std::exception& e) {
-    std::cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << std::endl;
-    return UMAP_FAILED;
+    UMAP_ERROR(" Failed to launch _umap: " << e.what());
   } catch(...) {
-    std::cerr << "umap failed to instantiate _umap object\n";
-    return UMAP_FAILED;
+    UMAP_ERROR("umap failed to instantiate _umap object");
   }
   return umap_region;
 }
@@ -318,21 +309,15 @@ int uunmap(void*  addr, uint64_t length)
     struct umap_cfg_stats st;
     umap_cfg_get_stats(addr, &st);
 
-    debug_printf( "\n\t"
-                "Dirty Evictions: %" PRIu64 "\n\t"
-                "  Evict Victims: %" PRIu64 "\n\t"
-                "    WP Messages: %" PRIu64 "\n\t"
-                "    Read Faults: %" PRIu64 "\n\t"
-                "   Write Faults: %" PRIu64 "\n",
-                st.dirty_evicts,
-                st.evict_victims,
-                st.wp_messages,
-                st.read_faults,
-                st.write_faults);
+    UMAP_LOG(Debug, "Dirty Evictions: " << st.dirty_evicts
+                    << "\nEvict Victims: " << st.evict_victims
+                    << "\nWP Messages: " << st.wp_messages
+                    << "\nRead Faults: " << st.read_faults
+                    << "\nWrite Faults: " << st.write_faults);
 
       delete it->second;
       active_umaps.erase(it);
-    }
+  }
   return 0;
 }
 
@@ -375,14 +360,16 @@ void umap_cfg_set_bufsize( uint64_t page_bufsize )
   uint64_t old_size = umap_buffer_size;
 
   if ( page_bufsize > max_size ) {
-    debug_printf("Bufsize of %" PRIu64 " larger than maximum of %ld.  Setting to %ld\n",
-        page_bufsize, max_size, max_size);
+    UMAP_LOG(Error, "Bufsize of " << page_bufsize
+                    << " larger than maximum of " << max_size
+                    << " Setting to " << max_size );
     umap_buffer_size = max_size;
   }
   else {
     umap_buffer_size = page_bufsize;
   }
-  debug_printf("Bufsize changed from %ld to %lu pages\n", old_size, umap_buffer_size);
+  UMAP_LOG(Debug,
+    "Bufsize changed from " << old_size << " to " << umap_buffer_size << " pages");
 }
 
 uint64_t umap_cfg_get_uffdthreads( void )
@@ -415,12 +402,10 @@ int umap_cfg_set_pagesize( long psize )
   /*
    * Must be multiple of system page size
    */
-  if ( psize % sys_psize ) {
-    std::cerr << "Specified page size (" << psize << ") must be a multiple of system page size (" << sys_psize << ")\n";
-    return -1;
-  }
+  if ( psize % sys_psize )
+    UMAP_ERROR("Specified page size (" << psize << ") must be a multiple of system page size (" << sys_psize << ")");
 
-  debug_printf("Adjusting page size from %ld to %ld\n", umapPageSize, psize);
+  UMAP_LOG(Debug, "Adjusting page size from " << umapPageSize << " to " << psize);
 
   umapPageSize = psize;
   return 0;
@@ -459,12 +444,8 @@ void umap_cfg_reset_stats(void* region)
 
 void __attribute ((constructor)) init_umap_lib( void )
 {
-  LOGGING_INIT;
-
-  if ((umapPageSize = sysconf(_SC_PAGESIZE)) == -1) {
-    perror("ERROR: sysconf(_SC_PAGESIZE)");
-    throw -1;
-  }
+  if ((umapPageSize = sysconf(_SC_PAGESIZE)) == -1)
+    UMAP_ERROR("Call to sysconf(_SC_PAGESIZE) Failed");
 
   umap_buffer_size = get_max_buf_size();
 
@@ -472,7 +453,6 @@ void __attribute ((constructor)) init_umap_lib( void )
   uffd_threads = (n == 0) ? 16 : n;
 
   umap_cfg_getenv();
-  LOGGING_FINI;
 }
 
 void __attribute ((destructor)) fine_umap_lib( void )
@@ -511,9 +491,7 @@ _umap::_umap( void* _mmap_region,
   uint64_t region_pages_per_worker = region_pages / num_workers;
   uint64_t region_residual_pages = region_pages % num_workers;
 
-#ifdef UMAP_DEBUG_LOGGING
-  std::stringstream ss;
-  ss << "umap("
+  UMAP_LOG(Debug,  "umap("
     << umapRegion << " - " << (void*)((char*)umapRegion+umapRegionSize) << ")\n\t"
     << umapPageSize << " Page Size\n\t"
     << umap_buffer_size << " UMAP Buffer Size in Pages\n\t"
@@ -524,10 +502,7 @@ _umap::_umap( void* _mmap_region,
     << buffer_pages_per_worker << " Buffer Pages per worker\n\t"
     << buffer_residual_pages << " Residual Buffer pages\n\t"
     << region_pages_per_worker << " Region Pages per worker\n\t"
-    << region_residual_pages << " Risidual Buffer pages"
-    << std::endl;
-  debug_printf("%s\n", ss.str().c_str());
-#endif
+    << region_residual_pages << " Residual Buffer pages");
 
   try {
     uint64_t region_offset = 0;
@@ -561,11 +536,9 @@ _umap::_umap( void* _mmap_region,
       region_offset += worker_region_pages;
     }
   } catch(const std::exception& e) {
-    std::cerr << __FUNCTION__ << " Failed to launch _umap: " << e.what() << std::endl;
-    throw -1;
+    UMAP_ERROR(" Failed to launch _umap: " << e.what());
   } catch(...) {
-    std::cerr << "umap failed to instantiate _umap object\n";
-    throw -1;
+    UMAP_ERROR("umap failed to instantiate _umap object");
   }
 }
 
@@ -598,23 +571,17 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const std::vector<umap_PageBlock>
 {
   umessages.resize(UMAP_UFFD_MAX_MESSAGES);
 
-  if (posix_memalign((void**)&copyin_buf, (uint64_t)umapPageSize, (umapPageSize * 2))) {
-    std::cerr << "ERROR: posix_memalign: failed\n";
-    exit(1);
-  }
+  if (posix_memalign((void**)&copyin_buf, (uint64_t)umapPageSize, (umapPageSize * 2)))
+    UMAP_ERROR("posix_memalign: failed");
 
-  if (copyin_buf == nullptr) {
-    std::cerr << "Unable to allocate " << (umapPageSize * 2) << " bytes for temporary buffer\n";
-    exit(1);
-  }
+  if (copyin_buf == nullptr)
+    UMAP_ERROR("Unable to allocate " << (umapPageSize * 2) << " bytes for temporary buffer");
 
-  if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
-    perror("ERROR: userfaultfd syscall not available in this kernel");
-    throw -1;
-  }
+  if ((userfault_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0)
+    UMAP_ERROR("userfaultfd syscall not available in this kernel");
 
   if ( ! required_uffd_features_present(userfault_fd) )
-    exit(1);
+    UMAP_ERROR("UFFD Features not present");
 
   for ( auto seg : PageBlocks ) {
     struct uffdio_register uffdio_register = {
@@ -626,21 +593,16 @@ UserFaultHandler::UserFaultHandler(_umap* _um, const std::vector<umap_PageBlock>
 #endif
     };
 
-    debug_printf2("Register %lu Pages from: %p - %p\n",
-        (seg.length / umapPageSize), seg.base,
-        (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
+    UMAP_LOG(Debug,
+        "Register " << (seg.length / umapPageSize)
+        << " Pages from: " << seg.base
+        << " - " << (void*)((uint64_t)seg.base + (uint64_t)(seg.length-1)));
 
-    if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
-      perror("ERROR: ioctl/uffdio_register");
-      close(userfault_fd);
-      throw -1;
-    }
+    if (ioctl(userfault_fd, UFFDIO_REGISTER, &uffdio_register) == -1)
+      UMAP_ERROR("ioctl/uffdio_register");
 
-    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS) {
-      std::cerr << "unexpected userfaultfd ioctl set\n";
-      close(userfault_fd);
-      throw -1;
-    }
+    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS)
+      UMAP_ERROR("unexpected userfaultfd ioctl set");
   }
 
   uffd_worker = new std::thread{&UserFaultHandler::uffd_handler, this};
@@ -656,10 +618,8 @@ UserFaultHandler::~UserFaultHandler(void)
     uffdio_register.range.start = (uint64_t)seg.base;
     uffdio_register.range.len = seg.length;
 
-    if (ioctl(userfault_fd, UFFDIO_UNREGISTER, &uffdio_register.range)) {
-      perror("ERROR: UFFDIO_UNREGISTER");
-      exit(1);
-    }
+    if (ioctl(userfault_fd, UFFDIO_UNREGISTER, &uffdio_register.range))
+      UMAP_LOG(Error, "UFFDIO_UNREGISTER Failed (ignored)");
   }
 
   free(copyin_buf);
@@ -697,21 +657,18 @@ void UserFaultHandler::uffd_handler(void)
 
     switch (pollres) {
       case -1:
-        perror("ERROR: poll/userfaultfd");
+        UMAP_ERROR("poll/userfaultfd");
         continue;
       case 0:
         continue;
       case 1:
         break;
       default:
-        std::cerr << __FUNCTION__ << " unexpected uffdio poll result\n";
-        exit(1);
+        UMAP_ERROR(" unexpected uffdio poll result");
     }
 
-    if (pollfd[0].revents & POLLERR) {
-      std::cerr << __FUNCTION__ << " POLLERR\n";
-      exit(1);
-    }
+    if (pollfd[0].revents & POLLERR)
+      UMAP_ERROR(" POLLERR");
 
     if ( !(pollfd[0].revents & POLLIN) )
       continue;
@@ -721,18 +678,15 @@ void UserFaultHandler::uffd_handler(void)
     if (readres == -1) {
       if (errno == EAGAIN)
         continue;
-      perror("ERROR: read/userfaultfd");
-      exit(1);
+      UMAP_ERROR("read/userfaultfd");
     }
 
     assert(readres % sizeof(struct uffd_msg) == 0);
 
     int msgs = readres / sizeof(struct uffd_msg);
 
-    if (msgs < 1) {
-      std::cerr << __FUNCTION__ << "invalid msg size " << readres << " " << msgs;
-      exit(1);
-    }
+    if (msgs < 1)
+      UMAP_ERROR("invalid msg size " << readres << " " << msgs);
 
     for (int i = 0; i < msgs; ++i) {
       assert("uffd_hander: Unexpected event" && (umessages[i].event == UFFD_EVENT_PAGEFAULT));
@@ -754,16 +708,17 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
       pm->mark_page_dirty();
       disable_wp_on_pages((uint64_t)page_begin, 1, false);
       stat->wp_messages++;
-      debug_printf2("Present page written, marking %p dirty\n", page_begin);
+      UMAP_LOG(Debug,
+          "Present page written, marking " << page_begin << " dirty");
     }
 #else
     if ( msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE ) {
-      assert("Write operation not allowed without WP support" && 0);
+      UMAP_ERROR("Write operation not allowed without WP support");
     }
 #endif
     else {
-      debug_printf2("Spurious fault for page %p which is already present\n",
-          page_begin);
+      UMAP_LOG(Debug, "Spurious fault for page " << page_begin
+                      << " which is already present");
     }
     return;
   }
@@ -774,7 +729,7 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
   off_t offset=(uint64_t)page_begin - (uint64_t)_u->umapRegion;
 
   if (_u->store->read_from_store(copyin_buf, umapPageSize, offset) == -1) {
-    perror("ERROR: read_from_store failed");
+    UMAP_ERROR("read_from_store failed");
     exit(1);
   }
 
@@ -796,22 +751,20 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 
 #ifndef UMAP_RO_MODE
   if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
-    debug_printf3("Write Fault: Copying in dirty page %p\n", page_begin);
+    UMAP_LOG(Debug, "Write Fault: Copying in dirty page " << page_begin);
     stat->write_faults++;
     pm->mark_page_dirty();
 
-    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-      perror("ERROR: ioctl(UFFDIO_COPY nowake)");
-      exit(1);
-    }
+    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1)
+      UMAP_ERROR("UFFDIO_COPY ioctl failed");
   }
 #else
   if (msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) {
-    assert("Write operation not allowed without WP support" && 0);
+    UMAP_ERROR("Write operation not allowed without WP support");
   }
 #endif
   else {
-    debug_printf3("Read Fault: Copying in page %p\n", page_begin);
+    UMAP_LOG(Debug, "Read Fault: Copying in page " << page_begin);
     stat->read_faults++;
     pm->mark_page_clean();
 
@@ -820,10 +773,8 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 #else
     copy.mode = 0;
 #endif
-    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
-      perror("ERROR: ioctl(UFFDIO_COPY nowake)");
-      exit(1);
-    }
+    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1)
+      UMAP_ERROR("ioctl(UFFDIO_COPY nowake)");
   }
 }
 
@@ -865,17 +816,13 @@ void UserFaultHandler::evict_page(umap_page* pb)
 
     enable_wp_on_pages_and_wake((uint64_t)page, 1);
 
-    if (_u->store->write_to_store((char*)page, umapPageSize, (off_t)((uint64_t)page - (uint64_t)_u->umapRegion)) == -1) {
-      perror("ERROR: write_to_store failed");
-      assert(0);
-    }
+    if (_u->store->write_to_store((char*)page, umapPageSize, (off_t)((uint64_t)page - (uint64_t)_u->umapRegion)) == -1)
+      UMAP_ERROR("write_to_store failed");
 #endif
   }
 
-  if (madvise((void*)page, umapPageSize, MADV_DONTNEED) == -1) {
-    perror("ERROR: madvise");
-    assert(0);
-  }
+  if (madvise((void*)page, umapPageSize, MADV_DONTNEED) == -1)
+    UMAP_ERROR("madvise");
 
   pb->set_page(nullptr);
 }
@@ -895,10 +842,8 @@ void UserFaultHandler::enable_wp_on_pages_and_wake(uint64_t start, int64_t num_p
   wp.range.len = num_pages * umapPageSize;
   wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-  if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
-    perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Enable)");
-    exit(1);
-  }
+  if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1)
+    UMAP_ERROR("ioctl(UFFDIO_WRITEPROTECT Enable)");
 }
 
 //
@@ -912,7 +857,7 @@ void UserFaultHandler::disable_wp_on_pages(uint64_t start, int64_t num_pages, bo
   wp.mode = do_not_awaken ? UFFDIO_WRITEPROTECT_MODE_DONTWAKE : 0;
 
   if (ioctl(userfault_fd, UFFDIO_WRITEPROTECT, &wp) == -1) {
-    perror("ERROR: ioctl(UFFDIO_WRITEPROTECT Disable)");
+    UMAP_ERROR("ioctl(UFFDIO_WRITEPROTECT Disable)");
     exit(1);
   }
 }
@@ -944,8 +889,10 @@ umap_page* umap_page_buffer::alloc_page_desc(void* page)
     page_buffer_alloc_cnt++;
     p->set_page(page);
     inmem_page_map[page] = p;
-    debug_printf3("%p allocated for %p, free idx=%" PRIu64 " alloc idx=%" PRIu64 " cnt=%" PRIu64 "\n",
-        p, page, page_buffer_free_idx, page_buffer_alloc_idx, page_buffer_alloc_cnt);
+    UMAP_LOG(Debug, p << " allocated for " << page
+        << ", free idx=" << page_buffer_free_idx
+        << ", allocation idx=" << page_buffer_alloc_idx
+        << ", cnt=" << page_buffer_alloc_cnt);
     return p;
   }
   return nullptr;
@@ -962,9 +909,10 @@ void umap_page_buffer::dealloc_page_desc( void )
                     page_descriptor_array + page_buffer_free_idx : nullptr;
 
   if ( p != nullptr ) {
-    debug_printf3("%p freed for %p, free idx=%" PRIu64 " alloc idx=%" PRIu64 " cnt=%" PRIu64 "\n",
-        p, p->get_page(), page_buffer_alloc_idx,
-        page_buffer_free_idx, page_buffer_alloc_cnt);
+    UMAP_LOG(Debug, p << " freed for " << p->get_page()
+                    << ", free idx=" << page_buffer_free_idx
+                    << ", alloc idx=" << page_buffer_alloc_idx
+                    << ", cnt=" << page_buffer_alloc_cnt);
     page_buffer_free_idx = (page_buffer_free_idx + 1) % page_buffer_size;
     page_buffer_alloc_cnt--;
     inmem_page_map.erase(p->get_page());
