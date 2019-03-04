@@ -6,7 +6,7 @@
 //////////////////////////////////////////////////////////////////////////////
 #include <unistd.h>
 #include <stdio.h>
-#include "umap/Store.h"
+#include "umap/store/Store.hpp"
 #include "StoreFile.h"
 #include <iostream>
 #include <sstream>

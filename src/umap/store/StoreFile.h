@@ -7,7 +7,7 @@
 #ifndef _UMAP_STORE_FILE_H_
 #define _UMAP_STORE_FILE_H_
 #include <cstdint>
-#include "umap/Store.h"
+#include "umap/store/Store.hpp"
 #include "umap/umap.h"
 
 class StoreFile : public Store {

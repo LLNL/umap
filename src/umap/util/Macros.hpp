@@ -7,7 +7,7 @@
 #ifndef UMAP_Macros_HPP
 #define UMAP_Macros_HPP
 
-#include "umap/Exception.hpp"
+#include "umap/util/Exception.hpp"
 #include "umap/config.h"
 
 #include <sstream>
@@ -22,7 +22,7 @@
 
 #ifdef UMAP_DEBUG_LOGGING
 
-#include "umap/Logger.hpp"
+#include "umap/util/Logger.hpp"
 #define UMAP_LOG( lvl, msg )                                                  \
 {                                                                             \
   if (Umap::Logger::getActiveLogger()->logLevelEnabled(Umap::message::lvl)) { \

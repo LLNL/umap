@@ -9,7 +9,7 @@
 
 #ifdef __cplusplus
   #include <cstdint>
-  #include "umap/Store.h"
+  #include "umap/store/Store.hpp"
   #include <unistd.h>
   #include <sys/mman.h>
 #else // __cplusplus

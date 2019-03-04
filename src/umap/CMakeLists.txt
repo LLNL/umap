@@ -8,19 +8,25 @@ project(umap_libraries)
 
 set(umapheaders
       config.h
-      Exception.hpp
-      Logger.hpp
-      Macros.hpp
-      StoreFile.h
-      Store.h
-      umap.h)
+      FaultMonitor.hpp
+      PageInWorkers.hpp
+      PageOutWorkers.hpp
+      store/StoreFile.h
+      store/Store.hpp
+      umap.h
+      util/Exception.hpp
+      util/Logger.hpp
+      util/Macros.hpp)
 
 set(umapsrc
-    Exception.cpp
-    Logger.cpp
-    Store.cpp
-    StoreFile.cpp
+    FaultMonitor.cpp
+    PageInWorkers.cpp
+    PageOutWorkers.cpp
+    store/Store.cpp
+    store/StoreFile.cpp
     umap.cpp
+    util/Exception.cpp
+    util/Logger.cpp
     ${umapheaders})
 
 if ( ENABLE_LOGGING )
@@ -39,4 +45,4 @@ install(TARGETS umap umap-static
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin )
 
-install(FILES umap.h Store.h DESTINATION include/umap)
+install(FILES umap.h store/Store.hpp DESTINATION include/umap)

@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#include "umap/Exception.hpp"
+#include "umap/util/Exception.hpp"
 
 #include <sstream>
 

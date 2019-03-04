@@ -25,9 +25,9 @@
 #include <sys/prctl.h>
 
 #include "umap/umap.h"               // API to library
-#include "umap/Store.h"
+#include "umap/store/Store.hpp"
 #include "umap/config.h"
-#include "umap/Macros.hpp"
+#include "umap/util/Macros.hpp"
 
 #ifndef UFFDIO_COPY_MODE_WP
 #define UMAP_RO_MODE
@@ -97,7 +97,6 @@ class UserFaultHandler {
       _u->uffd_time_to_stop_working = true;
       uffd_worker->join();
     };
-    bool page_is_in_umap(const void* page_begin);
     umap_page_buffer* get_pagebuffer() { return pagebuffer; }
     void flushbuffers( void );
     void resetstats( void );
@@ -776,14 +775,6 @@ void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
     if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1)
       UMAP_ERROR("ioctl(UFFDIO_COPY nowake)");
   }
-}
-
-bool UserFaultHandler::page_is_in_umap(const void* page_begin)
-{
-  for ( auto it : PageBlocks )
-    if (page_begin >= it.base && page_begin < (void*)((uint64_t)it.base + it.length))
-      return true;
-  return false;
 }
 
 void UserFaultHandler::flushbuffers( void )

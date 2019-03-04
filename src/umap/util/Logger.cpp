@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#include "umap/Logger.hpp"
+#include "umap/util/Logger.hpp"
 
 #include <iostream>   // for std::cout, std::cerr
 #include <mutex>
