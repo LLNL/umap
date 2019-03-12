@@ -25,6 +25,7 @@
 
 #include "umap/FaultMonitor.hpp"
 #include "umap/util/Macros.hpp"
+#include "umap/util/Pthread.hpp"
 #include "umap/store/Store.hpp"
 
 namespace Umap {
@@ -53,17 +54,20 @@ FaultMonitor::FaultMonitor(
   register_uffd();
 }
 
-#ifdef UMAP_RO_MODE
-  const uint64_t uffd_features = 0;
-#else
-  const uint64_t uffd_features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
-#endif
+FaultMonitor::~FaultMonitor( void )
+{
+}
 
 void FaultMonitor::check_uffd_compatibility( void )
 {
   struct uffdio_api uffdio_api = {
       .api = UFFD_API
-    , .features = uffd_features
+#ifdef UMAP_RO_MODE
+    , .features = 0
+#else
+    , .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
+#endif
+
     , .ioctls = 0
   };
 
@@ -76,10 +80,6 @@ void FaultMonitor::check_uffd_compatibility( void )
     UMAP_ERROR("UFFD Compatibilty Check - unsupported userfaultfd WP");
   }
 #endif
-}
-
-FaultMonitor::~FaultMonitor( void )
-{
 }
 
 void FaultMonitor::register_uffd( void )

@@ -16,7 +16,8 @@ set(umapheaders
       umap.h
       util/Exception.hpp
       util/Logger.hpp
-      util/Macros.hpp)
+      util/Macros.hpp
+      util/Pthread.hpp)
 
 set(umapsrc
     FaultMonitor.cpp

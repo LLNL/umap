@@ -8,10 +8,15 @@
 #define _UMAP_FaultMonitor_HPP
 
 #include <cstdint>
+#include <vector>
 
 #include "umap/store/Store.hpp"
+#include "umap/util/Pthread.hpp"
 
 namespace Umap {
+
+class Pthread;
+
 class FaultMonitor {
   public:
     FaultMonitor(
@@ -35,6 +40,7 @@ class FaultMonitor {
     uint64_t m_page_size;
     uint64_t m_max_fault_events;
     int      m_uffd_fd;
+    Pthread* m_monitor;
 
     void check_uffd_compatibility( void );
     void register_uffd( void );
