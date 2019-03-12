@@ -9,10 +9,10 @@ project(umap_libraries)
 set(umapheaders
       config.h
       FaultMonitor.hpp
-      PageInWorkers.hpp
-      PageOutWorkers.hpp
+      FaultMonitorManager.hpp
       store/StoreFile.h
       store/Store.hpp
+      Uffd.hpp
       umap.h
       util/Exception.hpp
       util/Logger.hpp
@@ -20,10 +20,10 @@ set(umapheaders
 
 set(umapsrc
     FaultMonitor.cpp
-    PageInWorkers.cpp
-    PageOutWorkers.cpp
+    FaultMonitorManager.cpp
     store/Store.cpp
     store/StoreFile.cpp
+    Uffd.cpp
     umap.cpp
     util/Exception.cpp
     util/Logger.cpp

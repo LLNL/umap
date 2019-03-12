@@ -97,6 +97,7 @@ uint64_t do_read_modify_write_pages(uint64_t page_step, uint64_t pages)
 void print_stats( void )
 {
   if (!usemmap) {
+#if 0
     struct umap_cfg_stats s;
     umap_cfg_get_stats(glb_array, &s);
 
@@ -105,6 +106,7 @@ void print_stats( void )
     cout << s.wp_messages << " WP Faults\n";
     cout << s.read_faults << " Read Faults\n";
     cout << s.write_faults << " Write Faults\n";
+#endif
   }
 }
 

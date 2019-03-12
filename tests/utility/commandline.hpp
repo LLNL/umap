@@ -54,12 +54,12 @@ static void usage(char* pname)
   << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
-  << " -u # of uffd threads   - default: " << umap_cfg_get_uffdthreads() << " worker threads\n"
-  << " -b # page buffer size  - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -u # of uffd threads   - default: " << umapcfg_get_num_page_in_workers() << " worker threads\n"
+  << " -b # page buffer size  - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
   << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n"
-  << " -P # page size         - default: " << umap_cfg_get_pagesize() << endl;
+  << " -P # page size         - default: " << umapcfg_get_umap_page_size() << endl;
   exit(1);
 }
 
@@ -75,11 +75,11 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
   testops->pages_to_access = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
-  testops->bufsize = umap_cfg_get_bufsize();
-  testops->uffdthreads = umap_cfg_get_uffdthreads();
+  testops->bufsize = umapcfg_get_max_pages_in_buffer();
+  testops->uffdthreads = umapcfg_get_num_page_in_workers();
   testops->filename = FILENAME;
   testops->dirname = DIRNAME;
-  testops->pagesize = umap_cfg_get_pagesize();
+  testops->pagesize = umapcfg_get_umap_page_size();
 
   while (1) {
     int option_index = 0;
@@ -106,9 +106,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
 
       case 'P':
         if ((testops->pagesize = strtol(optarg, nullptr, 0)) > 0) {
-          if (umap_cfg_set_pagesize(testops->pagesize) < 0) {
-            goto R0;
-          }
+          umapcfg_set_umap_page_size(testops->pagesize);
           break;
         }
         goto R0;
@@ -163,15 +161,17 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
    * buffer size requires that the number of threads be set properly
    * first.
    */
-  if (testops->uffdthreads != umap_cfg_get_uffdthreads())
-    umap_cfg_set_uffdthreads(testops->uffdthreads);
+  if (testops->uffdthreads != umapcfg_get_num_page_in_workers()) {
+    umapcfg_set_num_page_in_workers(testops->uffdthreads);
+    umapcfg_set_num_page_out_workers(testops->uffdthreads);
+  }
 
-  umap_cfg_set_bufsize(testops->bufsize);
+  umapcfg_set_max_pages_in_buffer(testops->bufsize);
 }
 
 long umt_getpagesize(void)
 {
-  return umap_cfg_get_pagesize();
+  return umapcfg_get_umap_page_size();
 }
 }
 #endif // _COMMANDLING_HPP

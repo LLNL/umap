@@ -7,29 +7,37 @@
 #ifndef _UMAP_FaultMonitor_HPP
 #define _UMAP_FaultMonitor_HPP
 
+#include <cstdint>
+
+#include "umap/store/Store.hpp"
 
 namespace Umap {
 class FaultMonitor {
   public:
     FaultMonitor(
-          char* _region_base_address
-        , uint64_t _region_size_in_bytes
-        , bool _read_only
-        , uint64_t _page_size
-        , uint64_t _max_uffd_events
+          Store* store
+        , char*        region
+        , uint64_t     region_size
+        , char*        mmap_region
+        , uint64_t     mmap_region_size
+        , uint64_t     page_size
+        , uint64_t     max_fault_events
     );
 
+    ~FaultMonitor( void );
+
   private:
-    char* m_region_base_address;
-    uint64_t m_region_size_in_bytes;
-    bool m_read_only;
+    Store*   m_store;
+    char*    m_region;
+    uint64_t m_region_size;
+    char*    m_mmap_region;
+    uint64_t m_mmap_region_size;
     uint64_t m_page_size;
-    uint64_t m_max_uffd_events;
-    int m_uffd_fd;
+    uint64_t m_max_fault_events;
+    int      m_uffd_fd;
 
-    void start_page_event_dispatcher( void );
-
-    void stop_page_event_dispatcher( void );
+    void check_uffd_compatibility( void );
+    void register_uffd( void );
 };
 } // end of namespace Umap
 

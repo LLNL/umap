@@ -33,7 +33,7 @@ static void usage(char* pname)
   << " --noinit                     - No Initialization\n"
   << " --directio                   - Use O_DIRECT for file IO\n"
   << " --usemmap                    - Use mmap instead of umap\n"
-  << " -b # of pages in page buffer - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -b # of pages in page buffer - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
   << " -c # of churn pages          - default: " << NUMCHURNPAGES << " Pages\n"
   << " -l # of load pages           - default: " << NUMLOADPAGES << " Pages\n"
   << " -t # of churn threads        - default: " << NUMCHURNTHREADS << endl
@@ -60,7 +60,7 @@ void getoptions(options_t& testops, int& argc, char **argv)
   testops.num_load_writer_threads=NUMLOADWRITERS;
   testops.fn=FILENAME;
   testops.testduration=TESTDURATION;
-  testops.page_buffer_size = umap_cfg_get_bufsize();
+  testops.page_buffer_size = umapcfg_get_max_pages_in_buffer();
 
   while (1) {
     int option_index = 0;
@@ -129,6 +129,6 @@ void getoptions(options_t& testops, int& argc, char **argv)
     usage(pname);
   }
 
-  umap_cfg_set_bufsize(testops.page_buffer_size);
+  umapcfg_set_max_pages_in_buffer(testops.page_buffer_size);
 }
 
