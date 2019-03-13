@@ -29,7 +29,7 @@ struct Version {
 //
 class FaultMonitorManager {
   public:
-    static FaultMonitorManager& getInstance( void );
+    static FaultMonitorManager* getInstance( void );
 
     void makeFaultMonitor(
           Store*   store
@@ -68,7 +68,8 @@ class FaultMonitorManager {
     uint64_t m_num_page_in_workers;
     uint64_t m_num_page_out_workers;
     uint64_t m_max_fault_events;
-    std::unordered_map<char*, FaultMonitor*> m_active_umaps;
+    std::unordered_map<void*, FaultMonitor*> m_active_umaps;
+
     static FaultMonitorManager* s_fault_monitor_manager_instance;
 
     FaultMonitorManager( void );

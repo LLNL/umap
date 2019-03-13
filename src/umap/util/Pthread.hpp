@@ -17,24 +17,24 @@ public:
 
    // Returns true if the thread was successfully started, false if there was
    // an error starting the thread
-   bool StartInternalThread() {
-      return (pthread_create(&_thread, NULL, InternalThreadEntryFunc, this) == 0);
+   bool StartThread() {
+      return (pthread_create(&_thread, NULL, ThreadEntryFunc, this) == 0);
    }
 
    // Will not return until the internal thread has exited.
-   void WaitForInternalThreadToExit() {
+   void WaitForThreadToExit() {
       (void) pthread_join(_thread, NULL);
    }
 
 protected:
    // Implement this method in your subclass with the code you want your thread
    // to run.
-   virtual void InternalThreadEntry() = 0;
+   virtual void ThreadEntry() = 0;
 
 private:
    static void*
-     InternalThreadEntryFunc(void * This) {
-       ((Pthread *)This)->InternalThreadEntry();
+     ThreadEntryFunc(void * This) {
+       ((Pthread *)This)->ThreadEntry();
        return NULL;
      }
 

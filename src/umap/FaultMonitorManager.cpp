@@ -25,7 +25,7 @@ namespace Umap {
 FaultMonitorManager* FaultMonitorManager::s_fault_monitor_manager_instance = nullptr;
 static const uint64_t MAX_FAULT_EVENTS = 256;
 
-FaultMonitorManager&
+FaultMonitorManager*
 FaultMonitorManager::getInstance( void )
 {
   if (!s_fault_monitor_manager_instance) {
@@ -33,7 +33,7 @@ FaultMonitorManager::getInstance( void )
   }
 
   UMAP_LOG(Debug, "() returning " << s_fault_monitor_manager_instance);
-  return *s_fault_monitor_manager_instance;
+  return s_fault_monitor_manager_instance;
 }
 
 void
@@ -45,25 +45,26 @@ FaultMonitorManager::makeFaultMonitor(
   , uint64_t mmap_region_size
 )
 {
-  auto fm = new FaultMonitor(
-          store
-        , region
-        , region_size
-        , mmap_region
-        , mmap_region_size
-        , get_umap_page_size()
-        , get_max_fault_events()
-    );
-  m_active_umaps[region] = fm;
+  m_active_umaps[(void*)region] = new FaultMonitor(
+                                                  store
+                                                , region
+                                                , region_size
+                                                , mmap_region
+                                                , mmap_region_size
+                                                , get_umap_page_size()
+                                                , get_max_fault_events()
+                                            );
 }
 
 void
-FaultMonitorManager::destroyFaultMonitor( char* mmap_region )
+FaultMonitorManager::destroyFaultMonitor( char* region )
 {
-  auto it = m_active_umaps.find(mmap_region);
+  UMAP_LOG(Debug, "region: " << (void*)region);
+
+  auto it = m_active_umaps.find(region);
 
   if (it == m_active_umaps.end())
-    UMAP_ERROR("umap fault monitor not found for: " << (void*)mmap_region);
+    UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
   delete it->second;
   m_active_umaps.erase(it);

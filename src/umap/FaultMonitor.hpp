@@ -8,43 +8,46 @@
 #define _UMAP_FaultMonitor_HPP
 
 #include <cstdint>
+#include <pthread.h>
 #include <vector>
 
 #include "umap/store/Store.hpp"
-#include "umap/util/Pthread.hpp"
 
 namespace Umap {
+  class FaultMonitor {
+    public:
+      FaultMonitor(
+            Store*   store
+          , char*    region
+          , uint64_t region_size
+          , char*    mmap_region
+          , uint64_t mmap_region_size
+          , uint64_t page_size
+          , uint64_t max_fault_events
+      );
 
-class Pthread;
+      ~FaultMonitor( void );
 
-class FaultMonitor {
-  public:
-    FaultMonitor(
-          Store* store
-        , char*        region
-        , uint64_t     region_size
-        , char*        mmap_region
-        , uint64_t     mmap_region_size
-        , uint64_t     page_size
-        , uint64_t     max_fault_events
-    );
+    private:
+      Store*    m_store;
+      char*     m_region;
+      uint64_t  m_region_size;
+      char*     m_mmap_region;
+      uint64_t  m_mmap_region_size;
+      uint64_t  m_page_size;
+      uint64_t  m_max_fault_events;
+      int       m_uffd_fd;
+      bool      m_time_to_stop;
+      pthread_t m_monitor;
 
-    ~FaultMonitor( void );
+      void check_uffd_compatibility( void );
+      void register_uffd( void );
 
-  private:
-    Store*   m_store;
-    char*    m_region;
-    uint64_t m_region_size;
-    char*    m_mmap_region;
-    uint64_t m_mmap_region_size;
-    uint64_t m_page_size;
-    uint64_t m_max_fault_events;
-    int      m_uffd_fd;
-    Pthread* m_monitor;
-
-    void check_uffd_compatibility( void );
-    void register_uffd( void );
-};
+      void start_thread();
+      void stop_thread();
+      void monitor_thread();
+      static void* monitor_thread_starter(void * This);
+  };
 } // end of namespace Umap
 
 #endif // _UMAP_FaultMonitor_HPP
