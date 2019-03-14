@@ -10,17 +10,19 @@
 #include "umap/store/Store.hpp"
 #include "umap/umap.h"
 
-class StoreFile : public Store {
-  public:
-    StoreFile(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd_);
+namespace Umap {
+  class StoreFile : public Store {
+    public:
+      StoreFile(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd_);
 
-    ssize_t read_from_store(char* buf, size_t nb, off_t off);
-    ssize_t  write_to_store(char* buf, size_t nb, off_t off);
-  private:
-    void* region;
-    void* alignment_buffer;
-    size_t rsize;
-    size_t alignsize;
-    int fd;
-};
+      ssize_t read_from_store(char* buf, size_t nb, off_t off);
+      ssize_t  write_to_store(char* buf, size_t nb, off_t off);
+    private:
+      void* region;
+      void* alignment_buffer;
+      size_t rsize;
+      size_t alignsize;
+      int fd;
+  };
+}
 #endif

@@ -8,24 +8,30 @@ project(umap_libraries)
 
 set(umapheaders
       config.h
+      Buffer.hpp
       FaultMonitor.hpp
       FaultMonitorManager.hpp
-      store/StoreFile.h
-      store/Store.hpp
+      PageOutWorkers.hpp
+      PageInWorkers.hpp
       Uffd.hpp
       umap.h
+      store/StoreFile.h
+      store/Store.hpp
       util/Exception.hpp
       util/Logger.hpp
       util/Macros.hpp
       util/Pthread.hpp)
 
 set(umapsrc
+    Buffer.cpp
     FaultMonitor.cpp
     FaultMonitorManager.cpp
-    store/Store.cpp
-    store/StoreFile.cpp
+    PageOutWorkers.cpp
+    PageInWorkers.cpp
     Uffd.cpp
     umap.cpp
+    store/Store.cpp
+    store/StoreFile.cpp
     util/Exception.cpp
     util/Logger.cpp
     ${umapheaders})

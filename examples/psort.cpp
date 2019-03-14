@@ -62,6 +62,7 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
     return;
   }
 
+#if 0
   uint64_t *arr = (uint64_t *) base_addr;
   cout << "Initializing Array\n";
 
@@ -71,6 +72,8 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
 
   cout << "Sorting Data\n";
   __gnu_parallel::sort(arr, &arr[arraysize], std::less<uint64_t>(), __gnu_parallel::quicksort_tag());
+
+#endif
 
   if (uunmap(base_addr, totalbytes) < 0) {
     int eno = errno;
@@ -132,6 +135,8 @@ int main(int argc, char **argv)
   umapcfg_set_max_pages_in_buffer( pagesInTest / 2 );
 
   initialize_and_sort_file(filename, arraySize, totalBytes);
+#if 0
   verify_sortfile(filename, arraySize, totalBytes);
+#endif
   return 0;
 }

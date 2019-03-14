@@ -7,12 +7,17 @@
 #ifndef _UMAP_WorkQueue_HPP
 #define _UMAP_WorkQueue_HPP
 
-#include <pthread.h>
+#include <list>
 
-#include "umap/Macros.hpp"
+#include <cstdint>
+#include <pthread.h>
+#include <unistd.h>
+
+#include "umap/Uffd.hpp"
+#include "umap/store/Store.hpp"
+#include "umap/util/Macros.hpp"
 
 namespace Umap {
-
 template <typename T>
 class WorkQueue {
   public:
@@ -23,10 +28,10 @@ class WorkQueue {
 
     ~WorkQueue() {
       pthread_mutex_destroy(&m_mutex);
-      pthread_cond_destroy(&cond_v);
+      pthread_cond_destroy(&m_cond);
     }
 
-    enqueue(T item) {
+    void enqueue(T item) {
       pthread_mutex_lock(&m_mutex);
       m_queue.push_back(item);
       pthread_cond_signal(&m_cond);
@@ -37,7 +42,7 @@ class WorkQueue {
       pthread_mutex_lock(&m_mutex);
 
       while ( m_queue.size() == 0 )
-        pthread_cond_wait(&m_condv, &m_mutex);
+        pthread_cond_wait(&m_cond, &m_mutex);
 
       auto item = m_queue.front();
       m_queue.pop_front();
@@ -55,10 +60,26 @@ class WorkQueue {
 
   private:
     pthread_mutex_t m_mutex;
-    pthread_mutex_t m_cond;
+    pthread_cond_t m_cond;
     std::list<T> m_queue;
 };
 
+struct PageOutWorkItem {
+  Store* store;
+  void* region;
+  std::size_t size;
+  std::size_t alignsize;
+  int fd;
+};
+
+struct PageInWorkItem {
+  Uffd* uffd;
+  Store* store;
+  void* region;
+  std::size_t size;
+  std::size_t alignsize;
+  int fd;
+};
 } // end of namespace Umap
 
 #endif // _UMAP_WorkQueue_HPP

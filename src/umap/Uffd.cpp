@@ -34,15 +34,21 @@ namespace Umap {
 
 Uffd::Uffd( char*    region
           , uint64_t region_size
-          , bool     read_only
           , uint64_t max_fault_events
           , uint64_t page_size
       ) :   m_region(region)
           , m_region_size(region_size)
-          , m_read_only(read_only)
           , m_max_fault_events(max_fault_events)
           , m_page_size(page_size)
 {
+  UMAP_LOG(Debug, "Hello from Userfaultfd!"
+      << "\n               region: " 
+          << (void*)m_region << " - " << (void*)(m_region+(m_region_size-1))
+      << "\n          region size: " << m_region_size
+      << "\n maximum fault events: " << m_max_fault_events
+      << "\n            page size: " << m_page_size
+  );
+
   if ((m_uffd_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0)
     UMAP_ERROR("userfaultfd syscall not available in this kernel: "
         << strerror(errno));
@@ -216,17 +222,16 @@ void Uffd::copy_in_page_and_write_protect(char* data, char* page_address)
 
 void Uffd::check_uffd_compatibility( void )
 {
+    struct uffdio_api uffdio_api = {
+        .api = UFFD_API
 #ifdef UMAP_RO_MODE
-  if ( ! m_read_only ) {
-    UMAP_ERROR("Write operations not allowed in Read-Only build");
-  }
-  struct uffdio_api uffdio_api = {.api = UFFD_API, .features = 0, .ioctls = 0};
+      , .features = 0
 #else
-  struct uffdio_api uffdio_api;
-  uffdio_api.api = UFFD_API;
-  uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
-  uffdio_api.ioctls = 0;
-#endif // UMAP_RO_MODE
+      , .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
+#endif
+
+      , .ioctls = 0
+    };
 
   if (ioctl(m_uffd_fd, UFFDIO_API, &uffdio_api) == -1)
     UMAP_ERROR("ioctl(UFFDIO_API) Failed: " << strerror(errno));

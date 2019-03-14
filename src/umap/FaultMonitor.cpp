@@ -25,7 +25,10 @@
 #include "umap/config.h"
 
 #include "umap/FaultMonitor.hpp"
+#include "umap/Uffd.hpp"
+
 #include "umap/store/Store.hpp"
+
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
@@ -46,67 +49,16 @@ namespace Umap {
             , m_max_fault_events(max_fault_events)
             , m_time_to_stop(false)
   {
-    if ((m_uffd_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0) {
-      UMAP_ERROR("userfaultfd syscall not available in this kernel");
-    }
+    m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
 
-    check_uffd_compatibility();
-    register_uffd();
     start_thread();
   }
 
   FaultMonitor::~FaultMonitor( void )
   {
     stop_thread();
+    delete m_uffd;
   }
-
-  void FaultMonitor::check_uffd_compatibility( void )
-  {
-    struct uffdio_api uffdio_api = {
-        .api = UFFD_API
-#ifdef UMAP_RO_MODE
-      , .features = 0
-#else
-      , .features = UFFD_FEATURE_PAGEFAULT_FLAG_WP
-#endif
-
-      , .ioctls = 0
-    };
-
-    if (ioctl(m_uffd_fd, UFFDIO_API, &uffdio_api) == -1)
-      UMAP_ERROR("ioctl(UFFDIO_API) Failed: " << strerror(errno));
-
-#ifndef UMAP_RO_MODE
-    if ( !(uffdio_api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) )
-      UMAP_ERROR("UFFD Compatibilty Check - unsupported userfaultfd WP");
-#endif
-  }
-
-  void FaultMonitor::register_uffd( void )
-  {
-    struct uffdio_register uffdio_register = {
-      .range = {  .start = (uint64_t)m_region
-                , .len = m_region_size}
-#ifndef UMAP_RO_MODE
-                , .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
-#else
-                , .mode = UFFDIO_REGISTER_MODE_MISSING
-#endif
-    };
-
-    UMAP_LOG(Debug,
-      "Register " << (uffdio_register.range.len / m_page_size)
-      << " Pages from: " << (void*)(uffdio_register.range.start)
-      << " - " << (void*)(uffdio_register.range.start + (uffdio_register.range.len-1)));
-
-    if (ioctl(m_uffd_fd, UFFDIO_REGISTER, &uffdio_register) == -1)
-      UMAP_ERROR("ioctl(UFFDIO_REGISTER) failed: " << strerror(errno));
-
-    if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS)
-      UMAP_ERROR("unexpected userfaultfd ioctl set: " << uffdio_register.ioctls);
-  }
-
-#include <unistd.h>
 
   void FaultMonitor::start_thread()
   {
@@ -124,21 +76,21 @@ namespace Umap {
   }
 
   void FaultMonitor::monitor_thread() {
-    UMAP_LOG(Debug, "\nEntry: "
-        << "\n  m_store: " <<  (void*)m_store
-        << "\n  m_region: " <<  (void*)m_region
-        << "\n  m_region_size: " <<  m_region_size
-        << "\n  m_mmap_region: " <<  (void*)m_mmap_region
+    UMAP_LOG(Debug, "\nThe UFFD Monitor says hello: "
+        << "\n             m_store: " <<  (void*)m_store
+        << "\n            m_region: " <<  (void*)m_region
+        << "\n       m_region_size: " <<  m_region_size
+        << "\n       m_mmap_region: " <<  (void*)m_mmap_region
         << "\n  m_mmap_region_size: " <<  m_mmap_region_size
-        << "\n  m_page_size: " <<  m_page_size
+        << "\n         m_page_size: " <<  m_page_size
         << "\n  m_max_fault_events: " <<  m_max_fault_events
-        << "\n  m_uffd_fd: " <<  m_uffd_fd
-        << "\n  m_monitor: " <<  m_monitor
+        << "\n           m_uffd_fd: " <<  m_uffd_fd
+        << "\n           m_monitor: " <<  m_monitor
     );
 
     while ( ! m_time_to_stop ) {
-      UMAP_LOG(Debug, "Hello");
-      sleep(5);
+      if (m_uffd->get_page_events() == false)
+        continue;
     }
 
     UMAP_LOG(Debug, "Bye");

@@ -20,7 +20,6 @@ class Uffd {
   public:
     Uffd(   char*    region
           , uint64_t region_size
-          , bool     read_only
           , uint64_t max_fault_events
           , uint64_t page_size
     );
@@ -44,7 +43,6 @@ class Uffd {
   private:
     char*    m_region;
     uint64_t m_region_size;
-    bool     m_read_only;
     uint64_t m_max_fault_events;
     uint64_t m_page_size;
     int      m_uffd_fd;

@@ -7,11 +7,17 @@
 #ifndef _UMAP_FaultMonitor_HPP
 #define _UMAP_FaultMonitor_HPP
 
+#include "umap/config.h"
+
 #include <cstdint>
 #include <pthread.h>
 #include <vector>
 
+#include "umap/PageInWorkers.hpp"
+#include "umap/PageOutWorkers.hpp"
+#include "umap/Uffd.hpp"
 #include "umap/store/Store.hpp"
+#include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
   class FaultMonitor {
@@ -38,15 +44,20 @@ namespace Umap {
       uint64_t  m_max_fault_events;
       int       m_uffd_fd;
       bool      m_time_to_stop;
+
       pthread_t m_monitor;
-
-      void check_uffd_compatibility( void );
-      void register_uffd( void );
-
       void start_thread();
       void stop_thread();
       void monitor_thread();
       static void* monitor_thread_starter(void * This);
+
+      Uffd* m_uffd;
+
+      WorkQueue<PageInWorkItem>*  m_pagein_wq;
+      PageInWorkers* m_pagein_workers;
+
+      WorkQueue<PageOutWorkItem>* m_pageout_wq;
+      PageOutWorkers* m_pageout_workers;
   };
 } // end of namespace Umap
 
