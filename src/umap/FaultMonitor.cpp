@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <string.h>             // strerror()
 #include <unistd.h>             // syscall()
 #include <linux/userfaultfd.h>  // ioctl(UFFDIO_*)
@@ -30,6 +29,7 @@
 #include "umap/store/Store.hpp"
 
 #include "umap/util/Macros.hpp"
+#include "umap/util/PthreadPool.hpp"
 
 namespace Umap {
   FaultMonitor::FaultMonitor(
@@ -40,42 +40,30 @@ namespace Umap {
           , uint64_t mmap_region_size
           , uint64_t page_size
           , uint64_t max_fault_events
-        ) :   m_store(store)
+        ) :   PthreadPool(1)
+            , m_store(store)
             , m_region(region)
             , m_region_size(region_size)
             , m_mmap_region(mmap_region)
             , m_mmap_region_size(mmap_region_size)
             , m_page_size(page_size)
             , m_max_fault_events(max_fault_events)
-            , m_time_to_stop(false)
   {
     m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
+    m_pagein_wq = new WorkQueue<PageInWorkItem>;
+    m_pageout_wq = new WorkQueue<PageOutWorkItem>;
 
-    start_thread();
+    start_thread_pool();
   }
 
   FaultMonitor::~FaultMonitor( void )
   {
-    stop_thread();
+    delete m_pageout_wq;
+    delete m_pagein_wq;
     delete m_uffd;
   }
 
-  void FaultMonitor::start_thread()
-  {
-    int error = pthread_create(&m_monitor, NULL, monitor_thread_starter, this);
-
-    if (error)
-      UMAP_ERROR("pthread_create failed: " << strerror(error));
-  }
-
-  void FaultMonitor::stop_thread()
-  {
-    UMAP_LOG(Debug, "Stoping " << (void*)m_monitor);
-    m_time_to_stop = true;
-    (void) pthread_join(m_monitor, NULL);
-  }
-
-  void FaultMonitor::monitor_thread() {
+  void FaultMonitor::ThreadEntry() {
     UMAP_LOG(Debug, "\nThe UFFD Monitor says hello: "
         << "\n             m_store: " <<  (void*)m_store
         << "\n            m_region: " <<  (void*)m_region
@@ -85,19 +73,13 @@ namespace Umap {
         << "\n         m_page_size: " <<  m_page_size
         << "\n  m_max_fault_events: " <<  m_max_fault_events
         << "\n           m_uffd_fd: " <<  m_uffd_fd
-        << "\n           m_monitor: " <<  m_monitor
     );
 
-    while ( ! m_time_to_stop ) {
+    while ( ! time_to_stop_thread_pool() ) {
       if (m_uffd->get_page_events() == false)
         continue;
     }
 
     UMAP_LOG(Debug, "Bye");
-  }
-
-  void* FaultMonitor::monitor_thread_starter(void * This) {
-    ((FaultMonitor *)This)->monitor_thread();
-    return NULL;
   }
 } // end of namespace Umap

@@ -10,17 +10,17 @@
 #include "umap/config.h"
 
 #include <cstdint>
-#include <pthread.h>
 #include <vector>
 
 #include "umap/PageInWorkers.hpp"
 #include "umap/PageOutWorkers.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/store/Store.hpp"
+#include "umap/util/PthreadPool.hpp"
 #include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-  class FaultMonitor {
+  class FaultMonitor : PthreadPool {
     public:
       FaultMonitor(
             Store*   store
@@ -34,6 +34,9 @@ namespace Umap {
 
       ~FaultMonitor( void );
 
+    protected:
+      void ThreadEntry();
+
     private:
       Store*    m_store;
       char*     m_region;
@@ -43,13 +46,6 @@ namespace Umap {
       uint64_t  m_page_size;
       uint64_t  m_max_fault_events;
       int       m_uffd_fd;
-      bool      m_time_to_stop;
-
-      pthread_t m_monitor;
-      void start_thread();
-      void stop_thread();
-      void monitor_thread();
-      static void* monitor_thread_starter(void * This);
 
       Uffd* m_uffd;
 

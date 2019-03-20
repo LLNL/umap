@@ -9,35 +9,32 @@
 
 #include "umap/config.h"
 
-#include <pthread.h>
 #include <vector>
 
 #include "umap/Buffer.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
+#include "umap/util/PthreadPool.hpp"
 #include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-  class PageOutWorkers {
+  class PageOutWorkers : PthreadPool {
     public:
       PageOutWorkers(
-            Buffer* buffer
+            uint64_t num_workers
+          , Buffer* buffer
           , Store* store
           , WorkQueue<PageOutWorkItem>* wq
       );
 
-      ~PageOutWorkers( void );
+      virtual ~PageOutWorkers( void );
 
     private:
       Buffer* m_buffer;
       Store* m_store;
       WorkQueue<PageOutWorkItem>* m_wq;
 
-      std::vector<pthread_t> m_page_out_threads;
-      void start_thread();
-      void stop_thread();
-      void page_out_thread();
-      static void* page_out_thread_starter(void * This);
+      void ThreadEntry();
   };
 } // end of namespace Umap
 

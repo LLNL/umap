@@ -11,21 +11,34 @@
 #include "umap/PageOutWorkers.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
+#include "umap/util/PthreadPool.hpp"
 #include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
   PageOutWorkers::PageOutWorkers(
-        Buffer* buffer
+        uint64_t num_workers
+      , Buffer* buffer
       , Store* store
       , WorkQueue<PageOutWorkItem>* wq
-    ): m_buffer(buffer), m_store(store), m_wq(wq)
+    ):   PthreadPool(num_workers)
+       , m_buffer(buffer)
+       , m_store(store)
+       , m_wq(wq)
   {
-    // Launch threads here...
+    start_thread_pool();
   }
 
   PageOutWorkers::~PageOutWorkers( void )
   {
-    // Wait for threads to go away here
   }
 
+  void PageOutWorkers::ThreadEntry() {
+    UMAP_LOG(Debug, "\nThe Worker says hello: ");
+
+    while ( ! time_to_stop_thread_pool() ) {
+      sleep(1);
+    }
+
+    UMAP_LOG(Debug, "Goodbye");
+  }
 } // end of namespace Umap

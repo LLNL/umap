@@ -20,7 +20,7 @@ set(umapheaders
       util/Exception.hpp
       util/Logger.hpp
       util/Macros.hpp
-      util/Pthread.hpp)
+      util/PthreadPool.hpp)
 
 set(umapsrc
     Buffer.cpp

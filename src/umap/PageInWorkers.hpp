@@ -9,39 +9,35 @@
 
 #include "umap/config.h"
 
-#include <pthread.h>
 #include <vector>
 
 #include "umap/Buffer.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
+#include "umap/util/PthreadPool.hpp"
 #include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-  class PageInWorkers {
+  class PageInWorkers : PthreadPool {
     public:
       PageInWorkers(
-            Buffer* buffer
+            uint64_t num_workers
+          , Buffer* buffer
           , Uffd* uffd
           , Store* store
           , WorkQueue<PageInWorkItem>* wq
       );
 
-      ~PageInWorkers( void );
+      virtual ~PageInWorkers();
 
     private:
       Buffer* m_buffer;
       Uffd* m_uffd;
       Store* m_store;
       WorkQueue<PageInWorkItem>* m_wq;
-      bool m_time_to_stop;
 
-      std::vector<pthread_t> m_page_in_threads;
-      void start_threads();
-      void stop_threads();
-      void page_in_thread();
-      static void* page_in_thread_starter(void * This);
+      void ThreadEntry();
   };
 } // end of namespace Umap
 
