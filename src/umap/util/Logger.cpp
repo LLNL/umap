@@ -67,10 +67,19 @@ void Logger::initialize()
   char* enval = getenv(env_name);
 
   if ( enval != NULL ) {
+    bool level_found = false;
     for ( int i = 0; i < message::Num_Levels; ++i ) {
       if ( strcasecmp( enval, MessageLevelName[ i ].c_str() ) == 0 ) {
+        level_found = true;
         level = (message::Level)i;
         break;
+      }
+    }
+    if (! level_found ) {
+      std::cerr << "No matching logging levels for: " << enval << "\n";
+      std::cerr << "Available levels are:\n";
+      for ( int i = 0; i < message::Num_Levels; ++i ) {
+        std::cerr << "\t" << MessageLevelName[ i ] << "\n";
       }
     }
   }

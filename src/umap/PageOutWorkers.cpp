@@ -8,6 +8,7 @@
 #include "umap/config.h"
 
 #include "umap/Buffer.hpp"
+#include "umap/Uffd.hpp"
 #include "umap/PageOutWorkers.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
@@ -18,6 +19,7 @@ namespace Umap {
   PageOutWorkers::PageOutWorkers(
         uint64_t num_workers
       , Buffer* buffer
+      , Uffd* uffd
       , Store* store
       , WorkQueue<PageOutWorkItem>* wq
     ):   PthreadPool(num_workers)

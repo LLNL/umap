@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "umap/Buffer.hpp"
+#include "umap/Uffd.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/PthreadPool.hpp"
@@ -23,6 +24,7 @@ namespace Umap {
       PageOutWorkers(
             uint64_t num_workers
           , Buffer* buffer
+          , Uffd* uffd
           , Store* store
           , WorkQueue<PageOutWorkItem>* wq
       );
@@ -31,6 +33,7 @@ namespace Umap {
 
     private:
       Buffer* m_buffer;
+      Uffd* m_uffd;
       Store* m_store;
       WorkQueue<PageOutWorkItem>* m_wq;
 

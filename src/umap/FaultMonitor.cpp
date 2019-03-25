@@ -24,6 +24,7 @@
 #include "umap/config.h"
 
 #include "umap/FaultMonitor.hpp"
+#include "umap/FaultMonitorManager.hpp"
 #include "umap/Uffd.hpp"
 
 #include "umap/store/Store.hpp"
@@ -52,12 +53,29 @@ namespace Umap {
     m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
     m_pagein_wq = new WorkQueue<PageInWorkItem>;
     m_pageout_wq = new WorkQueue<PageOutWorkItem>;
+    m_buffer = nullptr;
+    m_pagein_workers = new PageInWorkers(
+                  FaultMonitorManager::getInstance()->get_num_page_in_workers()
+                , m_buffer
+                , m_uffd
+                , m_store
+                , m_pagein_wq);
+
+    m_pageout_workers = nullptr;
+    m_pageout_workers = new PageOutWorkers(
+                  FaultMonitorManager::getInstance()->get_num_page_out_workers()
+                , m_buffer
+                , m_uffd
+                , m_store
+                , m_pageout_wq);
 
     start_thread_pool();
   }
 
   FaultMonitor::~FaultMonitor( void )
   {
+    delete m_pageout_workers;
+    delete m_pagein_workers;
     delete m_pageout_wq;
     delete m_pagein_wq;
     delete m_uffd;

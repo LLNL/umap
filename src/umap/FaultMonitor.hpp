@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "umap/Buffer.hpp"
 #include "umap/PageInWorkers.hpp"
 #include "umap/PageOutWorkers.hpp"
 #include "umap/Uffd.hpp"
@@ -54,6 +55,8 @@ namespace Umap {
 
       WorkQueue<PageOutWorkItem>* m_pageout_wq;
       PageOutWorkers* m_pageout_workers;
+
+      Buffer* m_buffer;
   };
 } // end of namespace Umap
 
