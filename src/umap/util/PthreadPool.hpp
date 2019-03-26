@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <pthread.h>
+#include <string>
 #include <vector>
 
 #include "umap/util/Macros.hpp"
@@ -16,22 +17,35 @@
 namespace Umap {
 class PthreadPool {
   public:
-    PthreadPool(uint64_t num_threads) : m_num_threads(num_threads), m_time_to_stop(false) {}
+    PthreadPool(
+        const std::string& pool_name
+        , uint64_t num_threads)
+      :   m_pool_name(pool_name)
+        , m_num_threads(num_threads)
+        , m_time_to_stop(false) {}
+
     virtual ~PthreadPool() {
+      UMAP_LOG(Debug,
+          "Stopping " <<  m_pool_name << " Pool of "
+          << m_num_threads << " threads");
+
       m_time_to_stop = true;
-      for ( auto pt : m_threads ) {
-        UMAP_LOG(Debug, "Stoping " << (void*)pt);
+      for ( auto pt : m_threads )
         (void) pthread_join(pt, NULL);
-      }
+
+      UMAP_LOG(Debug, m_pool_name << " stopped");
     }
 
     void start_thread_pool() {
-      UMAP_LOG(Debug, "Stoping Threads");
-      pthread_t t;
+      UMAP_LOG(Debug,
+          "Starting " <<  m_pool_name << " Pool of "
+          << m_num_threads << " threads");
+
       for ( uint64_t i = 0; i < m_num_threads; ++i) {
-        if (pthread_create(&t, NULL, ThreadEntryFunc, this) != 0) {
+        pthread_t t;
+
+        if (pthread_create(&t, NULL, ThreadEntryFunc, this) != 0)
           UMAP_ERROR("Failed to launch thread");
-        }
 
         m_threads.push_back(t);
       }
@@ -50,6 +64,7 @@ private:
     return NULL;
   }
 
+  std::string m_pool_name;
   uint64_t m_num_threads;
   bool m_time_to_stop;
   std::vector<pthread_t> m_threads;

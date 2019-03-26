@@ -26,7 +26,7 @@ namespace Umap {
       , Uffd* uffd
       , Store* store
       , WorkQueue<PageInWorkItem>* wq
-    ) :   PthreadPool(num_workers)
+    ) :   PthreadPool("Page In Workers", num_workers)
         , m_buffer(buffer)
         , m_uffd(uffd)
         , m_store(store)
@@ -40,12 +40,8 @@ namespace Umap {
   }
 
   void PageInWorkers::ThreadEntry() {
-    UMAP_LOG(Debug, "\nThe Worker says hello: ");
-
     while ( ! time_to_stop_thread_pool() ) {
       sleep(1);
     }
-
-    UMAP_LOG(Debug, "Goodbye");
   }
 } // end of namespace Umap

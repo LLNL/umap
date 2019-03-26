@@ -25,19 +25,15 @@ namespace Umap {
 FaultMonitorManager* FaultMonitorManager::s_fault_monitor_manager_instance = nullptr;
 static const uint64_t MAX_FAULT_EVENTS = 256;
 
-FaultMonitorManager*
-FaultMonitorManager::getInstance( void )
+FaultMonitorManager* FaultMonitorManager::getInstance( void )
 {
-  if (!s_fault_monitor_manager_instance) {
+  if (!s_fault_monitor_manager_instance)
     s_fault_monitor_manager_instance = new FaultMonitorManager();
-  }
 
-  UMAP_LOG(Debug, "() returning " << s_fault_monitor_manager_instance);
   return s_fault_monitor_manager_instance;
 }
 
-void
-FaultMonitorManager::makeFaultMonitor(
+void FaultMonitorManager::makeFaultMonitor(
     Store*   store
   , char*    region
   , uint64_t region_size

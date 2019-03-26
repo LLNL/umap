@@ -41,7 +41,7 @@ namespace Umap {
           , uint64_t mmap_region_size
           , uint64_t page_size
           , uint64_t max_fault_events
-        ) :   PthreadPool(1)
+        ) :   PthreadPool("Fault Monitor", 1)
             , m_store(store)
             , m_region(region)
             , m_region_size(region_size)

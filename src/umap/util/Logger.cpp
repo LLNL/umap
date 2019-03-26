@@ -10,6 +10,9 @@
 #include <mutex>
 #include <stdlib.h>   // for getenv()
 #include <strings.h>  // for strcasecmp()
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 namespace Umap {
 
@@ -52,6 +55,8 @@ void Logger::logMessage( message::Level level,
 
   std::lock_guard<std::mutex> guard(g_logging_mutex);
   std::cout
+    << getpid() << ":"
+    << syscall(__NR_gettid) << " "
     << "[" << MessageLevelName[ level ] << "]"
     << "[" << fileName  << ":" << line << "]:"
     << message
