@@ -734,8 +734,20 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
+    for ( auto & it : umessages )
+      it.arg.pagefault.address &= ~(umapPageSize-1);
+
+    std::sort(umessages.begin(), umessages.begin()+msgs, less_than_key());
+
+    uint64_t last_addr = 0;
+
     for (int i = 0; i < msgs; ++i) {
       assert("uffd_hander: Unexpected event" && (umessages[i].event == UFFD_EVENT_PAGEFAULT));
+
+      if (umessages[i].arg.pagefault.address == last_addr)
+        continue;
+
+      last_addr = umessages[i].arg.pagefault.address;
       pagefault_event(umessages[i]);       // At this point, we know we have had a page fault.  Let's handle it.
     }
   }
@@ -743,7 +755,7 @@ void UserFaultHandler::uffd_handler(void)
 
 void UserFaultHandler::pagefault_event(const struct uffd_msg& msg)
 {
-  void* page_begin = _umap::UMAP_PAGE_BEGIN( (void*)msg.arg.pagefault.address );
+  void* page_begin = (void*)msg.arg.pagefault.address;
   umap_page* pm = pagebuffer->find_inmem_page_desc(page_begin);
 
   if (pm != nullptr) {
