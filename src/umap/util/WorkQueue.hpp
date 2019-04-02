@@ -64,22 +64,6 @@ class WorkQueue {
     std::list<T> m_queue;
 };
 
-struct PageOutWorkItem {
-  Store* store;
-  void* region;
-  std::size_t size;
-  std::size_t alignsize;
-  int fd;
-};
-
-struct PageInWorkItem {
-  Uffd* uffd;
-  Store* store;
-  void* region;
-  std::size_t size;
-  std::size_t alignsize;
-  int fd;
-};
 } // end of namespace Umap
 
 #endif // _UMAP_WorkQueue_HPP

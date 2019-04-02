@@ -4,16 +4,17 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_FaultMonitorManager_HPP
-#define _UMAP_FaultMonitorManager_HPP
+#ifndef _UMAP_PageRegion_HPP
+#define _UMAP_PageRegion_HPP
 
 #include <cstdint>
 #include <unordered_map>
 
-#include "umap/FaultMonitor.hpp"
 #include "umap/store/Store.hpp"
 
 namespace Umap {
+
+class PageFiller;
 
 struct Version {
   int major;
@@ -27,11 +28,11 @@ struct Version {
 // working.  So, we only allow changing configuration when there are no active
 // monitors
 //
-class FaultMonitorManager {
+class PageRegion {
   public:
-    static FaultMonitorManager* getInstance( void );
+    static PageRegion* getInstance( void );
 
-    void makeFaultMonitor(
+    void makePageFiller(
           Store*   store
         , char*    region
         , uint64_t region_size
@@ -39,7 +40,7 @@ class FaultMonitorManager {
         , uint64_t mmap_region_size
     );
 
-    void destroyFaultMonitor( char* mmap_region );
+    void destroyPageFiller( char* mmap_region );
 
     inline Version  get_umap_version( void )         { return m_version; }
 
@@ -68,14 +69,15 @@ class FaultMonitorManager {
     uint64_t m_num_page_in_workers;
     uint64_t m_num_page_out_workers;
     uint64_t m_max_fault_events;
-    std::unordered_map<void*, FaultMonitor*> m_active_umaps;
 
-    static FaultMonitorManager* s_fault_monitor_manager_instance;
+    std::unordered_map<void*, PageFiller*> m_active_umaps;
 
-    FaultMonitorManager( void );
+    static PageRegion* s_fault_monitor_manager_instance;
+
+    PageRegion( void );
 
     uint64_t* read_env_var( const char* env, uint64_t* val);
     uint64_t        get_max_pages_in_memory( void );
 };
 } // end of namespace Umap
-#endif // UMPIRE_FaultMonitorManager_HPP
+#endif // UMPIRE_PageRegion_HPP

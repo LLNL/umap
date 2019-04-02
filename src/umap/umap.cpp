@@ -4,9 +4,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif // _GNU_SOURCE
 
 #include <cinttypes>
 #include <errno.h>              // strerror()
@@ -15,7 +12,7 @@
 
 #include "umap/config.h"
 
-#include "umap/FaultMonitorManager.hpp"
+#include "umap/PageRegion.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/umap.h"
 #include "umap/util/Macros.hpp"
@@ -43,7 +40,7 @@ void* umap_ex(
   , Store* store
 )
 {
-  auto fm = FaultMonitorManager::getInstance();
+  auto fm = PageRegion::getInstance();
   auto umap_psize = fm->get_umap_page_size();
 
   if ( ( region_size % umap_psize ) ) {
@@ -86,7 +83,7 @@ void* umap_ex(
   if ( store == nullptr )
     store = Store::make_store(umap_region, umap_size, umap_psize, fd);
 
-  fm->makeFaultMonitor(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
+  fm->makePageFiller(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
   return umap_region;
 }
@@ -94,58 +91,58 @@ void* umap_ex(
 
 int uunmap(void*  addr, uint64_t length)
 {
-  auto fm = Umap::FaultMonitorManager::getInstance();
-  fm->destroyFaultMonitor((char*)addr);
+  auto fm = Umap::PageRegion::getInstance();
+  fm->destroyPageFiller((char*)addr);
   return 0;
 }
 
 long     umapcfg_get_system_page_size( void )
 {
-  return Umap::FaultMonitorManager::getInstance()->get_system_page_size();
+  return Umap::PageRegion::getInstance()->get_system_page_size();
 }
 
 uint64_t umapcfg_get_max_pages_in_buffer( void )
 {
-  return Umap::FaultMonitorManager::getInstance()->get_max_pages_in_buffer();
+  return Umap::PageRegion::getInstance()->get_max_pages_in_buffer();
 }
 
 void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages )
 {
-  Umap::FaultMonitorManager::getInstance()->set_max_pages_in_buffer(max_pages);
+  Umap::PageRegion::getInstance()->set_max_pages_in_buffer(max_pages);
 }
 
 uint64_t umapcfg_get_umap_page_size( void )
 {
-  return Umap::FaultMonitorManager::getInstance()->get_umap_page_size();
+  return Umap::PageRegion::getInstance()->get_umap_page_size();
 }
 void     umapcfg_set_umap_page_size( uint64_t page_size )
 {
-  Umap::FaultMonitorManager::getInstance()->set_umap_page_size(page_size);
+  Umap::PageRegion::getInstance()->set_umap_page_size(page_size);
 }
 
 uint64_t umapcfg_get_num_page_in_workers( void )
 {
-  return Umap::FaultMonitorManager::getInstance()->get_num_page_in_workers();
+  return Umap::PageRegion::getInstance()->get_num_page_in_workers();
 }
 void     umapcfg_set_num_page_in_workers( uint64_t num_workers )
 {
-  Umap::FaultMonitorManager::getInstance()->set_num_page_in_workers(num_workers);
+  Umap::PageRegion::getInstance()->set_num_page_in_workers(num_workers);
 }
 
 uint64_t umapcfg_get_num_page_out_workers( void )
 {
-  return Umap::FaultMonitorManager::getInstance()->get_num_page_out_workers();
+  return Umap::PageRegion::getInstance()->get_num_page_out_workers();
 }
 void     umapcfg_set_num_page_out_workers( uint64_t num_workers )
 {
-  Umap::FaultMonitorManager::getInstance()->set_num_page_out_workers(num_workers);
+  Umap::PageRegion::getInstance()->set_num_page_out_workers(num_workers);
 }
 
 uint64_t umapcfg_get_max_fault_events( void )
 {
-  return Umap::FaultMonitorManager::getInstance()->get_max_fault_events();
+  return Umap::PageRegion::getInstance()->get_max_fault_events();
 }
 void     umapcfg_set_max_fault_events( uint64_t max_events )
 {
-  Umap::FaultMonitorManager::getInstance()->set_max_fault_events(max_events);
+  Umap::PageRegion::getInstance()->set_max_fault_events(max_events);
 }

@@ -9,10 +9,11 @@ project(umap_libraries)
 set(umapheaders
       config.h
       Buffer.hpp
-      FaultMonitor.hpp
-      FaultMonitorManager.hpp
-      PageOutWorkers.hpp
-      PageInWorkers.hpp
+      FillWorkers.hpp
+      FlushWorkers.hpp
+      PageFiller.hpp
+      PageRegion.hpp
+      PageFlusher.hpp
       Uffd.hpp
       umap.h
       store/StoreFile.h
@@ -23,12 +24,7 @@ set(umapheaders
       util/PthreadPool.hpp)
 
 set(umapsrc
-    Buffer.cpp
-    FaultMonitor.cpp
-    FaultMonitorManager.cpp
-    PageOutWorkers.cpp
-    PageInWorkers.cpp
-    Uffd.cpp
+  PageRegion.cpp
     umap.cpp
     store/Store.cpp
     store/StoreFile.cpp

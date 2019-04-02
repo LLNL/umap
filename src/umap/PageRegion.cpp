@@ -15,25 +15,25 @@
 #include <unordered_map>
 #include <unistd.h>       // sysconf()
 
-#include "umap/FaultMonitor.hpp"
-#include "umap/FaultMonitorManager.hpp"
+#include "umap/PageFiller.hpp"
+#include "umap/PageRegion.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
 
-FaultMonitorManager* FaultMonitorManager::s_fault_monitor_manager_instance = nullptr;
+PageRegion* PageRegion::s_fault_monitor_manager_instance = nullptr;
 static const uint64_t MAX_FAULT_EVENTS = 256;
 
-FaultMonitorManager* FaultMonitorManager::getInstance( void )
+PageRegion* PageRegion::getInstance( void )
 {
   if (!s_fault_monitor_manager_instance)
-    s_fault_monitor_manager_instance = new FaultMonitorManager();
+    s_fault_monitor_manager_instance = new PageRegion();
 
   return s_fault_monitor_manager_instance;
 }
 
-void FaultMonitorManager::makeFaultMonitor(
+void PageRegion::makePageFiller(
     Store*   store
   , char*    region
   , uint64_t region_size
@@ -41,7 +41,7 @@ void FaultMonitorManager::makeFaultMonitor(
   , uint64_t mmap_region_size
 )
 {
-  m_active_umaps[(void*)region] = new FaultMonitor(
+  m_active_umaps[(void*)region] = new PageFiller(
                                                   store
                                                 , region
                                                 , region_size
@@ -53,7 +53,7 @@ void FaultMonitorManager::makeFaultMonitor(
 }
 
 void
-FaultMonitorManager::destroyFaultMonitor( char* region )
+PageRegion::destroyPageFiller( char* region )
 {
   UMAP_LOG(Debug, "region: " << (void*)region);
 
@@ -66,7 +66,7 @@ FaultMonitorManager::destroyFaultMonitor( char* region )
   m_active_umaps.erase(it);
 }
 
-FaultMonitorManager::FaultMonitorManager()
+PageRegion::PageRegion()
 {
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
@@ -105,7 +105,7 @@ FaultMonitorManager::FaultMonitorManager()
 }
 
 uint64_t
-FaultMonitorManager::get_max_pages_in_memory( void )
+PageRegion::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
@@ -132,7 +132,7 @@ FaultMonitorManager::get_max_pages_in_memory( void )
 }
 
 void
-FaultMonitorManager::set_max_pages_in_buffer( uint64_t max_pages )
+PageRegion::set_max_pages_in_buffer( uint64_t max_pages )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -156,7 +156,7 @@ FaultMonitorManager::set_max_pages_in_buffer( uint64_t max_pages )
     << " to " << get_max_pages_in_buffer() << " pages");
 }
 
-void FaultMonitorManager::set_umap_page_size( uint64_t page_size )
+void PageRegion::set_umap_page_size( uint64_t page_size )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -178,7 +178,7 @@ void FaultMonitorManager::set_umap_page_size( uint64_t page_size )
   m_umap_page_size = page_size;
 }
 
-uint64_t* FaultMonitorManager::read_env_var(
+uint64_t* PageRegion::read_env_var(
     const char* env
   , uint64_t*  val
 )
@@ -201,7 +201,7 @@ uint64_t* FaultMonitorManager::read_env_var(
 }
 
 void
-FaultMonitorManager::set_num_page_in_workers( uint64_t num_workers )
+PageRegion::set_num_page_in_workers( uint64_t num_workers )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -211,7 +211,7 @@ FaultMonitorManager::set_num_page_in_workers( uint64_t num_workers )
 }
 
 void
-FaultMonitorManager::set_num_page_out_workers( uint64_t num_workers )
+PageRegion::set_num_page_out_workers( uint64_t num_workers )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -221,7 +221,7 @@ FaultMonitorManager::set_num_page_out_workers( uint64_t num_workers )
 }
 
 void
-FaultMonitorManager::set_max_fault_events( uint64_t max_events )
+PageRegion::set_max_fault_events( uint64_t max_events )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
