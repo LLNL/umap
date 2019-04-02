@@ -734,6 +734,13 @@ void UserFaultHandler::uffd_handler(void)
       exit(1);
     }
 
+    //
+    // Since uffd page events arrive on the system page boundary which could be
+    // different from umap's page size, the page address for the incoming
+    // events are adjusted to the beginning of the umap page address.  The
+    // events are then sorted in page base address / operation type order and
+    // are processed only once while duplicates are skipped.
+    //
     for ( auto & it : umessages )
       it.arg.pagefault.address &= ~(umapPageSize-1);
 
