@@ -48,7 +48,7 @@ static void usage(char* pname)
   << " --usemmap              - Use mmap instead of umap\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
-  << " -u # of uffd threads   - default: " << umapcfg_get_num_page_in_workers() << " worker threads\n"
+  << " -u # of uffd threads   - default: " << umapcfg_get_num_fill_workers() << " worker threads\n"
   << " -b # page buffer size  - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.\n"
@@ -67,7 +67,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umapcfg_get_max_pages_in_buffer();
-  testops->uffdthreads = umapcfg_get_num_page_in_workers();
+  testops->uffdthreads = umapcfg_get_num_fill_workers();
   testops->filename = FILENAME;
   testops->pagesize = umapcfg_get_umap_page_size();
 
@@ -139,9 +139,9 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
    * buffer size requires that the number of threads be set properly
    * first.
    */
-  if (testops->uffdthreads != umapcfg_get_num_page_in_workers()) {
-    umapcfg_set_num_page_in_workers(testops->uffdthreads);
-    umapcfg_set_num_page_out_workers(testops->uffdthreads);
+  if (testops->uffdthreads != umapcfg_get_num_fill_workers()) {
+    umapcfg_set_num_fill_workers(testops->uffdthreads);
+    umapcfg_set_num_flush_workers(testops->uffdthreads);
   }
 
   umapcfg_set_max_pages_in_buffer(testops->bufsize);

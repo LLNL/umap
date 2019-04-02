@@ -120,22 +120,22 @@ void     umapcfg_set_umap_page_size( uint64_t page_size )
   Umap::PageRegion::getInstance()->set_umap_page_size(page_size);
 }
 
-uint64_t umapcfg_get_num_page_in_workers( void )
+uint64_t umapcfg_get_num_fill_workers( void )
 {
-  return Umap::PageRegion::getInstance()->get_num_page_in_workers();
+  return Umap::PageRegion::getInstance()->get_num_fill_workers();
 }
-void     umapcfg_set_num_page_in_workers( uint64_t num_workers )
+void     umapcfg_set_num_fill_workers( uint64_t num_workers )
 {
-  Umap::PageRegion::getInstance()->set_num_page_in_workers(num_workers);
+  Umap::PageRegion::getInstance()->set_num_fill_workers(num_workers);
 }
 
-uint64_t umapcfg_get_num_page_out_workers( void )
+uint64_t umapcfg_get_num_flush_workers( void )
 {
-  return Umap::PageRegion::getInstance()->get_num_page_out_workers();
+  return Umap::PageRegion::getInstance()->get_num_flush_workers();
 }
-void     umapcfg_set_num_page_out_workers( uint64_t num_workers )
+void     umapcfg_set_num_flush_workers( uint64_t num_workers )
 {
-  Umap::PageRegion::getInstance()->set_num_page_out_workers(num_workers);
+  Umap::PageRegion::getInstance()->set_num_flush_workers(num_workers);
 }
 
 uint64_t umapcfg_get_max_fault_events( void )

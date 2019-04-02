@@ -83,7 +83,7 @@ public:
     return nullptr;
   }
 
-  inline PageDescriptor* find_page_in_buffer( void* )
+  inline PageDescriptor* find_fill_buffer( void* )
   {
     return nullptr;
   }

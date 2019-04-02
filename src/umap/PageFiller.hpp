@@ -53,9 +53,9 @@ class PageFiller : PthreadPool {
       m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
       m_page_fill_wq = new WorkQueue<FillWorkItem>;
       m_buffer = new Buffer(PageRegion::getInstance()->get_max_pages_in_buffer());
-      m_page_fill_workers = new FillWorkers(PageRegion::getInstance()->get_num_page_in_workers(), m_buffer, m_uffd , m_store, m_page_fill_wq);
+      m_page_fill_workers = new FillWorkers(PageRegion::getInstance()->get_num_fill_workers(), m_buffer, m_uffd , m_store, m_page_fill_wq);
 
-      m_page_flusher = new PageFlusher(PageRegion::getInstance()->get_num_page_out_workers(), m_buffer, m_uffd, m_store);
+      m_page_flusher = new PageFlusher(PageRegion::getInstance()->get_num_flush_workers(), m_buffer, m_uffd, m_store);
 
       start_thread_pool();
     }

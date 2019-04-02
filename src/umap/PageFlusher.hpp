@@ -25,7 +25,7 @@ namespace Umap {
               PthreadPool("Page Flusher", 1), m_buffer(buffer), m_uffd(uffd), m_store(store)
       {
         m_flush_wq = new WorkQueue<FlushWorkItem>;
-        m_page_flush_workers = new FlushWorkers(PageRegion::getInstance()->get_num_page_out_workers(), m_buffer, m_uffd , m_store, m_flush_wq);
+        m_page_flush_workers = new FlushWorkers(PageRegion::getInstance()->get_num_flush_workers(), m_buffer, m_uffd , m_store, m_flush_wq);
 
         start_thread_pool();
       }
