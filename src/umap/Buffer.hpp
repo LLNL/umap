@@ -49,7 +49,7 @@ public:
     free(m_array);
   }
 
-  inline std::vector<PageDescriptor*> set_pages_to_evict(
+  std::vector<PageDescriptor*> set_pages_to_evict(
       uint64_t pages_in_buffer_threshold, time_t seconds_to_wait)
   {
     std::vector<PageDescriptor*> rval;
