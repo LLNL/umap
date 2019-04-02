@@ -23,6 +23,7 @@
 
 #include "umap/config.h"
 
+#include "umap/Buffer.hpp"
 #include "umap/FaultMonitor.hpp"
 #include "umap/FaultMonitorManager.hpp"
 #include "umap/Uffd.hpp"
@@ -53,13 +54,14 @@ namespace Umap {
     m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
     m_pagein_wq = new WorkQueue<PageInWorkItem>;
     m_pageout_wq = new WorkQueue<PageOutWorkItem>;
-    m_buffer = nullptr;
+    m_buffer = new Buffer(
+                FaultMonitorManager::getInstance()->get_max_pages_in_buffer());
     m_pagein_workers = new PageInWorkers(
-                  FaultMonitorManager::getInstance()->get_num_page_in_workers()
-                , m_buffer
-                , m_uffd
-                , m_store
-                , m_pagein_wq);
+                FaultMonitorManager::getInstance()->get_num_page_in_workers()
+              , m_buffer
+              , m_uffd
+              , m_store
+              , m_pagein_wq);
 
     m_pageout_workers = nullptr;
     m_pageout_workers = new PageOutWorkers(
@@ -76,6 +78,7 @@ namespace Umap {
   {
     delete m_pageout_workers;
     delete m_pagein_workers;
+    delete m_buffer;
     delete m_pageout_wq;
     delete m_pagein_wq;
     delete m_uffd;
@@ -94,8 +97,16 @@ namespace Umap {
     );
 
     while ( ! time_to_stop_thread_pool() ) {
-      if (m_uffd->get_page_events() == false)
+      int num_events = m_uffd->get_page_events();
+
+      if (num_events == -1)
         continue;
+
+      //
+      // Make sure we have enough available slots in the buffer
+      //
+      m_buffer->lock();
+      m_buffer->unlock();
     }
 
     UMAP_LOG(Debug, "Bye");

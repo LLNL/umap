@@ -26,7 +26,7 @@ class Uffd {
 
     ~Uffd( void );
 
-    bool       get_page_events( void );  // False: if timed out waiting
+    int        get_page_events( void );  // -1: if timed out waiting
     const bool next_page_event( void );
 
     char* get_event_page_address( void );

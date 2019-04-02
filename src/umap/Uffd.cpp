@@ -73,7 +73,7 @@ struct less_than_key {
   }
 };
 
-bool Uffd::get_page_events( void )
+int Uffd::get_page_events( void )
 {
   struct pollfd pollfd = { .fd = m_uffd_fd, .events = POLLIN };
 
@@ -81,7 +81,7 @@ bool Uffd::get_page_events( void )
 
   switch (pollres) {
     case 0:
-      return false;
+      return -1;
     case 1:
       break;
     case -1:
@@ -94,13 +94,13 @@ bool Uffd::get_page_events( void )
     UMAP_ERROR("POLLERR: ");
 
   if ( !(pollfd.revents & POLLIN) )
-    return false;
+    return -1;
 
   int readres = read(m_uffd_fd, &m_events[0], m_max_fault_events * sizeof(struct uffd_msg));
 
   if (readres == -1) {
     if (errno == EAGAIN)
-      return false;
+      return -1;
 
     UMAP_ERROR("read failed: " << strerror(errno));
   }
@@ -120,7 +120,7 @@ bool Uffd::get_page_events( void )
   m_cur_event = &m_events[0];
   m_last_event = &m_events[msgs];
 
-  return true;
+  return msgs;
 }
 
 char* Uffd::get_event_page_address( void )
