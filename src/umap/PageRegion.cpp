@@ -83,15 +83,15 @@ PageRegion::PageRegion()
   unsigned int nthreads = std::thread::hardware_concurrency();
   nthreads = (nthreads == 0) ? 16 : nthreads;
 
-  if ( (read_env_var("UMAP_PAGEIN_WORKERS", &env_value)) != nullptr )
-    set_num_fill_workers(env_value);
+  if ( (read_env_var("UMAP_PAGE_FILLERS", &env_value)) != nullptr )
+    set_num_fillers(env_value);
   else
-    set_num_fill_workers(nthreads);
+    set_num_fillers(nthreads);
 
-  if ( (read_env_var("UMAP_PAGEOUT_WORKERS", &env_value)) != nullptr )
-    set_num_flush_workers(env_value);
+  if ( (read_env_var("UMAP_PAGE_FLUSHERS", &env_value)) != nullptr )
+    set_num_flushers(env_value);
   else
-    set_num_flush_workers(nthreads);
+    set_num_flushers(nthreads);
 
   if ( (read_env_var("UMAP_PAGESIZE", &env_value)) != nullptr )
     set_umap_page_size(env_value);
@@ -201,23 +201,23 @@ uint64_t* PageRegion::read_env_var(
 }
 
 void
-PageRegion::set_num_fill_workers( uint64_t num_workers )
+PageRegion::set_num_fillers( uint64_t num_fillers )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
   }
 
-  m_num_fill_workers = num_workers;
+  m_num_fillers = num_fillers;
 }
 
 void
-PageRegion::set_num_flush_workers( uint64_t num_workers )
+PageRegion::set_num_flushers( uint64_t num_flushers )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
   }
 
-  m_num_flush_workers = num_workers;
+  m_num_flushers = num_flushers;
 }
 
 void

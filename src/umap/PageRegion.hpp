@@ -52,11 +52,11 @@ class PageRegion {
     inline uint64_t get_umap_page_size( void )       { return m_umap_page_size; }
     void set_umap_page_size( uint64_t page_size );
 
-    inline uint64_t get_num_fill_workers( void )  { return m_num_fill_workers; }
-    void set_num_fill_workers( uint64_t num_workers );
+    inline uint64_t get_num_fillers( void )  { return m_num_fillers; }
+    void set_num_fillers( uint64_t num_fillers );
 
-    inline uint64_t get_num_flush_workers( void ) { return m_num_flush_workers; }
-    void set_num_flush_workers( uint64_t num_workers );
+    inline uint64_t get_num_flushers( void ) { return m_num_flushers; }
+    void set_num_flushers( uint64_t num_flushers );
 
     inline uint64_t get_max_fault_events( void )     { return m_max_fault_events; }
     void set_max_fault_events( uint64_t max_events );
@@ -66,8 +66,8 @@ class PageRegion {
     uint64_t m_max_pages_in_buffer;
     long     m_umap_page_size;
     uint64_t m_system_page_size;
-    uint64_t m_num_fill_workers;
-    uint64_t m_num_flush_workers;
+    uint64_t m_num_fillers;
+    uint64_t m_num_flushers;
     uint64_t m_max_fault_events;
 
     std::unordered_map<void*, PageFiller*> m_active_umaps;

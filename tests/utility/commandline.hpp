@@ -54,7 +54,7 @@ static void usage(char* pname)
   << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
   << " -p # of pages          - default: " << NUMPAGES << endl
   << " -t # of threads        - default: " << NUMTHREADS << endl
-  << " -u # of uffd threads   - default: " << umapcfg_get_num_fill_workers() << " worker threads\n"
+  << " -u # of page fillers   - default: " << umapcfg_get_num_fillers() << " UFFD page fillers\n"
   << " -b # page buffer size  - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
@@ -76,7 +76,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
   testops->bufsize = umapcfg_get_max_pages_in_buffer();
-  testops->uffdthreads = umapcfg_get_num_fill_workers();
+  testops->uffdthreads = umapcfg_get_num_fillers();
   testops->filename = FILENAME;
   testops->dirname = DIRNAME;
   testops->pagesize = umapcfg_get_umap_page_size();
@@ -161,9 +161,9 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
    * buffer size requires that the number of threads be set properly
    * first.
    */
-  if (testops->uffdthreads != umapcfg_get_num_fill_workers()) {
-    umapcfg_set_num_fill_workers(testops->uffdthreads);
-    umapcfg_set_num_flush_workers(testops->uffdthreads);
+  if (testops->uffdthreads != umapcfg_get_num_fillers()) {
+    umapcfg_set_num_fillers(testops->uffdthreads);
+    umapcfg_set_num_flushers(testops->uffdthreads);
   }
 
   umapcfg_set_max_pages_in_buffer(testops->bufsize);

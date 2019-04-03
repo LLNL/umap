@@ -9,8 +9,8 @@ project(umap_libraries)
 set(umapheaders
       config.h
       Buffer.hpp
-      FillWorkers.hpp
-      FlushWorkers.hpp
+      Fillers.hpp
+      Flushers.hpp
       PageFiller.hpp
       PageRegion.hpp
       PageFlusher.hpp

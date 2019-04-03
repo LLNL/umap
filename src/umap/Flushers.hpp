@@ -1,28 +1,24 @@
-//////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
 // Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_FillWorkers_HPP
-#define _UMAP_FillWorkers_HPP
+#ifndef _UMAP_Flushers_HPP
+#define _UMAP_Flushers_HPP
 
 #include "umap/config.h"
 
-#include <errno.h>
-#include <string.h>             // strerror()
-#include <unistd.h>             // sleep()
-
 #include "umap/Buffer.hpp"
 #include "umap/Uffd.hpp"
-#include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
+#include "umap/store/Store.hpp"
 #include "umap/util/PthreadPool.hpp"
 #include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-struct FillWorkItem {
-  Uffd* uffd;
+
+struct FlushWorkItem {
   Store* store;
   void* region;
   std::size_t size;
@@ -30,17 +26,16 @@ struct FillWorkItem {
   int fd;
 };
 
-class FillWorkers : PthreadPool {
+class Flushers : PthreadPool {
   public:
-    FillWorkers(uint64_t num_workers, Buffer* buffer, Uffd* uffd,
-        Store* store, WorkQueue<FillWorkItem>* wq) :
-          PthreadPool("Fill Workers", num_workers), m_buffer(buffer),
-          m_uffd(uffd), m_store(store), m_wq(wq)
+    Flushers(
+          uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store, WorkQueue<FlushWorkItem>* wq) :
+            PthreadPool("UMAP Flushers", num_flushers), m_buffer(buffer), m_store(store), m_wq(wq)
     {
       start_thread_pool();
     }
 
-    ~FillWorkers( void )
+    ~Flushers( void )
     {
     }
 
@@ -48,7 +43,7 @@ class FillWorkers : PthreadPool {
     Buffer* m_buffer;
     Uffd* m_uffd;
     Store* m_store;
-    WorkQueue<FillWorkItem>* m_wq;
+    WorkQueue<FlushWorkItem>* m_wq;
 
     inline void ThreadEntry() {
       while ( ! time_to_stop_thread_pool() ) {
@@ -57,4 +52,5 @@ class FillWorkers : PthreadPool {
     }
 };
 } // end of namespace Umap
-#endif // _UMAP_FillWorkers_HPP
+
+#endif // _UMAP_Flushers_HPP

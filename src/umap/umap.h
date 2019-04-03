@@ -68,11 +68,11 @@ void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages );
 uint64_t umapcfg_get_umap_page_size( void );
 void     umapcfg_set_umap_page_size( uint64_t page_size );
 
-uint64_t umapcfg_get_num_fill_workers( void );
-void     umapcfg_set_num_fill_workers( uint64_t num_workers );
+uint64_t umapcfg_get_num_fillers( void );
+void     umapcfg_set_num_fillers( uint64_t num_fillers );
 
-uint64_t umapcfg_get_num_flush_workers( void );
-void     umapcfg_set_num_flush_workers( uint64_t num_workers );
+uint64_t umapcfg_get_num_flushers( void );
+void     umapcfg_set_num_flushers( uint64_t num_flushers );
 
 uint64_t umapcfg_get_max_fault_events( void );
 void     umapcfg_set_max_fault_events( uint64_t max_events );

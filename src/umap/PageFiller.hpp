@@ -22,7 +22,7 @@
 
 #include "umap/Buffer.hpp"
 #include "umap/PageRegion.hpp"
-#include "umap/FillWorkers.hpp"
+#include "umap/Fillers.hpp"
 #include "umap/PageFlusher.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/store/Store.hpp"
@@ -53,9 +53,9 @@ class PageFiller : PthreadPool {
       m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
       m_page_fill_wq = new WorkQueue<FillWorkItem>;
       m_buffer = new Buffer(PageRegion::getInstance()->get_max_pages_in_buffer());
-      m_page_fill_workers = new FillWorkers(PageRegion::getInstance()->get_num_fill_workers(), m_buffer, m_uffd , m_store, m_page_fill_wq);
+      m_page_fillers = new Fillers(PageRegion::getInstance()->get_num_fillers(), m_buffer, m_uffd , m_store, m_page_fill_wq);
 
-      m_page_flusher = new PageFlusher(PageRegion::getInstance()->get_num_flush_workers(), m_buffer, m_uffd, m_store);
+      m_page_flusher = new PageFlusher(PageRegion::getInstance()->get_num_flushers(), m_buffer, m_uffd, m_store);
 
       start_thread_pool();
     }
@@ -63,7 +63,7 @@ class PageFiller : PthreadPool {
     ~PageFiller( void )
     {
       delete m_page_flusher;
-      delete m_page_fill_workers;
+      delete m_page_fillers;
       delete m_buffer;
       delete m_page_fill_wq;
       delete m_uffd;
@@ -110,7 +110,7 @@ class PageFiller : PthreadPool {
     Uffd* m_uffd;
 
     WorkQueue<FillWorkItem>*  m_page_fill_wq;
-    FillWorkers* m_page_fill_workers;
+    Fillers* m_page_fillers;
 
     PageFlusher* m_page_flusher;
     Buffer* m_buffer;

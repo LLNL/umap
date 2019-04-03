@@ -121,22 +121,22 @@ void     umapcfg_set_umap_page_size( uint64_t page_size )
   Umap::PageRegion::getInstance()->set_umap_page_size(page_size);
 }
 
-uint64_t umapcfg_get_num_fill_workers( void )
+uint64_t umapcfg_get_num_fillers( void )
 {
-  return Umap::PageRegion::getInstance()->get_num_fill_workers();
+  return Umap::PageRegion::getInstance()->get_num_fillers();
 }
-void     umapcfg_set_num_fill_workers( uint64_t num_workers )
+void     umapcfg_set_num_fillers( uint64_t num_fillers )
 {
-  Umap::PageRegion::getInstance()->set_num_fill_workers(num_workers);
+  Umap::PageRegion::getInstance()->set_num_fillers(num_fillers);
 }
 
-uint64_t umapcfg_get_num_flush_workers( void )
+uint64_t umapcfg_get_num_flushers( void )
 {
-  return Umap::PageRegion::getInstance()->get_num_flush_workers();
+  return Umap::PageRegion::getInstance()->get_num_flushers();
 }
-void     umapcfg_set_num_flush_workers( uint64_t num_workers )
+void     umapcfg_set_num_flushers( uint64_t num_flushers )
 {
-  Umap::PageRegion::getInstance()->set_num_flush_workers(num_workers);
+  Umap::PageRegion::getInstance()->set_num_flushers(num_flushers);
 }
 
 uint64_t umapcfg_get_max_fault_events( void )
