@@ -52,7 +52,7 @@ class PageFiller : PthreadPool {
     {
       m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
       m_page_fill_wq = new WorkQueue<FillWorkItem>;
-      m_buffer = new Buffer(PageRegion::getInstance()->get_max_pages_in_buffer());
+      m_buffer = new Buffer(PageRegion::getInstance()->get_max_pages_in_buffer(), PageRegion::getInstance()->get_flush_threshold());
       m_page_fillers = new Fillers(PageRegion::getInstance()->get_num_fillers(), m_buffer, m_uffd , m_store, m_page_fill_wq);
 
       m_page_flusher = new PageFlusher(PageRegion::getInstance()->get_num_flushers(), m_buffer, m_uffd, m_store);

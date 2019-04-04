@@ -139,6 +139,16 @@ void     umapcfg_set_num_flushers( uint64_t num_flushers )
   Umap::PageRegion::getInstance()->set_num_flushers(num_flushers);
 }
 
+int umapcfg_get_flush_threshold( void )
+{
+  return Umap::PageRegion::getInstance()->get_flush_threshold();
+}
+
+void umapcfg_set_flush_threshold( int threshold_percentage )
+{
+  Umap::PageRegion::getInstance()->set_flush_threshold(threshold_percentage);
+}
+
 uint64_t umapcfg_get_max_fault_events( void )
 {
   return Umap::PageRegion::getInstance()->get_max_fault_events();

@@ -27,7 +27,13 @@ struct PageDescriptor {
 
 class Buffer {
 public:
-explicit Buffer( uint64_t size ) : m_size(size)
+/** Buffer constructor
+ * \param size Maximum number of pages in buffer
+ * \param flush_threshold Integer percentage of Buffer capacify to be
+ * reached before page flushers are activated.  If 0 or 100, the flushers
+ * will only run when the Buffer is completely full.
+ */
+explicit Buffer( uint64_t size, int flush_threshold ) : m_size(size)
 {
   m_array = (PageDescriptor *)calloc(m_size, sizeof(PageDescriptor));
   if ( m_array == nullptr )
@@ -39,6 +45,17 @@ explicit Buffer( uint64_t size ) : m_size(size)
 
   pthread_mutex_init(&m_mutex, NULL);
   pthread_cond_init(&m_cond, NULL);
+
+  if ( flush_threshold < 0 || flush_threshold > 100)
+    UMAP_ERROR("Invalid percentage (" << flush_threshold << ") for flush threshold");
+
+  if ( flush_threshold == 0 || flush_threshold == 100 ) {
+    m_flush_threshold = m_size;
+  }
+  else {
+    float f = (float)((float)flush_threshold / (float)100.0);
+    m_flush_threshold = f * m_size;
+  }
 }
 
 ~Buffer( void )
@@ -108,6 +125,7 @@ inline uint64_t count( void ) {
 private:
 PageDescriptor* m_array;  // Circular buffer &m_array[0] - &m_array[m_size]
 uint64_t m_size;          // Maximum pages this buffer may have
+uint64_t m_flush_threshold;
 PageDescriptor* m_tail;
 PageDescriptor* m_head;
 std::unordered_map<void*, PageDescriptor*> m_present_pages;
