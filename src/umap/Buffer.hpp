@@ -21,7 +21,8 @@
 namespace Umap {
 struct PageDescriptor {
   enum State {EMPTY = 0, FILLING = 1, PRESENT = 2, DIRTY = 3, FLUSHING = 4};
-  void* page;
+  char* page;
+  bool is_dirty;
   State state;
 };
 

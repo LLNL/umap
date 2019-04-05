@@ -13,18 +13,18 @@
 
 #include "umap/Buffer.hpp"
 #include "umap/Flushers.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
-#include "umap/util/PthreadPool.hpp"
-#include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-class PageFlusher : PthreadPool {
+class PageFlusher : WorkerPool {
 public:
 PageFlusher(
       uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store) :
-        PthreadPool("Page Flusher", 1), m_buffer(buffer), m_uffd(uffd), m_store(store)
+        WorkerPool("Page Flusher", 1), m_buffer(buffer), m_uffd(uffd), m_store(store)
 {
   m_flush_wq = new WorkQueue<FlushWorkItem>;
   m_page_flushers = new Flushers(PageRegion::getInstance()->get_num_flushers(), m_buffer, m_uffd , m_store, m_flush_wq);

@@ -24,14 +24,14 @@
 #include "umap/PageRegion.hpp"
 #include "umap/Fillers.hpp"
 #include "umap/PageFlusher.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkQueue.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
-#include "umap/util/PthreadPool.hpp"
-#include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-class PageFiller : PthreadPool {
+class PageFiller : WorkerPool {
   public:
     PageFiller(
               Store*   store
@@ -41,7 +41,7 @@ class PageFiller : PthreadPool {
             , uint64_t mmap_region_size
             , uint64_t page_size
             , uint64_t max_fault_events
-          ) :   PthreadPool("Page Filler", 1)
+          ) :   WorkerPool("Page Filler", 1)
               , m_store(store)
               , m_region(region)
               , m_region_size(region_size)
@@ -52,10 +52,18 @@ class PageFiller : PthreadPool {
     {
       m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
       m_page_fill_wq = new WorkQueue<FillWorkItem>;
-      m_buffer = new Buffer(PageRegion::getInstance()->get_max_pages_in_buffer(), PageRegion::getInstance()->get_flush_threshold());
-      m_page_fillers = new Fillers(PageRegion::getInstance()->get_num_fillers(), m_buffer, m_uffd , m_store, m_page_fill_wq);
 
-      m_page_flusher = new PageFlusher(PageRegion::getInstance()->get_num_flushers(), m_buffer, m_uffd, m_store);
+      m_buffer = new Buffer(
+            PageRegion::getInstance()->get_max_pages_in_buffer()
+          , PageRegion::getInstance()->get_flush_threshold()
+      );
+
+      m_page_fillers = new Fillers(m_uffd , m_store, m_page_fill_wq);
+
+      m_page_flusher = new PageFlusher(
+            PageRegion::getInstance()->get_num_flushers()
+          , m_buffer, m_uffd, m_store
+      );
 
       start_thread_pool();
     }

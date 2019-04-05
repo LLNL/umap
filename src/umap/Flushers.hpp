@@ -10,11 +10,11 @@
 #include "umap/config.h"
 
 #include "umap/Buffer.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
-#include "umap/util/PthreadPool.hpp"
-#include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
 
@@ -26,11 +26,11 @@ struct FlushWorkItem {
   int fd;
 };
 
-class Flushers : PthreadPool {
+class Flushers : WorkerPool {
   public:
     Flushers(
           uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store, WorkQueue<FlushWorkItem>* wq) :
-            PthreadPool("UMAP Flushers", num_flushers), m_buffer(buffer), m_store(store), m_wq(wq)
+            WorkerPool("UMAP Flushers", num_flushers), m_buffer(buffer), m_store(store), m_wq(wq)
     {
       start_thread_pool();
     }

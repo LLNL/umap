@@ -9,52 +9,79 @@
 
 #include "umap/config.h"
 
+#include <cstdint>              // calloc
 #include <errno.h>
 #include <string.h>             // strerror()
-#include <unistd.h>             // sleep()
+#include <unistd.h>
 
-#include "umap/Buffer.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkQueue.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
-#include "umap/util/PthreadPool.hpp"
-#include "umap/util/WorkQueue.hpp"
 
 namespace Umap {
-struct FillWorkItem {
-  Uffd* uffd;
-  Store* store;
-  void* region;
-  std::size_t size;
-  std::size_t alignsize;
-  int fd;
-};
+  struct FillWorkItem {
+    PageDescriptor* page_desc;
+  };
 
-class Fillers : PthreadPool {
-public:
-Fillers(uint64_t num_fillers, Buffer* buffer, Uffd* uffd,
-    Store* store, WorkQueue<FillWorkItem>* wq) :
-      PthreadPool("UMAP Fillers", num_fillers), m_buffer(buffer),
-      m_uffd(uffd), m_store(store), m_wq(wq)
-{
-  start_thread_pool();
-}
+  class Fillers : WorkerPool {
+    public:
+      Fillers(Uffd* uffd, Store* store, WorkQueue<FillWorkItem>* wq)
+        :   WorkerPool("Page Fillers", PageRegion::getInstance()->get_num_fillers())
+          , m_uffd(uffd), m_store(store), m_wq(wq)
+      {
+        start_thread_pool();
+      }
 
-~Fillers( void )
-{
-}
+      ~Fillers( void ) {
+      }
 
-private:
-Buffer* m_buffer;
-Uffd* m_uffd;
-Store* m_store;
-WorkQueue<FillWorkItem>* m_wq;
+    private:
+      Uffd* m_uffd;
+      Store* m_store;
+      WorkQueue<FillWorkItem>* m_wq;
 
-inline void ThreadEntry() {
-  while ( ! time_to_stop_thread_pool() ) {
-    sleep(1);
-  }
-}
-};
+      inline void ThreadEntry() {
+        char* copyin_buf;
+        uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
+
+        if (posix_memalign((void**)&copyin_buf, page_size, page_size*2)) {
+          UMAP_ERROR("posix_memalign failed to allocated "
+              << page_size*2 << " bytes of memory");
+        }
+
+        if (copyin_buf == nullptr) {
+          UMAP_ERROR("posix_memalign failed to allocated "
+              << page_size*2 << " bytes of memory");
+        }
+
+        while ( ! time_to_stop_thread_pool() ) {
+          auto w = m_wq->dequeue();
+
+          uint64_t offset = m_uffd->get_offset(w.page_desc->page);
+
+          UMAP_LOG(Debug, "Filling page: " << (void*)w.page_desc->page);
+          if (m_store->read_from_store(copyin_buf, page_size, offset) == -1)
+            UMAP_ERROR("read_from_store failed");
+
+          if ( ! w.page_desc->is_dirty ) {
+            UMAP_LOG(Debug, "Copyin (WP) page: " << (void*)w.page_desc->page);
+            m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
+          }
+          else {
+            UMAP_LOG(Debug, "Copyin page: " << (void*)w.page_desc->page);
+            m_uffd->copy_in_page(copyin_buf, w.page_desc->page);
+          }
+
+          // TODO: Should we lock around this state change?
+          w.page_desc->state = PageDescriptor::State::PRESENT;
+
+          // TODO: Do we need to nofity anyone that this is now done?
+        }
+
+        free(copyin_buf);
+      }
+  };
 } // end of namespace Umap
 #endif // _UMAP_Fillers_HPP

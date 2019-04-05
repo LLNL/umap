@@ -212,6 +212,11 @@ class Uffd {
         UMAP_ERROR("UFFDIO_COPY failed: " << strerror(errno));
     }
 
+    uint64_t get_offset(void* page) {
+      return ( (uint64_t)page - (uint64_t)m_region );
+    }
+
+    
   private:
     char*    m_region;
     uint64_t m_region_size;

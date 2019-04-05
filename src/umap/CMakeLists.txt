@@ -14,17 +14,18 @@ set(umapheaders
       PageFiller.hpp
       PageRegion.hpp
       PageFlusher.hpp
+      WorkerPool.hpp
+      WorkQueue.hpp
       Uffd.hpp
       umap.h
       store/StoreFile.h
       store/Store.hpp
       util/Exception.hpp
       util/Logger.hpp
-      util/Macros.hpp
-      util/PthreadPool.hpp)
+      util/Macros.hpp)
 
 set(umapsrc
-  PageRegion.cpp
+    PageRegion.cpp
     umap.cpp
     store/Store.cpp
     store/StoreFile.cpp
