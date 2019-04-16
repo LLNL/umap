@@ -56,7 +56,8 @@ class PageFiller : WorkerPool {
 
       m_buffer = new Buffer(
             PageRegion::getInstance()->get_max_pages_in_buffer()
-          , PageRegion::getInstance()->get_flush_threshold()
+          , PageRegion::getInstance()->get_flush_low_water_threshold()
+          , PageRegion::getInstance()->get_flush_high_water_threshold()
       );
 
       m_page_fillers = new Fillers(m_uffd , m_store, m_page_fill_wq);

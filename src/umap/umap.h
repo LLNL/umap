@@ -74,8 +74,11 @@ void     umapcfg_set_num_fillers( uint64_t num_fillers );
 uint64_t umapcfg_get_num_flushers( void );
 void     umapcfg_set_num_flushers( uint64_t num_flushers );
 
-int umapcfg_get_flush_threshold( void );
-void     umapcfg_set_flush_threshold( int threshold_percentage );
+int umapcfg_get_flush_low_water_threshold( void );
+void     umapcfg_set_flush_low_water_threshold( int threshold_percentage );
+
+int umapcfg_get_flush_high_water_threshold( void );
+void     umapcfg_set_flush_high_water_threshold( int threshold_percentage );
 
 uint64_t umapcfg_get_max_fault_events( void );
 void     umapcfg_set_max_fault_events( uint64_t max_events );

@@ -93,10 +93,15 @@ PageRegion::PageRegion()
   else
     set_num_flushers(nthreads);
 
-  if ( (read_env_var("UMAP_FLUSH_THRESHOLD", &env_value)) != nullptr )
-    set_flush_threshold(env_value);
+  if ( (read_env_var("UMAP_FLUSH_HIGH_WATER_THRESHOLD", &env_value)) != nullptr )
+    set_flush_high_water_threshold(env_value);
   else
-    set_flush_threshold(nthreads);
+    set_flush_high_water_threshold(90);
+
+  if ( (read_env_var("UMAP_FLUSH_LOW_WATER_THRESHOLD", &env_value)) != nullptr )
+    set_flush_low_water_threshold(env_value);
+  else
+    set_flush_low_water_threshold(70);
 
   if ( (read_env_var("UMAP_PAGESIZE", &env_value)) != nullptr )
     set_umap_page_size(env_value);
@@ -226,13 +231,23 @@ PageRegion::set_num_flushers( uint64_t num_flushers )
 }
 
 void
-PageRegion::set_flush_threshold( int percent )
+PageRegion::set_flush_high_water_threshold( int percent )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
   }
 
-  m_flush_threshold = percent;
+  m_flush_high_water_threshold = percent;
+}
+
+void
+PageRegion::set_flush_low_water_threshold( int percent )
+{
+  if ( m_active_umaps.size() != 0 ) {
+    UMAP_ERROR("Cannot change configuration when umaps are active");
+  }
+
+  m_flush_low_water_threshold = percent;
 }
 
 void

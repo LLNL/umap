@@ -49,8 +49,6 @@ inline void ThreadEntry() {
   while ( ! time_to_stop_thread_pool() ) {
     std::vector<PageDescriptor*> page_descs;
 
-    page_descs = m_buffer->set_pages_to_evict(5, 5);
-
     sleep(1);
   }
 }

@@ -58,8 +58,11 @@ class PageRegion {
     inline uint64_t get_num_flushers( void ) { return m_num_flushers; }
     void set_num_flushers( uint64_t num_flushers );
 
-    inline int get_flush_threshold( void ) { return m_flush_threshold; }
-    void set_flush_threshold( int percent );
+    inline int get_flush_low_water_threshold( void ) { return m_flush_low_water_threshold; }
+    void set_flush_low_water_threshold( int percent );
+
+    inline int get_flush_high_water_threshold( void ) { return m_flush_high_water_threshold; }
+    void set_flush_high_water_threshold( int percent );
 
     inline uint64_t get_max_fault_events( void )     { return m_max_fault_events; }
     void set_max_fault_events( uint64_t max_events );
@@ -71,7 +74,8 @@ class PageRegion {
     uint64_t m_system_page_size;
     uint64_t m_num_fillers;
     uint64_t m_num_flushers;
-    int m_flush_threshold;
+    int m_flush_low_water_threshold;
+    int m_flush_high_water_threshold;
     uint64_t m_max_fault_events;
 
     std::unordered_map<void*, PageFiller*> m_active_umaps;
