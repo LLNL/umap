@@ -31,6 +31,11 @@
 
 namespace Umap {
 
+struct PageEvent {
+  char* aligned_page_address;
+  bool is_write_fault;
+};
+
 struct less_than_key {
   inline bool operator() (const struct uffd_msg& lhs, const struct uffd_msg& rhs)
   {
@@ -52,7 +57,7 @@ class Uffd {
           , m_max_fault_events(max_fault_events)
           , m_page_size(page_size)
     {
-      UMAP_LOG(Debug, "Hello from Userfaultfd!"
+      UMAP_LOG(Debug, "Uffd:"
           << "\n               region: " 
           << (void*)m_region << " - " << (void*)(m_region+(m_region_size-1))
           << "\n          region size: " << m_region_size
@@ -73,14 +78,18 @@ class Uffd {
       unregister_from_uffd();
     }
 
-    int get_page_events( void ) {
+    std::vector<PageEvent> get_page_events( void ) {
+      std::vector<PageEvent> rval;
       struct pollfd pollfd = { .fd = m_uffd_fd, .events = POLLIN };
+
+      UMAP_LOG(Debug, "Calling Poll");
 
       int pollres = poll(&pollfd, 1, 2000);
 
+      UMAP_LOG(Debug, "poll returned " << pollres);
       switch (pollres) {
         case 0:
-          return -1;
+          return rval;
         case 1:
           break;
         case -1:
@@ -93,13 +102,16 @@ class Uffd {
         UMAP_ERROR("POLLERR: ");
 
       if ( !(pollfd.revents & POLLIN) )
-        return -1;
+        return rval;
+
+      UMAP_LOG(Debug, "Calling read");
 
       int readres = read(m_uffd_fd, &m_events[0], m_max_fault_events * sizeof(struct uffd_msg));
+      UMAP_LOG(Debug, "read returned " << readres);
 
       if (readres == -1) {
         if (errno == EAGAIN)
-          return -1;
+          return rval;
 
         UMAP_ERROR("read failed: " << strerror(errno));
       }
@@ -111,27 +123,35 @@ class Uffd {
 
       assert("invalid message size" && msgs >= 1);
 
+      //
+      // Since uffd page events arrive on the system page boundary which could
+      // be different from umap's page size, the page address for the incoming
+      // events are adjusted to the beginning of the umap page address.  The
+      // events are then sorted in page base address / operation type order and
+      // are processed only once while duplicates are skipped.
+      //
       for (int i = 0; i < msgs; ++i)
         m_events[i].arg.pagefault.address &= ~(m_page_size-1);
 
       std::sort(m_events.begin(), m_events.begin()+msgs, less_than_key());
 
-      m_cur_event = &m_events[0];
-      m_last_event = &m_events[msgs];
+      uint64_t last_addr = 0;
+      for (int i = 0; i < msgs; ++i) {
+        if (m_events[i].arg.pagefault.address == last_addr)
+          continue;
 
-      return msgs;
-    }
+        last_addr = m_events[i].arg.pagefault.address;
 
-    const bool next_page_event( void ) {
-      if ( m_cur_event == m_last_event )
-        return false;
-
-      m_cur_event++;
-      return true;
-    }
-
-    char* get_event_page_address( void ) {
-      return ( (char*)(m_cur_event->arg.pagefault.address) );
+        PageEvent pe;
+        pe.aligned_page_address = (char*)(m_events[i].arg.pagefault.address);
+#ifndef UMAP_RO_MODE
+        pe.is_write_fault = (m_events[i].arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE) != 0);
+#else
+        pe.is_write_fault = false;
+#endif
+        rval.push_back(pe);
+      }
+      return rval;
     }
 
     void  enable_write_protect(
@@ -168,18 +188,6 @@ class Uffd {
       if (ioctl(m_uffd_fd, UFFDIO_WRITEPROTECT, &wp) == -1)
         UMAP_ERROR("ioctl(UFFDIO_WRITEPROTECT): " << strerror(errno));
 #endif // UMAP_RO_MODE
-    }
-
-    bool is_write_protect_event( void ) {
-      return ( (m_cur_event->arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP) != 0);
-    }
-
-    bool   is_write_fault_event( void ) {
-      return ( (m_cur_event->arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE) != 0);
-    }
-
-    bool    is_read_fault_event( void ) {
-      return ( !is_write_fault_event() && !is_read_fault_event() );
     }
 
     void copy_in_page(char* data, char* page_address) {
@@ -225,8 +233,6 @@ class Uffd {
     int      m_uffd_fd;
 
     std::vector<uffd_msg> m_events;
-    uffd_msg* m_cur_event;
-    uffd_msg* m_last_event;
 
     void check_uffd_compatibility( void ) {
       struct uffdio_api uffdio_api = {

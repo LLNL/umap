@@ -21,7 +21,7 @@ namespace Umap {
 template <typename T>
 class WorkQueue {
   public:
-    WorkQueue() {
+    WorkQueue(): m_time_to_stop(false) {
       pthread_mutex_init(&m_mutex, NULL);
       pthread_cond_init(&m_cond, NULL);
     }
@@ -29,6 +29,13 @@ class WorkQueue {
     ~WorkQueue() {
       pthread_mutex_destroy(&m_mutex);
       pthread_cond_destroy(&m_cond);
+    }
+
+    void kill( void ) {
+      m_time_to_stop = true;
+      pthread_mutex_lock(&m_mutex);
+      pthread_cond_broadcast(&m_cond);
+      pthread_mutex_unlock(&m_mutex);
     }
 
     void enqueue(T item) {
@@ -41,8 +48,13 @@ class WorkQueue {
     T dequeue() {
       pthread_mutex_lock(&m_mutex);
 
-      while ( m_queue.size() == 0 )
+      while ( m_queue.size() == 0 && !m_time_to_stop )
         pthread_cond_wait(&m_cond, &m_mutex);
+
+      if ( m_time_to_stop ) {
+        pthread_mutex_unlock(&m_mutex);
+        throw "Stopping WorkQueue";
+      }
 
       auto item = m_queue.front();
       m_queue.pop_front();
@@ -62,6 +74,7 @@ class WorkQueue {
     pthread_mutex_t m_mutex;
     pthread_cond_t m_cond;
     std::list<T> m_queue;
+    bool m_time_to_stop;
 };
 
 } // end of namespace Umap

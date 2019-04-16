@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <string.h>             // strerror()
 #include <unistd.h>             // syscall()
+#include <vector>
 #include <linux/userfaultfd.h>  // ioctl(UFFDIO_*)
 #include <sys/ioctl.h>          // ioctl()
 #include <sys/syscall.h>        // syscall()
@@ -77,7 +78,6 @@ class PageFiller : WorkerPool {
       delete m_uffd;
     }
 
-
   protected:
     inline void ThreadEntry() {
       UMAP_LOG(Debug, "\nPageFiller says Hello: "
@@ -92,17 +92,16 @@ class PageFiller : WorkerPool {
       );
 
       while ( ! time_to_stop_thread_pool() ) {
-        int num_events = m_uffd->get_page_events();
+        auto pe = m_uffd->get_page_events();
 
-        if (num_events == -1)
+        UMAP_LOG(Debug, "Recieved " << pe.size() << " page events");
+        if (pe.size() == 0)
           continue;
 
         //
         // Make sure we have enough available slots in the buffer
         //
       }
-
-      UMAP_LOG(Debug, "Bye");
     }
 
   private:
