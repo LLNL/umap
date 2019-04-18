@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
 #include <pthread.h>
 #include <queue>
 #include <time.h>
@@ -21,13 +22,17 @@
 
 namespace Umap {
   struct PageDescriptor {
-    enum State {EMPTY = 0, FILLING = 1, PRESENT = 2, DIRTY = 3, FLUSHING = 4};
-    char* page;
-    bool is_dirty;
-    State state;
+    void* m_page;
+    bool m_is_dirty;
+
+    bool page_is_dirty() { return m_is_dirty; }
+    void mark_page_dirty() { m_is_dirty = true; }
+    void set_page_addr(void* paddr) { m_page = paddr; }
+    void* get_page_addr() { return m_page; }
   };
 
   class Buffer {
+    friend std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b);
     public:
       /** Buffer constructor
        * \param size Maximum number of pages in buffer
@@ -41,7 +46,7 @@ namespace Umap {
           UMAP_ERROR("Failed to allocate " << m_size*sizeof(PageDescriptor)
               << " bytes for buffer page descriptors");
 
-        for ( auto i = (m_size - m_size); i < m_size; ++i )
+        for ( int i = 0; i < m_size; ++i )
           m_free_pages.push_back(&m_array[i]);
 
         pthread_mutex_init(&m_mutex, NULL);
@@ -49,7 +54,6 @@ namespace Umap {
 
         m_flush_low_water = apply_int_percentage(low_water_threshold, m_size);
         m_flush_high_water = apply_int_percentage(high_water_threshold, m_size);
-
       }
 
       ~Buffer( void )
@@ -60,57 +64,48 @@ namespace Umap {
         free(m_array);
       }
 
-#if 0
-      std::vector<PageDescriptor*> set_pages_to_evict(
-          uint64_t pages_in_buffer_threshold, time_t seconds_to_wait)
-      {
-        std::vector<PageDescriptor*> rval;
-
-        int rc = 0;
-
+      //
+      // Course grain lock against entire buffer.  We may need to make this
+      // finer grained later if needed
+      //
+      void lock() {
         pthread_mutex_lock(&m_mutex);
-        while (count() < pages_in_buffer_threshold && rc == 0) {
-          UMAP_LOG(Debug, count() << " < " << pages_in_buffer_threshold
-              << ".  Waiting for more pages");
+      }
 
-          struct timespec ts;
-          clock_gettime(CLOCK_REALTIME, &ts);
-          ts.tv_sec += seconds_to_wait;
-          rc = pthread_cond_timedwait(&m_cond, &m_mutex, &ts);
-        }
+      void unlock() {
         pthread_mutex_unlock(&m_mutex);
+      }
 
-        if (rc == ETIMEDOUT)
-          UMAP_LOG(Debug, "Timed out");
+      // Return nullptr if page not present, PageDescriptor * otherwise
+      PageDescriptor* page_already_present( void* page_addr ) {
+        auto pp = m_present_pages.find(page_addr);
+        if ( pp != m_present_pages.end() )
+          return pp->second;
+        else
+          return nullptr;
+      }
+
+      void mark_page_present( PageDescriptor* pd ) {
+        m_present_pages[pd->get_page_addr()] = pd;
+      }
+
+      PageDescriptor* get_page_descriptor( void* page_addr ) {
+        PageDescriptor* rval;
+        UMAP_LOG(Debug, this);
+
+        while ( m_free_pages.size() == 0 )
+          pthread_cond_wait(&m_cond, &m_mutex);
+
+        rval = m_free_pages.back();
+        m_free_pages.pop_back();
+
+        rval->m_page = page_addr;
+        rval->m_is_dirty = false;
+
+        m_busy_pages.push(rval);
 
         return rval;
       }
-
-      inline void remove_evicted_pages_from_buffer( void )
-      {
-      }
-
-      inline PageDescriptor* add_page_to_buffer( void* ) { return nullptr; }
-
-      inline PageDescriptor* find_fill_buffer( void* ) { return nullptr; }
-
-      inline void set_page_present( PageDescriptor* )
-      {
-      }
-
-      inline void set_page_dirty( PageDescriptor* )
-      {
-      }
-
-      inline bool page_is_dirty(PageDescriptor* pd)
-      {
-        return pd->state == PageDescriptor::State::DIRTY;
-      }
-
-      inline uint64_t size( void ) {
-        return m_size;
-      }
-#endif
 
     private:
       uint64_t m_size;          // Maximum pages this buffer may have
@@ -139,10 +134,29 @@ namespace Umap {
           float f = (float)((float)percentage / (float)100.0);
           rval = f * item;
         }
-
         return rval;
       }
-
   };
+
+  std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b)
+  {
+    os << "{ m_size: " << b->m_size
+      << ", m_array: " << (void*)(b->m_array)
+      << ", m_present_pages.size(): " << b->m_present_pages.size()
+      << ", m_free_pages.size(): " << b->m_free_pages.size()
+      << ", m_busy_pages.size(): " << b->m_busy_pages.size()
+      << ", m_flush_low_water: " << b->m_flush_low_water
+      << ", m_flush_high_water: " << b->m_flush_high_water
+      << " }";
+
+    return os;
+  }
+
+  std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor* pd)
+  {
+    os << "{ m_page: " << (void*)(pd->m_page) << ", m_is_dirty: " << pd->m_is_dirty << " }";
+    return os;
+  }
 } // end of namespace Umap
+
 #endif // _UMAP_Buffer_HPP

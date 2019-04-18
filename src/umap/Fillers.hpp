@@ -22,14 +22,16 @@
 
 namespace Umap {
   struct FillWorkItem {
+    void* region;
     PageDescriptor* page_desc;
+    Store* store;   // Set to nullptr if no I/O required
   };
 
   class Fillers : WorkerPool {
     public:
-      Fillers(Uffd* uffd, Store* store, WorkQueue<FillWorkItem>* wq)
+      Fillers(Uffd* uffd, WorkQueue<FillWorkItem>* wq)
         :   WorkerPool("Page Fillers", PageRegion::getInstance()->get_num_fillers())
-          , m_uffd(uffd), m_store(store), m_wq(wq)
+          , m_uffd(uffd), m_wq(wq)
       {
         start_thread_pool();
       }
@@ -42,7 +44,6 @@ namespace Umap {
 
     private:
       Uffd* m_uffd;
-      Store* m_store;
       WorkQueue<FillWorkItem>* m_wq;
 
       inline void ThreadEntry() {
@@ -63,25 +64,31 @@ namespace Umap {
           try {
             auto w = m_wq->dequeue();
 
-            uint64_t offset = m_uffd->get_offset(w.page_desc->page);
-
-            UMAP_LOG(Debug, "Filling page: " << (void*)w.page_desc->page);
-            if (m_store->read_from_store(copyin_buf, page_size, offset) == -1)
-              UMAP_ERROR("read_from_store failed");
-
-            if ( ! w.page_desc->is_dirty ) {
-              UMAP_LOG(Debug, "Copyin (WP) page: " << (void*)w.page_desc->page);
-              m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
+            if ( w.store == nullptr ) {
+              //
+              // The only reason we would not be given a store object is
+              // when a present page has become dirty.  At this point, the only
+              // thing we do is disable write protect on the present page and
+              // wake up the faulting thread
+              //
+              m_uffd->disable_write_protect(w.page_desc->get_page_addr());
             }
             else {
-              UMAP_LOG(Debug, "Copyin page: " << (void*)w.page_desc->page);
-              m_uffd->copy_in_page(copyin_buf, w.page_desc->page);
+              uint64_t offset = m_uffd->get_offset(w.page_desc->get_page_addr());
+
+              UMAP_LOG(Debug, "Filling page: " << w.page_desc->get_page_addr());
+              if (w.store->read_from_store(copyin_buf, page_size, offset) == -1)
+                UMAP_ERROR("read_from_store failed");
+
+              if ( ! w.page_desc->page_is_dirty() ) {
+                UMAP_LOG(Debug, "Copyin (WP) page: " << w.page_desc->get_page_addr());
+                m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->get_page_addr());
+              }
+              else {
+                UMAP_LOG(Debug, "Copyin page: " << w.page_desc->get_page_addr());
+                m_uffd->copy_in_page(copyin_buf, w.page_desc->get_page_addr());
+              }
             }
-
-            // TODO: Should we lock around this state change?
-            w.page_desc->state = PageDescriptor::State::PRESENT;
-
-            // TODO: Do we need to nofity anyone that this is now done?
           }
           catch ( ... ) {
             ;

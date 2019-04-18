@@ -32,7 +32,7 @@
 namespace Umap {
 
 struct PageEvent {
-  char* aligned_page_address;
+  void* aligned_page_address;
   bool is_write_fault;
 };
 
@@ -82,11 +82,8 @@ class Uffd {
       std::vector<PageEvent> rval;
       struct pollfd pollfd = { .fd = m_uffd_fd, .events = POLLIN };
 
-      UMAP_LOG(Debug, "Calling Poll");
-
       int pollres = poll(&pollfd, 1, 2000);
 
-      UMAP_LOG(Debug, "poll returned " << pollres);
       switch (pollres) {
         case 0:
           return rval;
@@ -104,10 +101,7 @@ class Uffd {
       if ( !(pollfd.revents & POLLIN) )
         return rval;
 
-      UMAP_LOG(Debug, "Calling read");
-
       int readres = read(m_uffd_fd, &m_events[0], m_max_fault_events * sizeof(struct uffd_msg));
-      UMAP_LOG(Debug, "read returned " << readres);
 
       if (readres == -1) {
         if (errno == EAGAIN)
@@ -173,7 +167,7 @@ class Uffd {
     }
 
     void disable_write_protect(
-      char*
+      void*
 #ifndef UMAP_RO_MODE
       page_address
 #endif
@@ -190,8 +184,8 @@ class Uffd {
 #endif // UMAP_RO_MODE
     }
 
-    void copy_in_page(char* data, char* page_address) {
-      UMAP_LOG(Debug, "(data = " << (void*) data << ")");
+    void copy_in_page(char* data, void* page_address) {
+      UMAP_LOG(Debug, "(page_address = " << page_address << ")");
       struct uffdio_copy copy = {
           .dst = (uint64_t)page_address
         , .src = (uint64_t)data
@@ -203,8 +197,8 @@ class Uffd {
         UMAP_ERROR("UFFDIO_COPY failed: " << strerror(errno));
     }
 
-    void copy_in_page_and_write_protect(char* data, char* page_address) {
-      UMAP_LOG(Debug, "(data = " << (void*) data << ")");
+    void copy_in_page_and_write_protect(char* data, void* page_address) {
+      UMAP_LOG(Debug, "(page_address = " << page_address << ")");
       struct uffdio_copy copy = {
           .dst = (uint64_t)page_address
         , .src = (uint64_t)data

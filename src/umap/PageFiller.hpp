@@ -32,97 +32,131 @@
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-class PageFiller : WorkerPool {
-  public:
-    PageFiller(
-              Store*   store
-            , char*    region
-            , uint64_t region_size
-            , char*    mmap_region
-            , uint64_t mmap_region_size
-            , uint64_t page_size
-            , uint64_t max_fault_events
-          ) :   WorkerPool("Page Filler", 1)
-              , m_store(store)
-              , m_region(region)
-              , m_region_size(region_size)
-              , m_mmap_region(mmap_region)
-              , m_mmap_region_size(mmap_region_size)
-              , m_page_size(page_size)
-              , m_max_fault_events(max_fault_events)
-    {
-      m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
-      m_page_fill_wq = new WorkQueue<FillWorkItem>;
+  class PageFiller : WorkerPool {
+    public:
+      PageFiller(
+                Store*   store
+              , char*    region
+              , uint64_t region_size
+              , char*    mmap_region
+              , uint64_t mmap_region_size
+              , uint64_t page_size
+              , uint64_t max_fault_events
+            ) :   WorkerPool("Page Filler", 1)
+                , m_store(store)
+                , m_region(region)
+                , m_region_size(region_size)
+                , m_mmap_region(mmap_region)
+                , m_mmap_region_size(mmap_region_size)
+                , m_page_size(page_size)
+                , m_max_fault_events(max_fault_events)
+      {
+        m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
+        m_page_fill_wq = new WorkQueue<FillWorkItem>;
 
-      m_buffer = new Buffer(
-            PageRegion::getInstance()->get_max_pages_in_buffer()
-          , PageRegion::getInstance()->get_flush_low_water_threshold()
-          , PageRegion::getInstance()->get_flush_high_water_threshold()
-      );
+        m_buffer = new Buffer(
+              PageRegion::getInstance()->get_max_pages_in_buffer()
+            , PageRegion::getInstance()->get_flush_low_water_threshold()
+            , PageRegion::getInstance()->get_flush_high_water_threshold()
+        );
 
-      m_page_fillers = new Fillers(m_uffd , m_store, m_page_fill_wq);
+        m_page_fillers = new Fillers(m_uffd, m_page_fill_wq);
 
-      m_page_flusher = new PageFlusher(
-            PageRegion::getInstance()->get_num_flushers()
-          , m_buffer, m_uffd, m_store
-      );
+        m_page_flusher = new PageFlusher(
+              PageRegion::getInstance()->get_num_flushers()
+            , m_buffer, m_uffd, m_store
+        );
 
-      start_thread_pool();
-    }
-
-    ~PageFiller( void )
-    {
-      delete m_page_flusher;
-      delete m_page_fillers;
-      delete m_buffer;
-      delete m_page_fill_wq;
-      delete m_uffd;
-    }
-
-  protected:
-    inline void ThreadEntry() {
-      UMAP_LOG(Debug, "\nPageFiller says Hello: "
-          << "\n             m_store: " <<  (void*)m_store
-          << "\n            m_region: " <<  (void*)m_region
-          << "\n       m_region_size: " <<  m_region_size
-          << "\n       m_mmap_region: " <<  (void*)m_mmap_region
-          << "\n  m_mmap_region_size: " <<  m_mmap_region_size
-          << "\n         m_page_size: " <<  m_page_size
-          << "\n  m_max_fault_events: " <<  m_max_fault_events
-          << "\n           m_uffd_fd: " <<  m_uffd_fd
-      );
-
-      while ( ! time_to_stop_thread_pool() ) {
-        auto pe = m_uffd->get_page_events();
-
-        UMAP_LOG(Debug, "Recieved " << pe.size() << " page events");
-        if (pe.size() == 0)
-          continue;
-
-        //
-        // Make sure we have enough available slots in the buffer
-        //
+        start_thread_pool();
       }
-    }
 
-  private:
-    Store*    m_store;
-    char*     m_region;
-    uint64_t  m_region_size;
-    char*     m_mmap_region;
-    uint64_t  m_mmap_region_size;
-    uint64_t  m_page_size;
-    uint64_t  m_max_fault_events;
-    int       m_uffd_fd;
+      ~PageFiller( void )
+      {
+        delete m_page_flusher;
+        delete m_page_fillers;
+        delete m_buffer;
+        delete m_page_fill_wq;
+        delete m_uffd;
+      }
 
-    Uffd* m_uffd;
+    protected:
+      inline void ThreadEntry() {
+        UMAP_LOG(Debug, "\nPageFiller says Hello: "
+            << "\n             m_store: " <<  (void*)m_store
+            << "\n            m_region: " <<  (void*)m_region
+            << "\n       m_region_size: " <<  m_region_size
+            << "\n       m_mmap_region: " <<  (void*)m_mmap_region
+            << "\n  m_mmap_region_size: " <<  m_mmap_region_size
+            << "\n         m_page_size: " <<  m_page_size
+            << "\n  m_max_fault_events: " <<  m_max_fault_events
+            << "\n           m_uffd_fd: " <<  m_uffd_fd
+        );
 
-    WorkQueue<FillWorkItem>*  m_page_fill_wq;
-    Fillers* m_page_fillers;
+        while ( ! time_to_stop_thread_pool() ) {
+          auto pe = m_uffd->get_page_events();
 
-    PageFlusher* m_page_flusher;
-    Buffer* m_buffer;
-};
+          if (pe.size() == 0)
+            continue;
+
+          m_buffer->lock();
+
+          for ( auto & event : pe ) {
+            auto pd = m_buffer->page_already_present(event.aligned_page_address);
+
+            if ( pd != nullptr ) {  // Page is already present
+              UMAP_LOG(Debug, "Present Page: " << pd);
+              if (event.is_write_fault && pd->page_is_dirty() == false) {
+                FillWorkItem work = {
+                    .region = m_region
+                  , .page_desc = pd
+                  , .store = nullptr
+                };
+
+                pd->mark_page_dirty();
+                m_page_fill_wq->enqueue(work);
+              }
+            }
+            else {                  // This page has not been brought in yet
+              pd = m_buffer->get_page_descriptor(event.aligned_page_address);
+              UMAP_LOG(Debug, "New Page: " << pd);
+
+              m_buffer->mark_page_present(pd);
+
+              FillWorkItem work = {
+                  .region = m_region
+                , .page_desc = pd
+                , .store = m_store
+              };
+
+              if ( pd->page_is_dirty() )
+                pd->mark_page_dirty();
+
+              m_page_fill_wq->enqueue(work);
+            }
+          }
+
+          m_buffer->unlock();
+        }
+      }
+
+    private:
+      Store*    m_store;
+      char*     m_region;
+      uint64_t  m_region_size;
+      char*     m_mmap_region;
+      uint64_t  m_mmap_region_size;
+      uint64_t  m_page_size;
+      uint64_t  m_max_fault_events;
+      int       m_uffd_fd;
+
+      Uffd* m_uffd;
+
+      WorkQueue<FillWorkItem>*  m_page_fill_wq;
+      Fillers* m_page_fillers;
+
+      PageFlusher* m_page_flusher;
+      Buffer* m_buffer;
+  };
 } // end of namespace Umap
 
 #endif // _UMAP_PageFiller_HPP

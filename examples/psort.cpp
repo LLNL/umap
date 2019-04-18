@@ -62,8 +62,11 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
     return;
   }
 
-#if 0
   uint64_t *arr = (uint64_t *) base_addr;
+
+  *arr = 0;
+
+#if 0
   cout << "Initializing Array\n";
 
 #pragma omp parallel for
