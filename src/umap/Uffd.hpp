@@ -69,6 +69,9 @@ class Uffd {
         UMAP_ERROR("userfaultfd syscall not available in this kernel: "
             << strerror(errno));
 
+      if (pipe2(m_pipe, 0) < 0)
+        UMAP_ERROR("userfaultfd pipe failed: " << strerror(errno));
+
       check_uffd_compatibility();
       register_with_uffd();
       m_events.resize(m_max_fault_events);
@@ -78,15 +81,25 @@ class Uffd {
       unregister_from_uffd();
     }
 
+    void stop_uffd( void ) {
+      char bye[5] = "bye";
+
+      if (write(m_pipe[1], bye, 3) < 0)
+        UMAP_ERROR("userfaultfd pipe write failed: " << strerror(errno));
+    }
+
     std::vector<PageEvent> get_page_events( void ) {
       std::vector<PageEvent> rval;
-      struct pollfd pollfd = { .fd = m_uffd_fd, .events = POLLIN };
 
-      int pollres = poll(&pollfd, 1, 2000);
+      struct pollfd pollfd[3] = {
+          { .fd = m_uffd_fd, .events = POLLIN } 
+        , { .fd = m_pipe[0], .events = POLLIN } 
+        , { .fd = m_pipe[1], .events = POLLIN } 
+      };
+
+      int pollres = poll(&pollfd[0], 3, -1);
 
       switch (pollres) {
-        case 0:
-          return rval;
         case 1:
           break;
         case -1:
@@ -95,11 +108,21 @@ class Uffd {
           UMAP_ERROR("poll: unexpected result: " << pollres);
       }
 
-      if (pollfd.revents & POLLERR)
+      if (pollfd[1].revents & POLLIN || pollfd[2].revents & POLLIN) {
+        UMAP_LOG(Debug, "Good bye");
+        PageEvent pe;
+        pe.aligned_page_address = (char*)nullptr;
+        pe.is_write_fault = false;
+        rval.push_back(pe);
+        return rval;
+      }
+
+      if (pollfd[0].revents & POLLERR)
         UMAP_ERROR("POLLERR: ");
 
-      if ( !(pollfd.revents & POLLIN) )
+      if ( !(pollfd[0].revents & POLLIN) ) {
         return rval;
+      }
 
       int readres = read(m_uffd_fd, &m_events[0], m_max_fault_events * sizeof(struct uffd_msg));
 
@@ -217,13 +240,13 @@ class Uffd {
       return ( (uint64_t)page - (uint64_t)m_region );
     }
 
-    
   private:
     char*    m_region;
     uint64_t m_region_size;
     uint64_t m_max_fault_events;
     uint64_t m_page_size;
     int      m_uffd_fd;
+    int m_pipe[2];
 
     std::vector<uffd_msg> m_events;
 

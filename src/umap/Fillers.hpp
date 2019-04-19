@@ -30,6 +30,7 @@ namespace Umap {
       }
 
       ~Fillers( void ) {
+        stop_thread_pool();
       }
 
     private:
@@ -53,38 +54,36 @@ namespace Umap {
               << page_size*2 << " bytes of memory");
         }
 
-        while ( ! time_to_stop_thread_pool() ) {
-          try {
-            auto w = get_work();
+        while ( 1 ) {
+          auto w = get_work();
 
-            if ( w.store == nullptr ) {
-              //
-              // The only reason we would not be given a store object is
-              // when a present page has become dirty.  At this point, the only
-              // thing we do is disable write protect on the present page and
-              // wake up the faulting thread
-              //
-              m_uffd->disable_write_protect(w.page_desc->get_page_addr());
+          if (w.page_desc == nullptr && w.store == nullptr)
+            break;    // Time to leave
+
+          if ( w.store == nullptr ) {
+            //
+            // The only reason we would not be given a store object is
+            // when a present page has become dirty.  At this point, the only
+            // thing we do is disable write protect on the present page and
+            // wake up the faulting thread
+            //
+            m_uffd->disable_write_protect(w.page_desc->get_page_addr());
+          }
+          else {
+            uint64_t offset = m_uffd->get_offset(w.page_desc->get_page_addr());
+
+            UMAP_LOG(Debug, "Filling page: " << w.page_desc->get_page_addr());
+            if (w.store->read_from_store(copyin_buf, page_size, offset) == -1)
+              UMAP_ERROR("read_from_store failed");
+
+            if ( ! w.page_desc->page_is_dirty() ) {
+              UMAP_LOG(Debug, "Copyin (WP) page: " << w.page_desc->get_page_addr());
+              m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->get_page_addr());
             }
             else {
-              uint64_t offset = m_uffd->get_offset(w.page_desc->get_page_addr());
-
-              UMAP_LOG(Debug, "Filling page: " << w.page_desc->get_page_addr());
-              if (w.store->read_from_store(copyin_buf, page_size, offset) == -1)
-                UMAP_ERROR("read_from_store failed");
-
-              if ( ! w.page_desc->page_is_dirty() ) {
-                UMAP_LOG(Debug, "Copyin (WP) page: " << w.page_desc->get_page_addr());
-                m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->get_page_addr());
-              }
-              else {
-                UMAP_LOG(Debug, "Copyin page: " << w.page_desc->get_page_addr());
-                m_uffd->copy_in_page(copyin_buf, w.page_desc->get_page_addr());
-              }
+              UMAP_LOG(Debug, "Copyin page: " << w.page_desc->get_page_addr());
+              m_uffd->copy_in_page(copyin_buf, w.page_desc->get_page_addr());
             }
-          }
-          catch ( ... ) {
-            continue;
           }
         }
 

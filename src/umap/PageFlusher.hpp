@@ -32,7 +32,26 @@ namespace Umap {
 
       ~PageFlusher( void ) {
         FlushAll();
+        stop_thread_pool();
         delete m_page_flushers;
+      }
+
+    private:
+      Buffer* m_buffer;
+      Store* m_store;
+      Flushers* m_page_flushers;
+
+      void ThreadEntry() {
+        PageFlusherLoop();
+      }
+
+      void PageFlusherLoop() {
+        while ( 1 ) {
+          auto w = get_work();
+
+          if ( w.page_desc == nullptr && w.store == nullptr )
+            break;    // Time to leave
+        }
       }
 
       void FlushAll( void ) {
@@ -51,19 +70,6 @@ namespace Umap {
         }
         m_buffer->unlock();
       }
-
-    private:
-      Buffer* m_buffer;
-      Store* m_store;
-      Flushers* m_page_flushers;
-
-      inline void ThreadEntry() {
-        while ( ! time_to_stop_thread_pool() ) {
-          std::vector<PageDescriptor*> page_descs;
-
-          sleep(1);
-        }
-    }
   };
 } // end of namespace Umap
 

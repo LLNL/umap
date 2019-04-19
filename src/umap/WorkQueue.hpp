@@ -11,7 +11,6 @@
 
 #include <cstdint>
 #include <pthread.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "umap/Uffd.hpp"
@@ -40,19 +39,10 @@ class WorkQueue {
     }
 
     T dequeue() {
-      struct timespec ts;
       pthread_mutex_lock(&m_mutex);
 
-      clock_gettime(CLOCK_REALTIME, &ts);
-      ts.tv_sec += 1;
-      while ( m_queue.size() == 0 ) {
-        int rc = pthread_cond_timedwait(&m_cond, &m_mutex, &ts);
-
-        if ( rc ) {
-          pthread_mutex_unlock(&m_mutex);
-          throw "Work Queue Timeout";
-        }
-      }
+      while ( m_queue.size() == 0 )
+        pthread_cond_wait(&m_cond, &m_mutex);
 
       auto item = m_queue.front();
       m_queue.pop_front();

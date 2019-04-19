@@ -37,6 +37,7 @@ class Flushers : public WorkerPool {
     }
 
     ~Flushers( void ) {
+      stop_thread_pool();
     }
 
   private:
@@ -50,30 +51,29 @@ class Flushers : public WorkerPool {
     void FlushersLoop( void ) {
       uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
 
-      while ( ! time_to_stop_thread_pool() ) {
-        try {
-          auto w = get_work();
-          auto page_addr = w.page_desc->get_page_addr();
+      while ( 1 ) {
+        auto w = get_work();
 
-          if ( w.store != nullptr ) {
-            uint64_t offset = m_uffd->get_offset(page_addr);
-            m_uffd->enable_write_protect(page_addr);
+        if ( w.page_desc == nullptr && w.store == nullptr )
+          break;    // Time to leave
 
-            UMAP_LOG(Debug, "Flushing page: " << page_addr);
-            if (w.store->write_to_store((char*)page_addr, page_size, offset) == -1)
-              UMAP_ERROR("write_to_store failed: " << errno << " (" << strerror(errno) << ")");
-          }
+        auto page_addr = w.page_desc->get_page_addr();
 
-          if (madvise(page_addr, page_size, MADV_DONTNEED) == -1)
-            UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+        if ( w.store != nullptr ) {
+          uint64_t offset = m_uffd->get_offset(page_addr);
+          m_uffd->enable_write_protect(page_addr);
 
-          m_buffer->lock();
-          m_buffer->mark_page_not_present(w.page_desc);
-          m_buffer->unlock();
+          UMAP_LOG(Debug, "Flushing page: " << page_addr);
+          if (w.store->write_to_store((char*)page_addr, page_size, offset) == -1)
+            UMAP_ERROR("write_to_store failed: " << errno << " (" << strerror(errno) << ")");
         }
-        catch (...) {
-          continue;
-        }
+
+        if (madvise(page_addr, page_size, MADV_DONTNEED) == -1)
+          UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+
+        m_buffer->lock();
+        m_buffer->mark_page_not_present(w.page_desc);
+        m_buffer->unlock();
       }
     }
 };

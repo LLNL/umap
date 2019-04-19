@@ -66,8 +66,10 @@ namespace Umap {
 
       ~PageFiller( void )
       {
-        delete m_page_flusher;
+        m_uffd->stop_uffd();
+        stop_thread_pool();
         delete m_page_fillers;
+        delete m_page_flusher;
         delete m_buffer;
         delete m_uffd;
       }
@@ -84,11 +86,16 @@ namespace Umap {
                         << "\n           m_uffd_fd: " <<  m_uffd_fd
         );
 
-        while ( ! time_to_stop_thread_pool() ) {
+        while ( 1 ) {
           auto pe = m_uffd->get_page_events();
 
           if (pe.size() == 0)
             continue;
+
+          if ( pe[0].aligned_page_address == (char*)nullptr && pe[0].is_write_fault == false) {
+            UMAP_LOG(Debug, "Good-bye");
+            break;
+          }
 
           m_buffer->lock();
 

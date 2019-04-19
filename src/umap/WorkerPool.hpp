@@ -22,8 +22,8 @@
 
 namespace Umap {
   struct WorkItem {
-    PageDescriptor* page_desc;
-    Store* store;   // Set to nullptr if no I/O required
+    PageDescriptor* page_desc;  // Set to nullptr if time to stop
+    Store* store;               // Set to nullptr if no I/O required
   };
 
   class WorkerPool {
@@ -31,7 +31,6 @@ namespace Umap {
       WorkerPool(const std::string& pool_name, uint64_t num_threads)
         :   m_pool_name(pool_name)
           , m_num_threads(num_threads)
-          , m_time_to_stop(false)
           , m_wq(new WorkQueue<WorkItem>)
       {
         if (m_pool_name.length() > 15)
@@ -72,17 +71,23 @@ namespace Umap {
         UMAP_LOG(Debug, "Stopping " <<  m_pool_name << " Pool of "
             << m_num_threads << " threads");
 
-        m_time_to_stop = true;
+        WorkItem w = {.page_desc = nullptr, .store = nullptr};
+
+        //
+        // This will inform all of the threads it is time to go away
+        //
+        for ( uint64_t i = 0; i < m_num_threads; ++i)
+          send_work(w);
+
+        //
+        // Wait for all of the threads to exit
+        //
         for ( auto pt : m_threads )
           (void) pthread_join(pt, NULL);
 
         m_threads.clear();
 
         UMAP_LOG(Debug, m_pool_name << " stopped");
-      }
-
-      bool time_to_stop_thread_pool() {
-        return m_time_to_stop;
       }
 
     protected:
@@ -96,7 +101,6 @@ namespace Umap {
 
       std::string             m_pool_name;
       uint64_t                m_num_threads;
-      bool                    m_time_to_stop;
       WorkQueue<WorkItem>*    m_wq;
       std::vector<pthread_t>  m_threads;
   };
