@@ -27,12 +27,11 @@
 #include "umap/PageFlusher.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
-#include "umap/WorkQueue.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-  class PageFiller : WorkerPool {
+  class PageFiller : public WorkerPool {
     public:
       PageFiller(
                 Store*   store
@@ -44,15 +43,10 @@ namespace Umap {
               , uint64_t max_fault_events
             ) :   WorkerPool("Page Filler", 1)
                 , m_store(store)
-                , m_region(region)
-                , m_region_size(region_size)
-                , m_mmap_region(mmap_region)
-                , m_mmap_region_size(mmap_region_size)
                 , m_page_size(page_size)
                 , m_max_fault_events(max_fault_events)
       {
         m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
-        m_page_fill_wq = new WorkQueue<FillWorkItem>;
 
         m_buffer = new Buffer(
               PageRegion::getInstance()->get_max_pages_in_buffer()
@@ -60,7 +54,7 @@ namespace Umap {
             , PageRegion::getInstance()->get_flush_high_water_threshold()
         );
 
-        m_page_fillers = new Fillers(m_uffd, m_page_fill_wq);
+        m_page_fillers = new Fillers(m_uffd);
 
         m_page_flusher = new PageFlusher(
               PageRegion::getInstance()->get_num_flushers()
@@ -75,7 +69,6 @@ namespace Umap {
         delete m_page_flusher;
         delete m_page_fillers;
         delete m_buffer;
-        delete m_page_fill_wq;
         delete m_uffd;
       }
 
@@ -83,10 +76,6 @@ namespace Umap {
       inline void ThreadEntry() {
         UMAP_LOG(Debug, "\nPageFiller says Hello: "
             << "\n             m_store: " <<  (void*)m_store
-            << "\n            m_region: " <<  (void*)m_region
-            << "\n       m_region_size: " <<  m_region_size
-            << "\n       m_mmap_region: " <<  (void*)m_mmap_region
-            << "\n  m_mmap_region_size: " <<  m_mmap_region_size
             << "\n         m_page_size: " <<  m_page_size
             << "\n  m_max_fault_events: " <<  m_max_fault_events
             << "\n           m_uffd_fd: " <<  m_uffd_fd
@@ -106,14 +95,10 @@ namespace Umap {
             if ( pd != nullptr ) {  // Page is already present
               UMAP_LOG(Debug, "Present Page: " << pd);
               if (event.is_write_fault && pd->page_is_dirty() == false) {
-                FillWorkItem work = {
-                    .region = m_region
-                  , .page_desc = pd
-                  , .store = nullptr
-                };
+                WorkItem work = { .page_desc = pd, .store = nullptr };
 
                 pd->mark_page_dirty();
-                m_page_fill_wq->enqueue(work);
+                m_page_fillers->send_work(work);
               }
             }
             else {                  // This page has not been brought in yet
@@ -122,16 +107,12 @@ namespace Umap {
 
               m_buffer->mark_page_present(pd);
 
-              FillWorkItem work = {
-                  .region = m_region
-                , .page_desc = pd
-                , .store = m_store
-              };
+              WorkItem work = { .page_desc = pd, .store = m_store };
 
               if ( pd->page_is_dirty() )
                 pd->mark_page_dirty();
 
-              m_page_fill_wq->enqueue(work);
+              m_page_fillers->send_work(work);
             }
           }
 
@@ -141,17 +122,12 @@ namespace Umap {
 
     private:
       Store*    m_store;
-      char*     m_region;
-      uint64_t  m_region_size;
-      char*     m_mmap_region;
-      uint64_t  m_mmap_region_size;
       uint64_t  m_page_size;
       uint64_t  m_max_fault_events;
       int       m_uffd_fd;
 
       Uffd* m_uffd;
 
-      WorkQueue<FillWorkItem>*  m_page_fill_wq;
       Fillers* m_page_fillers;
 
       PageFlusher* m_page_flusher;

@@ -149,7 +149,7 @@ class Uffd {
     }
 
     void  enable_write_protect(
-              char*
+              void*
 #ifndef UMAP_RO_MODE
               page_address
 #endif

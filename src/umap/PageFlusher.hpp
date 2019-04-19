@@ -13,46 +13,58 @@
 
 #include "umap/Buffer.hpp"
 #include "umap/Flushers.hpp"
-#include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
-#include "umap/WorkQueue.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
 
 namespace Umap {
-class PageFlusher : WorkerPool {
-public:
-PageFlusher(
-      uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store) :
-        WorkerPool("Page Flusher", 1), m_buffer(buffer), m_uffd(uffd), m_store(store)
-{
-  m_flush_wq = new WorkQueue<FlushWorkItem>;
-  m_page_flushers = new Flushers(PageRegion::getInstance()->get_num_flushers(), m_buffer, m_uffd , m_store, m_flush_wq);
+  class PageFlusher : WorkerPool {
+    public:
+      PageFlusher(
+            uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store) :
+              WorkerPool("Page Flusher", 1), m_buffer(buffer), m_store(store)
+      {
+        m_page_flushers = new Flushers(PageRegion::getInstance()->get_num_flushers(), m_buffer, uffd);
 
-  start_thread_pool();
-}
+        start_thread_pool();
+      }
 
-~PageFlusher( void )
-{
-  delete m_flush_wq;
-  delete m_page_flushers;
-}
+      ~PageFlusher( void ) {
+        FlushAll();
+        delete m_page_flushers;
+      }
 
-private:
-Buffer* m_buffer;
-Uffd* m_uffd;
-Store* m_store;
-WorkQueue<FlushWorkItem>* m_flush_wq;
-Flushers* m_page_flushers;
+      void FlushAll( void ) {
+        m_buffer->lock();
+        for ( auto pd = m_buffer->get_oldest_present_page_descriptor(); pd != nullptr; pd = m_buffer->get_oldest_present_page_descriptor()) {
+          WorkItem work;
 
-inline void ThreadEntry() {
-  while ( ! time_to_stop_thread_pool() ) {
-    std::vector<PageDescriptor*> page_descs;
+          work.page_desc = pd;
 
-    sleep(1);
-  }
-}
-};
+          if (pd->page_is_dirty())
+            work.store = m_store;
+          else
+            work.store = nullptr;
+
+          m_page_flushers->send_work(work);
+        }
+        m_buffer->unlock();
+      }
+
+    private:
+      Buffer* m_buffer;
+      Store* m_store;
+      Flushers* m_page_flushers;
+
+      inline void ThreadEntry() {
+        while ( ! time_to_stop_thread_pool() ) {
+          std::vector<PageDescriptor*> page_descs;
+
+          sleep(1);
+        }
+    }
+  };
 } // end of namespace Umap
 
 #endif // _UMAP_PageFlusher_HPP

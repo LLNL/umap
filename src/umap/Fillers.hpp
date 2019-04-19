@@ -16,37 +16,26 @@
 
 #include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
-#include "umap/WorkQueue.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-  struct FillWorkItem {
-    void* region;
-    PageDescriptor* page_desc;
-    Store* store;   // Set to nullptr if no I/O required
-  };
-
-  class Fillers : WorkerPool {
+  class Fillers : public WorkerPool {
     public:
-      Fillers(Uffd* uffd, WorkQueue<FillWorkItem>* wq)
+      Fillers(Uffd* uffd)
         :   WorkerPool("Page Fillers", PageRegion::getInstance()->get_num_fillers())
-          , m_uffd(uffd), m_wq(wq)
+          , m_uffd(uffd)
       {
         start_thread_pool();
       }
 
       ~Fillers( void ) {
-        UMAP_LOG(Debug, "Stopping the Fillers");
-        m_wq->kill();
-        UMAP_LOG(Debug, "Workers should have been stopped now");
       }
 
     private:
       Uffd* m_uffd;
-      WorkQueue<FillWorkItem>* m_wq;
 
-      inline void ThreadEntry() {
+      inline void ThreadEntry( void ) {
         char* copyin_buf;
         uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
 
@@ -62,7 +51,7 @@ namespace Umap {
 
         while ( ! time_to_stop_thread_pool() ) {
           try {
-            auto w = m_wq->dequeue();
+            auto w = get_work();
 
             if ( w.store == nullptr ) {
               //
@@ -91,7 +80,7 @@ namespace Umap {
             }
           }
           catch ( ... ) {
-            ;
+            continue;
           }
         }
 

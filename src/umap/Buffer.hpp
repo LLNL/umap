@@ -47,7 +47,7 @@ namespace Umap {
               << " bytes for buffer page descriptors");
 
         for ( int i = 0; i < m_size; ++i )
-          m_free_pages.push_back(&m_array[i]);
+          free_page_descriptor( &m_array[i] );
 
         pthread_mutex_init(&m_mutex, NULL);
         pthread_cond_init(&m_cond, NULL);
@@ -89,6 +89,10 @@ namespace Umap {
         m_present_pages[pd->get_page_addr()] = pd;
       }
 
+      void mark_page_not_present( PageDescriptor* pd ) {
+        m_present_pages.erase(pd->get_page_addr());
+      }
+
       PageDescriptor* get_page_descriptor( void* page_addr ) {
         PageDescriptor* rval;
         UMAP_LOG(Debug, this);
@@ -105,6 +109,27 @@ namespace Umap {
         m_busy_pages.push(rval);
 
         return rval;
+      }
+
+      PageDescriptor* get_oldest_present_page_descriptor() {
+        if ( m_busy_pages.size() == 0 )
+          return nullptr;
+
+        PageDescriptor* rval;
+        UMAP_LOG(Debug, this);
+
+        rval = m_busy_pages.front();
+        m_busy_pages.pop();
+
+        return rval;
+      }
+
+      void free_page_descriptor( PageDescriptor* pd ) {
+        m_free_pages.push_back(pd);
+      }
+
+      uint64_t get_number_of_present_pages( void ) {
+        return m_present_pages.size();
       }
 
     private:

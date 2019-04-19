@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <pthread.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "umap/Uffd.hpp"
@@ -21,7 +22,7 @@ namespace Umap {
 template <typename T>
 class WorkQueue {
   public:
-    WorkQueue(): m_time_to_stop(false) {
+    WorkQueue() {
       pthread_mutex_init(&m_mutex, NULL);
       pthread_cond_init(&m_cond, NULL);
     }
@@ -29,13 +30,6 @@ class WorkQueue {
     ~WorkQueue() {
       pthread_mutex_destroy(&m_mutex);
       pthread_cond_destroy(&m_cond);
-    }
-
-    void kill( void ) {
-      m_time_to_stop = true;
-      pthread_mutex_lock(&m_mutex);
-      pthread_cond_broadcast(&m_cond);
-      pthread_mutex_unlock(&m_mutex);
     }
 
     void enqueue(T item) {
@@ -46,14 +40,18 @@ class WorkQueue {
     }
 
     T dequeue() {
+      struct timespec ts;
       pthread_mutex_lock(&m_mutex);
 
-      while ( m_queue.size() == 0 && !m_time_to_stop )
-        pthread_cond_wait(&m_cond, &m_mutex);
+      clock_gettime(CLOCK_REALTIME, &ts);
+      ts.tv_sec += 1;
+      while ( m_queue.size() == 0 ) {
+        int rc = pthread_cond_timedwait(&m_cond, &m_mutex, &ts);
 
-      if ( m_time_to_stop ) {
-        pthread_mutex_unlock(&m_mutex);
-        throw "Stopping WorkQueue";
+        if ( rc ) {
+          pthread_mutex_unlock(&m_mutex);
+          throw "Work Queue Timeout";
+        }
       }
 
       auto item = m_queue.front();
@@ -74,7 +72,6 @@ class WorkQueue {
     pthread_mutex_t m_mutex;
     pthread_cond_t m_cond;
     std::list<T> m_queue;
-    bool m_time_to_stop;
 };
 
 } // end of namespace Umap

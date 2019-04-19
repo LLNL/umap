@@ -9,45 +9,71 @@
 
 #include "umap/config.h"
 
+#include <errno.h>
+#include <string.h>
+#include <sys/mman.h>
+
 #include "umap/Buffer.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
-#include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
 
 namespace Umap {
 
 struct FlushWorkItem {
-  Store* store;
   void* region;
-  std::size_t size;
-  std::size_t alignsize;
-  int fd;
+  PageDescriptor* page_desk;
+  Store* store;   // Set to nullptr if no I/O required
 };
 
-class Flushers : WorkerPool {
+class Flushers : public WorkerPool {
   public:
-    Flushers(
-          uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store, WorkQueue<FlushWorkItem>* wq) :
-            WorkerPool("UMAP Flushers", num_flushers), m_buffer(buffer), m_store(store), m_wq(wq)
+    Flushers(uint64_t num_flushers, Buffer* buffer, Uffd* uffd)
+      :   WorkerPool("UMAP Flushers", num_flushers), m_buffer(buffer)
+        , m_uffd(uffd)
     {
       start_thread_pool();
     }
 
-    ~Flushers( void )
-    {
+    ~Flushers( void ) {
     }
 
   private:
     Buffer* m_buffer;
     Uffd* m_uffd;
-    Store* m_store;
-    WorkQueue<FlushWorkItem>* m_wq;
 
     inline void ThreadEntry() {
+      FlushersLoop();
+    }
+
+    void FlushersLoop( void ) {
+      uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
+
       while ( ! time_to_stop_thread_pool() ) {
-        sleep(1);
+        try {
+          auto w = get_work();
+          auto page_addr = w.page_desc->get_page_addr();
+
+          if ( w.store != nullptr ) {
+            uint64_t offset = m_uffd->get_offset(page_addr);
+            m_uffd->enable_write_protect(page_addr);
+
+            UMAP_LOG(Debug, "Flushing page: " << page_addr);
+            if (w.store->write_to_store((char*)page_addr, page_size, offset) == -1)
+              UMAP_ERROR("write_to_store failed: " << errno << " (" << strerror(errno) << ")");
+          }
+
+          if (madvise(page_addr, page_size, MADV_DONTNEED) == -1)
+            UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+
+          m_buffer->lock();
+          m_buffer->mark_page_not_present(w.page_desc);
+          m_buffer->unlock();
+        }
+        catch (...) {
+          continue;
+        }
       }
     }
 };
