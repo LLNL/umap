@@ -14,17 +14,19 @@
 #include <string.h>             // strerror()
 #include <unistd.h>
 
-#include "umap/WorkerPool.hpp"
+#include "umap/Buffer.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
   class Fillers : public WorkerPool {
     public:
-      Fillers(Uffd* uffd)
+      Fillers(Uffd* uffd, Buffer* buffer)
         :   WorkerPool("Page Fillers", PageRegion::getInstance()->get_num_fillers())
           , m_uffd(uffd)
+          , m_buffer(buffer)
       {
         start_thread_pool();
       }
@@ -35,6 +37,7 @@ namespace Umap {
 
     private:
       Uffd* m_uffd;
+      Buffer* m_buffer;
 
       void ThreadEntry( void ) {
         FillWorker();
@@ -57,6 +60,8 @@ namespace Umap {
         while ( 1 ) {
           auto w = get_work();
 
+          UMAP_LOG(Debug, " " << w << " " << m_buffer);
+
           if (w.type == Umap::WorkItem::WorkType::EXIT)
             break;    // Time to leave
 
@@ -72,16 +77,13 @@ namespace Umap {
           else {
             uint64_t offset = m_uffd->get_offset(w.page_desc->get_page_addr());
 
-            UMAP_LOG(Debug, "Filling page: " << w.page_desc->get_page_addr());
             if (w.store->read_from_store(copyin_buf, page_size, offset) == -1)
               UMAP_ERROR("read_from_store failed");
 
             if ( ! w.page_desc->page_is_dirty() ) {
-              UMAP_LOG(Debug, "Copyin (WP) page: " << w.page_desc->get_page_addr());
               m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->get_page_addr());
             }
             else {
-              UMAP_LOG(Debug, "Copyin page: " << w.page_desc->get_page_addr());
               m_uffd->copy_in_page(copyin_buf, w.page_desc->get_page_addr());
             }
           }

@@ -54,7 +54,7 @@ namespace Umap {
             , PageRegion::getInstance()->get_flush_high_water_threshold()
         );
 
-        m_page_fillers = new Fillers(m_uffd);
+        m_page_fillers = new Fillers(m_uffd, m_buffer);
 
         m_page_flusher = new PageFlusher(
               PageRegion::getInstance()->get_num_flushers()
@@ -99,16 +99,21 @@ namespace Umap {
 
           m_buffer->lock();
 
-          if (m_buffer->flush_threshold_reached()) {
-            WorkItem work;
-
-            work.type = Umap::WorkItem::WorkType::THRESHOLD;
-            work.page_desc = nullptr;
-            work.store = nullptr;
-            m_page_flusher->send_work(work);
-          }
-
           for ( auto & event : pe ) {
+
+            //
+            // TODO: Need to determine how to best avoid thrashing here.
+            // Consider best way to move this outside of loop
+            //
+            if (m_buffer->flush_threshold_reached()) {
+              WorkItem w;
+
+              w.type = Umap::WorkItem::WorkType::THRESHOLD;
+              w.page_desc = nullptr;
+              w.store = nullptr;
+              m_page_flusher->send_work(w);
+            }
+
             WorkItem work;
             auto pd = m_buffer->page_already_present(event.aligned_page_address);
 

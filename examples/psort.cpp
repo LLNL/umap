@@ -131,8 +131,8 @@ int main(int argc, char **argv)
   // Optional: Set umap's buffer to half the number of pages we need so that
   //           we may simulate an out-of-core experience
   //
-  //umapcfg_set_max_pages_in_buffer( pagesInTest / 2 );
-  umapcfg_set_max_pages_in_buffer( pagesInTest );
+  umapcfg_set_max_pages_in_buffer( pagesInTest / 2 );
+  //umapcfg_set_max_pages_in_buffer( pagesInTest );
 
   initialize_and_sort_file(filename, arraySize, totalBytes);
   verify_sortfile(filename, arraySize, totalBytes);

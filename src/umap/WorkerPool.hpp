@@ -28,6 +28,16 @@ namespace Umap {
     WorkType type;
   };
 
+  std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
+  {
+    os << "{ page_desc: " << b.page_desc
+       << ", store: " << b.store
+       << ", type: " << b.type
+       << " }";
+
+    return os;
+  }
+
   class WorkerPool {
     public:
       WorkerPool(const std::string& pool_name, uint64_t num_threads)

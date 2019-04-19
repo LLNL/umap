@@ -65,7 +65,11 @@ namespace Umap {
       }
 
       bool flush_threshold_reached( void ) {
-        return m_present_pages.size() >= m_flush_high_water;
+        return m_busy_pages.size() >= m_flush_high_water;
+      }
+
+      bool flush_low_threshold_reached( void ) {
+        return m_busy_pages.size() <= m_flush_low_water;
       }
 
       //
@@ -95,6 +99,7 @@ namespace Umap {
 
       void mark_page_not_present( PageDescriptor* pd ) {
         m_present_pages.erase(pd->get_page_addr());
+        free_page_descriptor( pd );
       }
 
       PageDescriptor* get_page_descriptor( void* page_addr ) {
@@ -120,7 +125,6 @@ namespace Umap {
           return nullptr;
 
         PageDescriptor* rval;
-        UMAP_LOG(Debug, this);
 
         rval = m_busy_pages.front();
         m_busy_pages.pop();

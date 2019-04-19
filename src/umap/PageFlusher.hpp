@@ -51,6 +51,29 @@ namespace Umap {
 
           if ( w.type == Umap::WorkItem::WorkType::EXIT )
             break;    // Time to leave
+
+          m_buffer->lock();
+
+          while ( ! m_buffer->flush_low_threshold_reached() ) {
+            UMAP_LOG(Debug, "Flushing: " << m_buffer);
+            auto pd = m_buffer->get_oldest_present_page_descriptor();
+
+            if ( pd == nullptr )
+              break;
+
+            WorkItem work;
+            work.type = Umap::WorkItem::WorkType::FLUSH;
+            work.page_desc = pd;
+
+            if (pd->page_is_dirty())
+              work.store = m_store;
+            else
+              work.store = nullptr;
+
+            m_page_flushers->send_work(work);
+          }
+
+          m_buffer->unlock();
         }
       }
 

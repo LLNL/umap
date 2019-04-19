@@ -54,6 +54,8 @@ class Flushers : public WorkerPool {
       while ( 1 ) {
         auto w = get_work();
 
+        UMAP_LOG(Debug, " " << w << " " << m_buffer);
+
         if ( w.type == Umap::WorkItem::WorkType::EXIT )
           break;    // Time to leave
 
@@ -63,7 +65,6 @@ class Flushers : public WorkerPool {
           uint64_t offset = m_uffd->get_offset(page_addr);
           m_uffd->enable_write_protect(page_addr);
 
-          UMAP_LOG(Debug, "Flushing page: " << page_addr);
           if (w.store->write_to_store((char*)page_addr, page_size, offset) == -1)
             UMAP_ERROR("write_to_store failed: " << errno << " (" << strerror(errno) << ")");
         }

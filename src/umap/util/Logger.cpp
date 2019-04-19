@@ -54,6 +54,7 @@ void Logger::logMessage( message::Level level,
     return;   /* short-circuit */
 
   std::lock_guard<std::mutex> guard(g_logging_mutex);
+#ifdef verbose_output
   std::cout
     << getpid() << ":"
     << syscall(__NR_gettid) << " "
@@ -61,6 +62,11 @@ void Logger::logMessage( message::Level level,
     << "[" << fileName  << ":" << line << "]:"
     << message
     << std::endl;
+#else
+  std::cout
+    << message
+    << std::endl;
+#endif
 }
 
 void Logger::initialize()
