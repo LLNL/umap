@@ -22,8 +22,10 @@
 
 namespace Umap {
   struct WorkItem {
+    enum WorkType { NONE, EXIT, THRESHOLD, FLUSH };
     PageDescriptor* page_desc;  // Set to nullptr if time to stop
     Store* store;               // Set to nullptr if no I/O required
+    WorkType type;
   };
 
   class WorkerPool {
@@ -71,7 +73,7 @@ namespace Umap {
         UMAP_LOG(Debug, "Stopping " <<  m_pool_name << " Pool of "
             << m_num_threads << " threads");
 
-        WorkItem w = {.page_desc = nullptr, .store = nullptr};
+        WorkItem w = {.page_desc = nullptr, .store = nullptr, .type = Umap::WorkItem::WorkType::EXIT };
 
         //
         // This will inform all of the threads it is time to go away

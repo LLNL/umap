@@ -99,6 +99,15 @@ namespace Umap {
 
           m_buffer->lock();
 
+          if (m_buffer->flush_threshold_reached()) {
+            WorkItem work;
+
+            work.type = Umap::WorkItem::WorkType::THRESHOLD;
+            work.page_desc = nullptr;
+            work.store = nullptr;
+            m_page_flusher->send_work(work);
+          }
+
           for ( auto & event : pe ) {
             WorkItem work;
             auto pd = m_buffer->page_already_present(event.aligned_page_address);

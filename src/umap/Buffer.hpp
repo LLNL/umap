@@ -64,6 +64,10 @@ namespace Umap {
         free(m_array);
       }
 
+      bool flush_threshold_reached( void ) {
+        return m_present_pages.size() >= m_flush_high_water;
+      }
+
       //
       // Course grain lock against entire buffer.  We may need to make this
       // finer grained later if needed

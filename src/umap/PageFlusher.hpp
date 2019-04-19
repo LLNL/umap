@@ -19,7 +19,7 @@
 #include "umap/store/Store.hpp"
 
 namespace Umap {
-  class PageFlusher : WorkerPool {
+  class PageFlusher : public WorkerPool {
     public:
       PageFlusher(
             uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store) :
@@ -49,7 +49,7 @@ namespace Umap {
         while ( 1 ) {
           auto w = get_work();
 
-          if ( w.page_desc == nullptr && w.store == nullptr )
+          if ( w.type == Umap::WorkItem::WorkType::EXIT )
             break;    // Time to leave
         }
       }
@@ -59,6 +59,7 @@ namespace Umap {
         for ( auto pd = m_buffer->get_oldest_present_page_descriptor(); pd != nullptr; pd = m_buffer->get_oldest_present_page_descriptor()) {
           WorkItem work;
 
+          work.type = Umap::WorkItem::WorkType::FLUSH;
           work.page_desc = pd;
 
           if (pd->page_is_dirty())

@@ -54,7 +54,7 @@ class Flushers : public WorkerPool {
       while ( 1 ) {
         auto w = get_work();
 
-        if ( w.page_desc == nullptr && w.store == nullptr )
+        if ( w.type == Umap::WorkItem::WorkType::EXIT )
           break;    // Time to leave
 
         auto page_addr = w.page_desc->get_page_addr();

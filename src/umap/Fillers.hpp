@@ -57,7 +57,7 @@ namespace Umap {
         while ( 1 ) {
           auto w = get_work();
 
-          if (w.page_desc == nullptr && w.store == nullptr)
+          if (w.type == Umap::WorkItem::WorkType::EXIT)
             break;    // Time to leave
 
           if ( w.store == nullptr ) {
