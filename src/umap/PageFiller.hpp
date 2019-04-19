@@ -73,12 +73,15 @@ namespace Umap {
       }
 
     protected:
-      inline void ThreadEntry() {
-        UMAP_LOG(Debug, "\nPageFiller says Hello: "
-            << "\n             m_store: " <<  (void*)m_store
-            << "\n         m_page_size: " <<  m_page_size
-            << "\n  m_max_fault_events: " <<  m_max_fault_events
-            << "\n           m_uffd_fd: " <<  m_uffd_fd
+      void ThreadEntry() {
+        PageFillerLoop();
+      }
+
+      void PageFillerLoop() {
+        UMAP_LOG(Debug,    "\n             m_store: " <<  (void*)m_store
+                        << "\n         m_page_size: " <<  m_page_size
+                        << "\n  m_max_fault_events: " <<  m_max_fault_events
+                        << "\n           m_uffd_fd: " <<  m_uffd_fd
         );
 
         while ( ! time_to_stop_thread_pool() ) {
@@ -90,30 +93,33 @@ namespace Umap {
           m_buffer->lock();
 
           for ( auto & event : pe ) {
+            WorkItem work;
             auto pd = m_buffer->page_already_present(event.aligned_page_address);
 
             if ( pd != nullptr ) {  // Page is already present
-              UMAP_LOG(Debug, "Present Page: " << pd);
               if (event.is_write_fault && pd->page_is_dirty() == false) {
-                WorkItem work = { .page_desc = pd, .store = nullptr };
-
+                work.page_desc = pd; work.store = nullptr;
                 pd->mark_page_dirty();
-                m_page_fillers->send_work(work);
+                UMAP_LOG(Debug, "Present: " << pd);
+              }
+              else {
+                UMAP_LOG(Debug, "Spurious: " << pd);
+                continue;           // Spurious
               }
             }
             else {                  // This page has not been brought in yet
               pd = m_buffer->get_page_descriptor(event.aligned_page_address);
-              UMAP_LOG(Debug, "New Page: " << pd);
+              work.page_desc = pd; work.store = m_store;
 
               m_buffer->mark_page_present(pd);
 
-              WorkItem work = { .page_desc = pd, .store = m_store };
-
-              if ( pd->page_is_dirty() )
+              if (event.is_write_fault)
                 pd->mark_page_dirty();
 
-              m_page_fillers->send_work(work);
+              UMAP_LOG(Debug, "New: " << pd << " From: " << m_buffer);
             }
+
+            m_page_fillers->send_work(work);
           }
 
           m_buffer->unlock();

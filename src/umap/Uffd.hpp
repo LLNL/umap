@@ -185,7 +185,6 @@ class Uffd {
     }
 
     void copy_in_page(char* data, void* page_address) {
-      UMAP_LOG(Debug, "(page_address = " << page_address << ")");
       struct uffdio_copy copy = {
           .dst = (uint64_t)page_address
         , .src = (uint64_t)data

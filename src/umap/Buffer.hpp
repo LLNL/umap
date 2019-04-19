@@ -95,7 +95,7 @@ namespace Umap {
 
       PageDescriptor* get_page_descriptor( void* page_addr ) {
         PageDescriptor* rval;
-        UMAP_LOG(Debug, this);
+        //UMAP_LOG(Debug, this);
 
         while ( m_free_pages.size() == 0 )
           pthread_cond_wait(&m_cond, &m_mutex);

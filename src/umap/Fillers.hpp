@@ -35,7 +35,11 @@ namespace Umap {
     private:
       Uffd* m_uffd;
 
-      inline void ThreadEntry( void ) {
+      void ThreadEntry( void ) {
+        FillWorker();
+      }
+
+      void FillWorker( void ) {
         char* copyin_buf;
         uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
 
