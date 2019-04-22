@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_Flushers_HPP
-#define _UMAP_Flushers_HPP
+#ifndef _UMAP_FlushWorkers_HPP
+#define _UMAP_FlushWorkers_HPP
 
 #include "umap/config.h"
 
@@ -27,16 +27,16 @@ struct FlushWorkItem {
   Store* store;   // Set to nullptr if no I/O required
 };
 
-class Flushers : public WorkerPool {
+class FlushWorkers : public WorkerPool {
   public:
-    Flushers(uint64_t num_flushers, Buffer* buffer, Uffd* uffd)
-      :   WorkerPool("UMAP Flushers", num_flushers), m_buffer(buffer)
+    FlushWorkers(uint64_t num_flushers, Buffer* buffer, Uffd* uffd)
+      :   WorkerPool("Flush Workers", num_flushers), m_buffer(buffer)
         , m_uffd(uffd)
     {
       start_thread_pool();
     }
 
-    ~Flushers( void ) {
+    ~FlushWorkers( void ) {
       stop_thread_pool();
     }
 
@@ -45,10 +45,10 @@ class Flushers : public WorkerPool {
     Uffd* m_uffd;
 
     inline void ThreadEntry() {
-      FlushersLoop();
+      FlushWorker();
     }
 
-    void FlushersLoop( void ) {
+    void FlushWorker( void ) {
       uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
 
       while ( 1 ) {
@@ -73,6 +73,7 @@ class Flushers : public WorkerPool {
           UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
 
         m_buffer->lock();
+        w.page_desc->set_state_free();
         m_buffer->mark_page_not_present(w.page_desc);
         m_buffer->unlock();
       }
@@ -80,4 +81,4 @@ class Flushers : public WorkerPool {
 };
 } // end of namespace Umap
 
-#endif // _UMAP_Flushers_HPP
+#endif // _UMAP_FlushWorkers_HPP

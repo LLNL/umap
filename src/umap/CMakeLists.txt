@@ -9,11 +9,11 @@ project(umap_libraries)
 set(umapheaders
       config.h
       Buffer.hpp
-      Fillers.hpp
-      Flushers.hpp
-      PageFiller.hpp
+      FillManager.hpp
+      FillWorkers.hpp
+      FlushManager.hpp
+      FlushWorkers.hpp
       PageRegion.hpp
-      PageFlusher.hpp
       WorkerPool.hpp
       WorkQueue.hpp
       Uffd.hpp

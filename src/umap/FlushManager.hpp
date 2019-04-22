@@ -4,48 +4,48 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_PageFlusher_HPP
-#define _UMAP_PageFlusher_HPP
+#ifndef _UMAP_FlushManager_HPP
+#define _UMAP_FlushManager_HPP
 
 #include "umap/config.h"
 
 #include <vector>
 
 #include "umap/Buffer.hpp"
-#include "umap/Flushers.hpp"
+#include "umap/FlushWorkers.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
 
 namespace Umap {
-  class PageFlusher : public WorkerPool {
+  class FlushManager : public WorkerPool {
     public:
-      PageFlusher(
+      FlushManager(
             uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store) :
-              WorkerPool("Page Flusher", 1), m_buffer(buffer), m_store(store)
+              WorkerPool("Flush Manager", 1), m_buffer(buffer), m_store(store)
       {
-        m_page_flushers = new Flushers(PageRegion::getInstance()->get_num_flushers(), m_buffer, uffd);
+        m_flush_workers = new FlushWorkers(PageRegion::getInstance()->get_num_flushers(), m_buffer, uffd);
 
         start_thread_pool();
       }
 
-      ~PageFlusher( void ) {
+      ~FlushManager( void ) {
         FlushAll();
         stop_thread_pool();
-        delete m_page_flushers;
+        delete m_flush_workers;
       }
 
     private:
       Buffer* m_buffer;
       Store* m_store;
-      Flushers* m_page_flushers;
+      FlushWorkers* m_flush_workers;
 
       void ThreadEntry() {
-        PageFlusherLoop();
+        FlushMgr();
       }
 
-      void PageFlusherLoop() {
+      void FlushMgr() {
         while ( 1 ) {
           auto w = get_work();
 
@@ -55,11 +55,14 @@ namespace Umap {
           m_buffer->lock();
 
           while ( ! m_buffer->flush_low_threshold_reached() ) {
-            UMAP_LOG(Debug, "Flushing: " << m_buffer);
-            auto pd = m_buffer->get_oldest_present_page_descriptor();
+            auto pd = m_buffer->get_oldest_present_page_descriptor(); // Could block
 
             if ( pd == nullptr )
               break;
+
+            UMAP_LOG(Debug, m_buffer << ", " << pd);
+
+            pd->set_state_leaving();
 
             WorkItem work;
             work.type = Umap::WorkItem::WorkType::FLUSH;
@@ -70,7 +73,7 @@ namespace Umap {
             else
               work.store = nullptr;
 
-            m_page_flushers->send_work(work);
+            m_flush_workers->send_work(work);
           }
 
           m_buffer->unlock();
@@ -80,6 +83,8 @@ namespace Umap {
       void FlushAll( void ) {
         m_buffer->lock();
         for ( auto pd = m_buffer->get_oldest_present_page_descriptor(); pd != nullptr; pd = m_buffer->get_oldest_present_page_descriptor()) {
+          pd->set_state_leaving();
+
           WorkItem work;
 
           work.type = Umap::WorkItem::WorkType::FLUSH;
@@ -90,11 +95,11 @@ namespace Umap {
           else
             work.store = nullptr;
 
-          m_page_flushers->send_work(work);
+          m_flush_workers->send_work(work);
         }
         m_buffer->unlock();
       }
   };
 } // end of namespace Umap
 
-#endif // _UMAP_PageFlusher_HPP
+#endif // _UMAP_FlushManager_HPP

@@ -4,14 +4,15 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_PageFiller_HPP
-#define _UMAP_PageFiller_HPP
+#ifndef _UMAP_FillManager_HPP
+#define _UMAP_FillManager_HPP
 
 #include "umap/config.h"
 
 #include <cstdint>
 #include <errno.h>
 #include <fcntl.h>
+#include <iomanip>
 #include <string.h>             // strerror()
 #include <unistd.h>             // syscall()
 #include <vector>
@@ -23,17 +24,17 @@
 
 #include "umap/Buffer.hpp"
 #include "umap/PageRegion.hpp"
-#include "umap/Fillers.hpp"
-#include "umap/PageFlusher.hpp"
+#include "umap/FillWorkers.hpp"
+#include "umap/FlushManager.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-  class PageFiller : public WorkerPool {
+  class FillManager : public WorkerPool {
     public:
-      PageFiller(
+      FillManager(
                 Store*   store
               , char*    region
               , uint64_t region_size
@@ -41,7 +42,7 @@ namespace Umap {
               , uint64_t mmap_region_size
               , uint64_t page_size
               , uint64_t max_fault_events
-            ) :   WorkerPool("Page Filler", 1)
+            ) :   WorkerPool("Fill Manager", 1)
                 , m_store(store)
                 , m_page_size(page_size)
                 , m_max_fault_events(max_fault_events)
@@ -54,9 +55,9 @@ namespace Umap {
             , PageRegion::getInstance()->get_flush_high_water_threshold()
         );
 
-        m_page_fillers = new Fillers(m_uffd, m_buffer);
+        m_fill_workers = new FillWorkers(m_uffd, m_buffer);
 
-        m_page_flusher = new PageFlusher(
+        m_flush_manager = new FlushManager(
               PageRegion::getInstance()->get_num_flushers()
             , m_buffer, m_uffd, m_store
         );
@@ -64,22 +65,22 @@ namespace Umap {
         start_thread_pool();
       }
 
-      ~PageFiller( void )
+      ~FillManager( void )
       {
         m_uffd->stop_uffd();
         stop_thread_pool();
-        delete m_page_fillers;
-        delete m_page_flusher;
+        delete m_fill_workers;
+        delete m_flush_manager;
         delete m_buffer;
         delete m_uffd;
       }
 
     protected:
       void ThreadEntry() {
-        PageFillerLoop();
+        FillMgr();
       }
 
-      void PageFillerLoop() {
+      void FillMgr() {
         UMAP_LOG(Debug,    "\n             m_store: " <<  (void*)m_store
                         << "\n         m_page_size: " <<  m_page_size
                         << "\n  m_max_fault_events: " <<  m_max_fault_events
@@ -99,19 +100,18 @@ namespace Umap {
 
           m_buffer->lock();
 
+          int count = 0;
           for ( auto & event : pe ) {
-
-            //
-            // TODO: Need to determine how to best avoid thrashing here.
-            // Consider best way to move this outside of loop
-            //
+            count++;
             if (m_buffer->flush_threshold_reached()) {
               WorkItem w;
 
               w.type = Umap::WorkItem::WorkType::THRESHOLD;
               w.page_desc = nullptr;
               w.store = nullptr;
-              m_page_flusher->send_work(w);
+              m_flush_manager->send_work(w);
+              m_buffer->unlock();
+              m_buffer->lock();
             }
 
             WorkItem work;
@@ -121,26 +121,28 @@ namespace Umap {
               if (event.is_write_fault && pd->page_is_dirty() == false) {
                 work.page_desc = pd; work.store = nullptr;
                 pd->mark_page_dirty();
-                UMAP_LOG(Debug, "Present: " << pd);
+                pd->set_state_updating();
+                UMAP_LOG(Debug, "PRE (" << std::setfill('0') << std::setw(3) << count << '/' << std::setw(3) << pe.size() << "): " << pd << " From: " << m_buffer);
               }
               else {
-                UMAP_LOG(Debug, "Spurious: " << pd);
+                UMAP_LOG(Debug, "SPU (" << std::setfill('0') << std::setw(3) << count << '/' << std::setw(3) << pe.size() << "): " << pd << " From: " << m_buffer);
                 continue;           // Spurious
               }
             }
             else {                  // This page has not been brought in yet
               pd = m_buffer->get_page_descriptor(event.aligned_page_address);
               work.page_desc = pd; work.store = m_store;
+              pd->set_state_filling();
 
               m_buffer->mark_page_present(pd);
 
               if (event.is_write_fault)
                 pd->mark_page_dirty();
 
-              UMAP_LOG(Debug, "New: " << pd << " From: " << m_buffer);
+              UMAP_LOG(Debug, "New (" << std::setfill('0') << std::setw(3) << count << '/' << std::setw(3) << pe.size() << "): " << pd << " From: " << m_buffer);
             }
 
-            m_page_fillers->send_work(work);
+            m_fill_workers->send_work(work);
           }
 
           m_buffer->unlock();
@@ -155,11 +157,11 @@ namespace Umap {
 
       Uffd* m_uffd;
 
-      Fillers* m_page_fillers;
+      FillWorkers* m_fill_workers;
 
-      PageFlusher* m_page_flusher;
+      FlushManager* m_flush_manager;
       Buffer* m_buffer;
   };
 } // end of namespace Umap
 
-#endif // _UMAP_PageFiller_HPP
+#endif // _UMAP_FillManager_HPP

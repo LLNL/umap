@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_Fillers_HPP
-#define _UMAP_Fillers_HPP
+#ifndef _UMAP_FillWorkers_HPP
+#define _UMAP_FillWorkers_HPP
 
 #include "umap/config.h"
 
@@ -21,17 +21,17 @@
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-  class Fillers : public WorkerPool {
+  class FillWorkers : public WorkerPool {
     public:
-      Fillers(Uffd* uffd, Buffer* buffer)
-        :   WorkerPool("Page Fillers", PageRegion::getInstance()->get_num_fillers())
+      FillWorkers(Uffd* uffd, Buffer* buffer)
+        :   WorkerPool("Fill Workers", PageRegion::getInstance()->get_num_fillers())
           , m_uffd(uffd)
           , m_buffer(buffer)
       {
         start_thread_pool();
       }
 
-      ~Fillers( void ) {
+      ~FillWorkers( void ) {
         stop_thread_pool();
       }
 
@@ -60,7 +60,7 @@ namespace Umap {
         while ( 1 ) {
           auto w = get_work();
 
-          UMAP_LOG(Debug, " " << w << " " << m_buffer);
+          UMAP_LOG(Debug, ": " << w << " " << m_buffer);
 
           if (w.type == Umap::WorkItem::WorkType::EXIT)
             break;    // Time to leave
@@ -87,10 +87,15 @@ namespace Umap {
               m_uffd->copy_in_page(copyin_buf, w.page_desc->get_page_addr());
             }
           }
+
+          m_buffer->lock();
+          w.page_desc->set_state_present();
+          m_buffer->wake_up_waiters_for_oldest_page(w.page_desc);
+          m_buffer->unlock();
         }
 
         free(copyin_buf);
       }
   };
 } // end of namespace Umap
-#endif // _UMAP_Fillers_HPP
+#endif // _UMAP_FillWorker_HPP

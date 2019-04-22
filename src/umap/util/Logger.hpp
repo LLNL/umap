@@ -56,9 +56,10 @@ class Logger {
   };
 
 private:
-  Logger() noexcept;
+  Logger( bool log_with_timestamp ) noexcept;
   ~Logger() noexcept;
 
+  bool m_log_timestamp;
   bool m_isEnabled[ message::Num_Levels ];
   static Logger* s_Logger;
 };

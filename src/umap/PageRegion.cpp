@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <unistd.h>       // sysconf()
 
-#include "umap/PageFiller.hpp"
+#include "umap/FillManager.hpp"
 #include "umap/PageRegion.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
@@ -33,7 +33,7 @@ PageRegion* PageRegion::getInstance( void )
   return s_fault_monitor_manager_instance;
 }
 
-void PageRegion::makePageFiller(
+void PageRegion::makeFillManager(
     Store*   store
   , char*    region
   , uint64_t region_size
@@ -41,7 +41,7 @@ void PageRegion::makePageFiller(
   , uint64_t mmap_region_size
 )
 {
-  m_active_umaps[(void*)region] = new PageFiller(
+  m_active_umaps[(void*)region] = new FillManager(
                                                   store
                                                 , region
                                                 , region_size
@@ -53,7 +53,7 @@ void PageRegion::makePageFiller(
 }
 
 void
-PageRegion::destroyPageFiller( char* region )
+PageRegion::destroyFillManager( char* region )
 {
   UMAP_LOG(Debug, "region: " << (void*)region);
 

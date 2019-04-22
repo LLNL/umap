@@ -14,7 +14,7 @@
 
 namespace Umap {
 
-class PageFiller;
+class FillManager;
 
 struct Version {
   int major;
@@ -32,7 +32,7 @@ class PageRegion {
   public:
     static PageRegion* getInstance( void );
 
-    void makePageFiller(
+    void makeFillManager(
           Store*   store
         , char*    region
         , uint64_t region_size
@@ -40,7 +40,7 @@ class PageRegion {
         , uint64_t mmap_region_size
     );
 
-    void destroyPageFiller( char* mmap_region );
+    void destroyFillManager( char* mmap_region );
 
     inline Version  get_umap_version( void )         { return m_version; }
 
@@ -78,7 +78,7 @@ class PageRegion {
     int m_flush_high_water_threshold;
     uint64_t m_max_fault_events;
 
-    std::unordered_map<void*, PageFiller*> m_active_umaps;
+    std::unordered_map<void*, FillManager*> m_active_umaps;
 
     static PageRegion* s_fault_monitor_manager_instance;
 

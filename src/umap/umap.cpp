@@ -83,7 +83,7 @@ void* umap_ex(
   if ( store == nullptr )
     store = Store::make_store(umap_region, umap_size, umap_psize, fd);
 
-  fm->makePageFiller(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
+  fm->makeFillManager(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
   return umap_region;
 }
@@ -92,7 +92,7 @@ void* umap_ex(
 int uunmap(void*  addr, uint64_t length)
 {
   auto fm = Umap::PageRegion::getInstance();
-  fm->destroyPageFiller((char*)addr);
+  fm->destroyFillManager((char*)addr);
   return 0;
 }
 
