@@ -13,11 +13,11 @@ set(umapheaders
       FillWorkers.hpp
       FlushManager.hpp
       FlushWorkers.hpp
-      PageRegion.hpp
-      WorkerPool.hpp
-      WorkQueue.hpp
+      Region.hpp
       Uffd.hpp
       umap.h
+      WorkerPool.hpp
+      WorkQueue.hpp
       store/StoreFile.h
       store/Store.hpp
       util/Exception.hpp
@@ -25,7 +25,7 @@ set(umapheaders
       util/Macros.hpp)
 
 set(umapsrc
-    PageRegion.cpp
+    Region.cpp
     umap.cpp
     store/Store.cpp
     store/StoreFile.cpp

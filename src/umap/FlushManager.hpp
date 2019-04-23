@@ -13,6 +13,7 @@
 
 #include "umap/Buffer.hpp"
 #include "umap/FlushWorkers.hpp"
+#include "umap/Region.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
@@ -25,7 +26,7 @@ namespace Umap {
             uint64_t num_flushers, Buffer* buffer, Uffd* uffd, Store* store) :
               WorkerPool("Flush Manager", 1), m_buffer(buffer), m_store(store)
       {
-        m_flush_workers = new FlushWorkers(PageRegion::getInstance()->get_num_flushers(), m_buffer, uffd);
+        m_flush_workers = new FlushWorkers(Region::getInstance()->get_num_flushers(), m_buffer, uffd);
 
         start_thread_pool();
       }

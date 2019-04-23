@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_PageRegion_HPP
-#define _UMAP_PageRegion_HPP
+#ifndef _UMAP_Region_HPP
+#define _UMAP_Region_HPP
 
 #include <cstdint>
 #include <unordered_map>
@@ -28,9 +28,9 @@ struct Version {
 // working.  So, we only allow changing configuration when there are no active
 // monitors
 //
-class PageRegion {
+class Region {
   public:
-    static PageRegion* getInstance( void );
+    static Region* getInstance( void );
 
     void makeFillManager(
           Store*   store
@@ -80,12 +80,12 @@ class PageRegion {
 
     std::unordered_map<void*, FillManager*> m_active_umaps;
 
-    static PageRegion* s_fault_monitor_manager_instance;
+    static Region* s_fault_monitor_manager_instance;
 
-    PageRegion( void );
+    Region( void );
 
     uint64_t* read_env_var( const char* env, uint64_t* val);
     uint64_t        get_max_pages_in_memory( void );
 };
 } // end of namespace Umap
-#endif // UMPIRE_PageRegion_HPP
+#endif // UMPIRE_Region_HPP

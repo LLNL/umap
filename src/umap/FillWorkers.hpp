@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "umap/Buffer.hpp"
+#include "umap/Region.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/store/Store.hpp"
@@ -24,7 +25,7 @@ namespace Umap {
   class FillWorkers : public WorkerPool {
     public:
       FillWorkers(Uffd* uffd, Buffer* buffer)
-        :   WorkerPool("Fill Workers", PageRegion::getInstance()->get_num_fillers())
+        :   WorkerPool("Fill Workers", Region::getInstance()->get_num_fillers())
           , m_uffd(uffd)
           , m_buffer(buffer)
       {
@@ -45,7 +46,7 @@ namespace Umap {
 
       void FillWorker( void ) {
         char* copyin_buf;
-        uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
+        uint64_t page_size = Region::getInstance()->get_umap_page_size();
 
         if (posix_memalign((void**)&copyin_buf, page_size, page_size*2)) {
           UMAP_ERROR("posix_memalign failed to allocated "

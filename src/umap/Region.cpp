@@ -16,24 +16,24 @@
 #include <unistd.h>       // sysconf()
 
 #include "umap/FillManager.hpp"
-#include "umap/PageRegion.hpp"
+#include "umap/Region.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
 
-PageRegion* PageRegion::s_fault_monitor_manager_instance = nullptr;
+Region* Region::s_fault_monitor_manager_instance = nullptr;
 static const uint64_t MAX_FAULT_EVENTS = 256;
 
-PageRegion* PageRegion::getInstance( void )
+Region* Region::getInstance( void )
 {
   if (!s_fault_monitor_manager_instance)
-    s_fault_monitor_manager_instance = new PageRegion();
+    s_fault_monitor_manager_instance = new Region();
 
   return s_fault_monitor_manager_instance;
 }
 
-void PageRegion::makeFillManager(
+void Region::makeFillManager(
     Store*   store
   , char*    region
   , uint64_t region_size
@@ -53,7 +53,7 @@ void PageRegion::makeFillManager(
 }
 
 void
-PageRegion::destroyFillManager( char* region )
+Region::destroyFillManager( char* region )
 {
   UMAP_LOG(Debug, "region: " << (void*)region);
 
@@ -66,7 +66,7 @@ PageRegion::destroyFillManager( char* region )
   m_active_umaps.erase(it);
 }
 
-PageRegion::PageRegion()
+Region::Region()
 {
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
@@ -115,7 +115,7 @@ PageRegion::PageRegion()
 }
 
 uint64_t
-PageRegion::get_max_pages_in_memory( void )
+Region::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
@@ -142,7 +142,7 @@ PageRegion::get_max_pages_in_memory( void )
 }
 
 void
-PageRegion::set_max_pages_in_buffer( uint64_t max_pages )
+Region::set_max_pages_in_buffer( uint64_t max_pages )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -166,7 +166,7 @@ PageRegion::set_max_pages_in_buffer( uint64_t max_pages )
     << " to " << get_max_pages_in_buffer() << " pages");
 }
 
-void PageRegion::set_umap_page_size( uint64_t page_size )
+void Region::set_umap_page_size( uint64_t page_size )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -188,7 +188,7 @@ void PageRegion::set_umap_page_size( uint64_t page_size )
   m_umap_page_size = page_size;
 }
 
-uint64_t* PageRegion::read_env_var(
+uint64_t* Region::read_env_var(
     const char* env
   , uint64_t*  val
 )
@@ -211,7 +211,7 @@ uint64_t* PageRegion::read_env_var(
 }
 
 void
-PageRegion::set_num_fillers( uint64_t num_fillers )
+Region::set_num_fillers( uint64_t num_fillers )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -221,7 +221,7 @@ PageRegion::set_num_fillers( uint64_t num_fillers )
 }
 
 void
-PageRegion::set_num_flushers( uint64_t num_flushers )
+Region::set_num_flushers( uint64_t num_flushers )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -231,7 +231,7 @@ PageRegion::set_num_flushers( uint64_t num_flushers )
 }
 
 void
-PageRegion::set_flush_high_water_threshold( int percent )
+Region::set_flush_high_water_threshold( int percent )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -241,7 +241,7 @@ PageRegion::set_flush_high_water_threshold( int percent )
 }
 
 void
-PageRegion::set_flush_low_water_threshold( int percent )
+Region::set_flush_low_water_threshold( int percent )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
@@ -251,7 +251,7 @@ PageRegion::set_flush_low_water_threshold( int percent )
 }
 
 void
-PageRegion::set_max_fault_events( uint64_t max_events )
+Region::set_max_fault_events( uint64_t max_events )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");

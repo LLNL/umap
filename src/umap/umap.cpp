@@ -12,9 +12,9 @@
 
 #include "umap/config.h"
 
-#include "umap/PageRegion.hpp"
-#include "umap/store/Store.hpp"
+#include "umap/Region.hpp"
 #include "umap/umap.h"
+#include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 void* umap(
@@ -40,7 +40,7 @@ void* umap_ex(
   , Store* store
 )
 {
-  auto fm = PageRegion::getInstance();
+  auto fm = Region::getInstance();
   auto umap_psize = fm->get_umap_page_size();
 
   if ( ( region_size % umap_psize ) ) {
@@ -91,78 +91,78 @@ void* umap_ex(
 
 int uunmap(void*  addr, uint64_t length)
 {
-  auto fm = Umap::PageRegion::getInstance();
+  auto fm = Umap::Region::getInstance();
   fm->destroyFillManager((char*)addr);
   return 0;
 }
 
 long     umapcfg_get_system_page_size( void )
 {
-  return Umap::PageRegion::getInstance()->get_system_page_size();
+  return Umap::Region::getInstance()->get_system_page_size();
 }
 
 uint64_t umapcfg_get_max_pages_in_buffer( void )
 {
-  return Umap::PageRegion::getInstance()->get_max_pages_in_buffer();
+  return Umap::Region::getInstance()->get_max_pages_in_buffer();
 }
 
 void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages )
 {
-  Umap::PageRegion::getInstance()->set_max_pages_in_buffer(max_pages);
+  Umap::Region::getInstance()->set_max_pages_in_buffer(max_pages);
 }
 
 uint64_t umapcfg_get_umap_page_size( void )
 {
-  return Umap::PageRegion::getInstance()->get_umap_page_size();
+  return Umap::Region::getInstance()->get_umap_page_size();
 }
 void     umapcfg_set_umap_page_size( uint64_t page_size )
 {
-  Umap::PageRegion::getInstance()->set_umap_page_size(page_size);
+  Umap::Region::getInstance()->set_umap_page_size(page_size);
 }
 
 uint64_t umapcfg_get_num_fillers( void )
 {
-  return Umap::PageRegion::getInstance()->get_num_fillers();
+  return Umap::Region::getInstance()->get_num_fillers();
 }
 void     umapcfg_set_num_fillers( uint64_t num_fillers )
 {
-  Umap::PageRegion::getInstance()->set_num_fillers(num_fillers);
+  Umap::Region::getInstance()->set_num_fillers(num_fillers);
 }
 
 uint64_t umapcfg_get_num_flushers( void )
 {
-  return Umap::PageRegion::getInstance()->get_num_flushers();
+  return Umap::Region::getInstance()->get_num_flushers();
 }
 void     umapcfg_set_num_flushers( uint64_t num_flushers )
 {
-  Umap::PageRegion::getInstance()->set_num_flushers(num_flushers);
+  Umap::Region::getInstance()->set_num_flushers(num_flushers);
 }
 
 int umapcfg_get_flush_low_water_threshold( void )
 {
-  return Umap::PageRegion::getInstance()->get_flush_low_water_threshold();
+  return Umap::Region::getInstance()->get_flush_low_water_threshold();
 }
 
 void umapcfg_set_flush_low_water_threshold( int threshold_percentage )
 {
-  Umap::PageRegion::getInstance()->set_flush_low_water_threshold(threshold_percentage);
+  Umap::Region::getInstance()->set_flush_low_water_threshold(threshold_percentage);
 }
 
 int umapcfg_get_flush_high_water_threshold( void )
 {
-  return Umap::PageRegion::getInstance()->get_flush_high_water_threshold();
+  return Umap::Region::getInstance()->get_flush_high_water_threshold();
 }
 
 void umapcfg_set_flush_high_water_threshold( int threshold_percentage )
 {
-  Umap::PageRegion::getInstance()->set_flush_high_water_threshold(threshold_percentage);
+  Umap::Region::getInstance()->set_flush_high_water_threshold(threshold_percentage);
 }
 
 uint64_t umapcfg_get_max_fault_events( void )
 {
-  return Umap::PageRegion::getInstance()->get_max_fault_events();
+  return Umap::Region::getInstance()->get_max_fault_events();
 }
 void     umapcfg_set_max_fault_events( uint64_t max_events )
 {
-  Umap::PageRegion::getInstance()->set_max_fault_events(max_events);
+  Umap::Region::getInstance()->set_max_fault_events(max_events);
 }

@@ -23,11 +23,11 @@
 #include "umap/config.h"
 
 #include "umap/Buffer.hpp"
-#include "umap/PageRegion.hpp"
 #include "umap/FillWorkers.hpp"
 #include "umap/FlushManager.hpp"
-#include "umap/WorkerPool.hpp"
+#include "umap/Region.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
@@ -50,15 +50,15 @@ namespace Umap {
         m_uffd = new Uffd(region, region_size, max_fault_events, page_size);
 
         m_buffer = new Buffer(
-              PageRegion::getInstance()->get_max_pages_in_buffer()
-            , PageRegion::getInstance()->get_flush_low_water_threshold()
-            , PageRegion::getInstance()->get_flush_high_water_threshold()
+              Region::getInstance()->get_max_pages_in_buffer()
+            , Region::getInstance()->get_flush_low_water_threshold()
+            , Region::getInstance()->get_flush_high_water_threshold()
         );
 
         m_fill_workers = new FillWorkers(m_uffd, m_buffer);
 
         m_flush_manager = new FlushManager(
-              PageRegion::getInstance()->get_num_flushers()
+              Region::getInstance()->get_num_flushers()
             , m_buffer, m_uffd, m_store
         );
 

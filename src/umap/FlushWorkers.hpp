@@ -14,8 +14,9 @@
 #include <sys/mman.h>
 
 #include "umap/Buffer.hpp"
-#include "umap/WorkerPool.hpp"
+#include "umap/Region.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/store/Store.hpp"
 
@@ -49,7 +50,7 @@ class FlushWorkers : public WorkerPool {
     }
 
     void FlushWorker( void ) {
-      uint64_t page_size = PageRegion::getInstance()->get_umap_page_size();
+      uint64_t page_size = Region::getInstance()->get_umap_page_size();
 
       while ( 1 ) {
         auto w = get_work();
