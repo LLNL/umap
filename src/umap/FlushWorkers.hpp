@@ -74,8 +74,7 @@ class FlushWorkers : public WorkerPool {
           UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
 
         m_buffer->lock();
-        w.page_desc->set_state_free();
-        m_buffer->mark_page_not_present(w.page_desc);
+        m_buffer->remove_page(w.page_desc);
         m_buffer->unlock();
       }
     }

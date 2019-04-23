@@ -134,7 +134,7 @@ namespace Umap {
               work.page_desc = pd; work.store = m_store;
               pd->set_state_filling();
 
-              m_buffer->mark_page_present(pd);
+              m_buffer->add_page(pd);
 
               if (event.is_write_fault)
                 pd->mark_page_dirty();

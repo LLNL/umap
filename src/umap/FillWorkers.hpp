@@ -90,8 +90,7 @@ namespace Umap {
           }
 
           m_buffer->lock();
-          w.page_desc->set_state_present();
-          m_buffer->wake_up_waiters_for_oldest_page(w.page_desc);
+          m_buffer->make_page_present(w.page_desc);
           m_buffer->unlock();
         }
 

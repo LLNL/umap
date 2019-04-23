@@ -30,7 +30,6 @@ namespace Umap {
 
     bool page_is_dirty() { return m_is_dirty; }
     void mark_page_dirty() { m_is_dirty = true; }
-    void set_page_addr(void* paddr) { m_page = paddr; }
     void* get_page_addr() { return m_page; }
 
     std::string print_state() const
@@ -48,7 +47,6 @@ namespace Umap {
     void set_state_free() {
       if ( m_state != LEAVING )
         UMAP_ERROR("Invalid state transition from: " << print_state());
-
       m_state = FREE;
     }
 
@@ -93,13 +91,14 @@ namespace Umap {
               << " bytes for buffer page descriptors");
 
         for ( int i = 0; i < m_size; ++i ) {
-          free_page_descriptor( &m_array[i] );
+          m_free_pages.push_back(&m_array[i]);
           m_array[i].m_state = Umap::PageDescriptor::State::FREE;
         }
 
         pthread_mutex_init(&m_mutex, NULL);
         pthread_cond_init(&m_available_descriptor_cond, NULL);
         pthread_cond_init(&m_oldest_page_ready_for_eviction, NULL);
+        pthread_cond_init(&m_present_page_descriptor_cond, NULL);
 
         m_flush_low_water = apply_int_percentage(low_water_threshold, m_size);
         m_flush_high_water = apply_int_percentage(high_water_threshold, m_size);
@@ -110,6 +109,7 @@ namespace Umap {
         assert("Pages are still present" && m_present_pages.size() == 0);
         pthread_cond_destroy(&m_available_descriptor_cond);
         pthread_cond_destroy(&m_oldest_page_ready_for_eviction);
+        pthread_cond_destroy(&m_present_page_descriptor_cond);
         pthread_mutex_destroy(&m_mutex);
         free(m_array);
       }
@@ -136,20 +136,50 @@ namespace Umap {
 
       // Return nullptr if page not present, PageDescriptor * otherwise
       PageDescriptor* page_already_present( void* page_addr ) {
-        auto pp = m_present_pages.find(page_addr);
-        if ( pp != m_present_pages.end() )
-          return pp->second;
-        else
-          return nullptr;
+        while (1) {
+          auto pp = m_present_pages.find(page_addr);
+        
+          // There is a chance that the state of this page is not/no-longer
+          // PRESENT.  If this is the case, we need to wait for it to finish
+          // with whatever is happening to it and then check again
+          //
+          if ( pp != m_present_pages.end() ) {
+            if ( pp->second->m_state != PageDescriptor::State::PRESENT ) {
+              map_of_pages_awaiting_state_change[page_addr];
+              pthread_cond_wait(&m_present_page_descriptor_cond, &m_mutex);
+              map_of_pages_awaiting_state_change.erase(page_addr);
+            }
+            else {
+              return pp->second;
+            }
+          }
+          else {
+            return nullptr;
+          }
+        }
       }
 
-      void mark_page_present( PageDescriptor* pd ) {
+      void add_page( PageDescriptor* pd ) {
         m_present_pages[pd->get_page_addr()] = pd;
       }
 
-      void mark_page_not_present( PageDescriptor* pd ) {
-        m_present_pages.erase(pd->get_page_addr());
+      void remove_page( PageDescriptor* pd ) {
+        void* page_addr = pd->get_page_addr();
+
+        m_present_pages.erase(page_addr);
         free_page_descriptor( pd );
+
+        pd->set_state_free();
+
+        if ( m_fill_waiting_count )
+          pthread_cond_signal(&m_available_descriptor_cond);
+
+        auto pp = map_of_pages_awaiting_state_change.find(page_addr);
+        if ( pp != map_of_pages_awaiting_state_change.end() )
+          pthread_cond_signal(&m_present_page_descriptor_cond);
+
+        unlock();
+        lock();
       }
 
       PageDescriptor* get_page_descriptor( void* page_addr ) {
@@ -173,9 +203,17 @@ namespace Umap {
         return rval;
       }
 
-      void wake_up_waiters_for_oldest_page(PageDescriptor* pd) {
+      void make_page_present(PageDescriptor* pd) {
+        void* page_addr = pd->get_page_addr();
+
+        pd->set_state_present();
+
         if (m_last_pd_waiting == pd)
             pthread_cond_signal(&m_oldest_page_ready_for_eviction);
+
+        auto pp = map_of_pages_awaiting_state_change.find(page_addr);
+        if ( pp != map_of_pages_awaiting_state_change.end() )
+          pthread_cond_signal(&m_present_page_descriptor_cond);
       }
 
       PageDescriptor* get_oldest_present_page_descriptor() {
@@ -199,12 +237,6 @@ namespace Umap {
 
       void free_page_descriptor( PageDescriptor* pd ) {
         m_free_pages.push_back(pd);
-
-        if ( m_fill_waiting_count ) {
-          pthread_cond_signal(&m_available_descriptor_cond);
-          unlock();
-          lock();
-        }
       }
 
       uint64_t get_number_of_present_pages( void ) {
@@ -216,6 +248,7 @@ namespace Umap {
       int m_fill_waiting_count; // # of IOs waiting to be filled
       PageDescriptor* m_last_pd_waiting;
 
+      std::unordered_map<void*, bool> map_of_pages_awaiting_state_change;
       PageDescriptor* m_array;
       std::unordered_map<void*, PageDescriptor*> m_present_pages;
       std::vector<PageDescriptor*> m_free_pages;
@@ -227,6 +260,7 @@ namespace Umap {
       pthread_mutex_t m_mutex;
       pthread_cond_t m_available_descriptor_cond;
       pthread_cond_t m_oldest_page_ready_for_eviction;
+      pthread_cond_t m_present_page_descriptor_cond;
 
       uint64_t apply_int_percentage( int percentage, uint64_t item ) {
         uint64_t rval;
@@ -247,24 +281,34 @@ namespace Umap {
 
   std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b)
   {
-    os << "{ m_size: " << b->m_size
-      << ", m_fill_waiting_count: " << b->m_fill_waiting_count
-      << ", m_array: " << (void*)(b->m_array)
-      << ", m_present_pages.size(): " << std::setw(2) << b->m_present_pages.size()
-      << ", m_free_pages.size(): " << std::setw(2) << b->m_free_pages.size()
-      << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
-      << ", m_flush_low_water: " << std::setw(2) << b->m_flush_low_water
-      << ", m_flush_high_water: " << std::setw(2) << b->m_flush_high_water
-      << " }";
+    if ( b != nullptr ) {
+      os << "{ m_size: " << b->m_size
+        << ", m_fill_waiting_count: " << b->m_fill_waiting_count
+        << ", m_array: " << (void*)(b->m_array)
+        << ", m_present_pages.size(): " << std::setw(2) << b->m_present_pages.size()
+        << ", m_free_pages.size(): " << std::setw(2) << b->m_free_pages.size()
+        << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
+        << ", m_flush_low_water: " << std::setw(2) << b->m_flush_low_water
+        << ", m_flush_high_water: " << std::setw(2) << b->m_flush_high_water
+        << " }";
+    }
+    else {
+      os << "{ nullptr }";
+    }
 
     return os;
   }
 
   std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor* pd)
   {
-    os << "{ m_page: " << (void*)(pd->m_page)
-       << ", m_state: " << pd->print_state()
-       << ", m_is_dirty: " << pd->m_is_dirty << " }";
+    if (pd != nullptr) {
+      os << "{ m_page: " << (void*)(pd->m_page)
+         << ", m_state: " << pd->print_state()
+         << ", m_is_dirty: " << pd->m_is_dirty << " }";
+    }
+    else {
+      os << "{ nullptr }";
+    }
     return os;
   }
 } // end of namespace Umap
