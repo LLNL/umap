@@ -103,17 +103,6 @@ namespace Umap {
           int count = 0;
           for ( auto & event : pe ) {
             count++;
-            if (m_buffer->flush_threshold_reached()) {
-              WorkItem w;
-
-              w.type = Umap::WorkItem::WorkType::THRESHOLD;
-              w.page_desc = nullptr;
-              w.store = nullptr;
-              m_flush_manager->send_work(w);
-              m_buffer->unlock();
-              m_buffer->lock();
-            }
-
             WorkItem work;
             auto pd = m_buffer->page_already_present(event.aligned_page_address);
 
@@ -143,6 +132,15 @@ namespace Umap {
             }
 
             m_fill_workers->send_work(work);
+          }
+
+          if (m_buffer->flush_threshold_reached()) {
+            WorkItem w;
+
+            w.type = Umap::WorkItem::WorkType::THRESHOLD;
+            w.page_desc = nullptr;
+            w.store = nullptr;
+            m_flush_manager->send_work(w);
           }
 
           m_buffer->unlock();

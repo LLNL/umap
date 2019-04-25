@@ -75,8 +75,36 @@ namespace Umap {
     }
   };
 
+  struct BufferStats {
+    BufferStats() :   lock_collision(0), lock(0), pages_inserted(0)
+                    , pages_deleted(0), wait_for_present(0), not_avail(0)
+    {};
+
+    uint64_t lock_collision;
+    uint64_t lock;
+    uint64_t pages_inserted;
+    uint64_t pages_deleted;
+    uint64_t wait_for_present;
+    uint64_t not_avail;
+    uint64_t wait_on_oldest;
+  };
+
+  std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats)
+  {
+    os << "Buffer Statisics:\n"
+      << "   Pages Inserted: " << std::setw(12) << stats.pages_inserted<< "\n"
+      << "    Pages Deleted: " << std::setw(12) << stats.pages_deleted<< "\n"
+      << "   Presence waits: " << std::setw(12) << stats.wait_for_present<< "\n"
+      << "     Oldest waits: " << std::setw(12) << stats.wait_on_oldest<< "\n"
+      << " Unavailable wait: " << std::setw(12) << stats.not_avail<< "\n"
+      << "            Locks: " << std::setw(12) << stats.lock << "\n"
+      << "  Lock collisions: " << std::setw(12) << stats.lock_collision;
+    return os;
+  }
+
   class Buffer {
     friend std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b);
+    friend std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats);
     public:
       /** Buffer constructor
        * \param size Maximum number of pages in buffer
@@ -84,7 +112,13 @@ namespace Umap {
        * reached before page flushers are activated.  If 0 or 100, the flushers
        * will only run when the Buffer is completely full.
        */
-      explicit Buffer( uint64_t size, int low_water_threshold, int high_water_threshold ) : m_size(size), m_fill_waiting_count(0), m_last_pd_waiting(nullptr) {
+      explicit Buffer(  uint64_t size
+                      , int low_water_threshold
+                      , int high_water_threshold
+               ) :   m_size(size)
+                   , m_fill_waiting_count(0)
+                   , m_last_pd_waiting(nullptr)
+      {
         m_array = (PageDescriptor *)calloc(m_size, sizeof(PageDescriptor));
         if ( m_array == nullptr )
           UMAP_ERROR("Failed to allocate " << m_size*sizeof(PageDescriptor)
@@ -106,6 +140,8 @@ namespace Umap {
 
       ~Buffer( void )
       {
+        std::cout << m_stats << std::endl;
+
         assert("Pages are still present" && m_present_pages.size() == 0);
         pthread_cond_destroy(&m_available_descriptor_cond);
         pthread_cond_destroy(&m_oldest_page_ready_for_eviction);
@@ -122,18 +158,6 @@ namespace Umap {
         return m_busy_pages.size() <= m_flush_low_water;
       }
 
-      //
-      // Course grain lock against entire buffer.  We may need to make this
-      // finer grained later if needed
-      //
-      void lock() {
-        pthread_mutex_lock(&m_mutex);
-      }
-
-      void unlock() {
-        pthread_mutex_unlock(&m_mutex);
-      }
-
       // Return nullptr if page not present, PageDescriptor * otherwise
       PageDescriptor* page_already_present( void* page_addr ) {
         while (1) {
@@ -145,6 +169,7 @@ namespace Umap {
           //
           if ( pp != m_present_pages.end() ) {
             if ( pp->second->m_state != PageDescriptor::State::PRESENT ) {
+              m_stats.wait_for_present++;
               map_of_pages_awaiting_state_change[page_addr];
               pthread_cond_wait(&m_present_page_descriptor_cond, &m_mutex);
               map_of_pages_awaiting_state_change.erase(page_addr);
@@ -177,27 +202,25 @@ namespace Umap {
         auto pp = map_of_pages_awaiting_state_change.find(page_addr);
         if ( pp != map_of_pages_awaiting_state_change.end() )
           pthread_cond_signal(&m_present_page_descriptor_cond);
-
-        unlock();
-        lock();
       }
 
       PageDescriptor* get_page_descriptor( void* page_addr ) {
-        PageDescriptor* rval;
-        //UMAP_LOG(Debug, this);
-
-        ++m_fill_waiting_count;
-
-        while ( m_free_pages.size() == 0 )
+        while ( m_free_pages.size() == 0 )  {
+          ++m_fill_waiting_count;
+          m_stats.not_avail++;
           pthread_cond_wait(&m_available_descriptor_cond, &m_mutex);
+          --m_fill_waiting_count;
+        }
 
-        --m_fill_waiting_count;
+        PageDescriptor* rval;
+
         rval = m_free_pages.back();
         m_free_pages.pop_back();
 
         rval->m_page = page_addr;
         rval->m_is_dirty = false;
 
+        m_stats.pages_inserted++;
         m_busy_pages.push(rval);
 
         return rval;
@@ -225,12 +248,14 @@ namespace Umap {
         rval = m_busy_pages.front();
 
         while ( rval->m_state != PageDescriptor::State::PRESENT ) {
+          m_stats.wait_on_oldest++;
           m_last_pd_waiting = rval;
           pthread_cond_wait(&m_oldest_page_ready_for_eviction, &m_mutex);
         }
         m_last_pd_waiting = nullptr;
 
         m_busy_pages.pop();
+        m_stats.pages_deleted++;
 
         return rval;
       }
@@ -241,6 +266,23 @@ namespace Umap {
 
       uint64_t get_number_of_present_pages( void ) {
         return m_present_pages.size();
+      }
+
+      void lock() {
+        int err;
+        if ( (err = pthread_mutex_trylock(&m_mutex)) != 0 ) {
+          if (err != EBUSY)
+            UMAP_ERROR("pthread_mutex_trylock failed: " << strerror(err));
+
+          if ( (err = pthread_mutex_lock(&m_mutex)) != 0 )
+            UMAP_ERROR("pthread_mutex_lock failed: " << strerror(err));
+          m_stats.lock_collision++;
+        }
+        m_stats.lock++;
+      }
+
+      void unlock() {
+        pthread_mutex_unlock(&m_mutex);
       }
 
     private:
@@ -262,6 +304,8 @@ namespace Umap {
       pthread_cond_t m_oldest_page_ready_for_eviction;
       pthread_cond_t m_present_page_descriptor_cond;
 
+      BufferStats m_stats;
+
       uint64_t apply_int_percentage( int percentage, uint64_t item ) {
         uint64_t rval;
 
@@ -277,6 +321,7 @@ namespace Umap {
         }
         return rval;
       }
+
   };
 
   std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b)
