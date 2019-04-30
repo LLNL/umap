@@ -19,62 +19,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "umap/PageDescriptor.hpp"
+#include "umap/WorkerPool.hpp"
+#include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-  struct PageDescriptor {
-    enum State { FREE, FILLING, PRESENT, UPDATING, LEAVING };
-    void* m_page;
-    bool m_is_dirty;
-    State m_state;
-
-    bool page_is_dirty() { return m_is_dirty; }
-    void mark_page_dirty() { m_is_dirty = true; }
-    void* get_page_addr() { return m_page; }
-
-    std::string print_state() const
-    {
-      switch (m_state) {
-        default:                                    return "???";
-        case Umap::PageDescriptor::State::FREE:     return "FREE";
-        case Umap::PageDescriptor::State::FILLING:  return "FILLING";
-        case Umap::PageDescriptor::State::PRESENT:  return "PRESENT";
-        case Umap::PageDescriptor::State::UPDATING: return "UPDATING";
-        case Umap::PageDescriptor::State::LEAVING:  return "LEAVING";
-      }
-    }
-
-    void set_state_free() {
-      if ( m_state != LEAVING )
-        UMAP_ERROR("Invalid state transition from: " << print_state());
-      m_state = FREE;
-    }
-
-    void set_state_filling() {
-      if ( m_state != FREE )
-        UMAP_ERROR("Invalid state transition from: " << print_state());
-      m_state = FILLING;
-    }
-
-    void set_state_present() {
-      if ( m_state != FILLING && m_state != UPDATING )
-        UMAP_ERROR("Invalid state transition from: " << print_state());
-      m_state = PRESENT;
-    }
-
-    void set_state_updating() {
-      if ( m_state != PRESENT )
-        UMAP_ERROR("Invalid state transition from: " << print_state());
-      m_state = UPDATING;
-    }
-
-    void set_state_leaving() {
-      if ( m_state != PRESENT )
-        UMAP_ERROR("Invalid state transition from: " << print_state());
-      m_state = LEAVING;
-    }
-  };
-
   struct BufferStats {
     BufferStats() :   lock_collision(0), lock(0), pages_inserted(0)
                     , pages_deleted(0), wait_for_present(0), not_avail(0)
@@ -106,18 +56,8 @@ namespace Umap {
     friend std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b);
     friend std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats);
     public:
-      /** Buffer constructor
-       * \param size Maximum number of pages in buffer
-       * \param flush_threshold Integer percentage of Buffer capacify to be
-       * reached before page flushers are activated.  If 0 or 100, the flushers
-       * will only run when the Buffer is completely full.
-       */
-      explicit Buffer(  uint64_t size
-                      , int low_water_threshold
-                      , int high_water_threshold
-               ) :   m_size(size)
-                   , m_fill_waiting_count(0)
-                   , m_last_pd_waiting(nullptr)
+      explicit Buffer(  uint64_t size, int low_water_threshold, int high_water_threshold)
+        : m_size(size), m_fill_waiting_count(0), m_last_pd_waiting(nullptr)
       {
         m_array = (PageDescriptor *)calloc(m_size, sizeof(PageDescriptor));
         if ( m_array == nullptr )
@@ -134,8 +74,8 @@ namespace Umap {
         pthread_cond_init(&m_oldest_page_ready_for_eviction, NULL);
         pthread_cond_init(&m_present_page_descriptor_cond, NULL);
 
-        m_flush_low_water = apply_int_percentage(low_water_threshold, m_size);
-        m_flush_high_water = apply_int_percentage(high_water_threshold, m_size);
+        m_evict_low_water = apply_int_percentage(low_water_threshold, m_size);
+        m_evict_high_water = apply_int_percentage(high_water_threshold, m_size);
       }
 
       ~Buffer( void )
@@ -150,12 +90,135 @@ namespace Umap {
         free(m_array);
       }
 
-      bool flush_threshold_reached( void ) {
-        return m_busy_pages.size() >= m_flush_high_water;
+      //
+      // Called from FillWorker threads after IO has completed
+      //
+      void make_page_present(PageDescriptor* pd) {
+        void* page_addr = pd->get_page_addr();
+
+        lock();
+
+        pd->set_state_present();
+
+        if (m_last_pd_waiting == pd)
+            pthread_cond_signal(&m_oldest_page_ready_for_eviction);
+
+        auto pp = map_of_pages_awaiting_state_change.find(page_addr);
+        if ( pp != map_of_pages_awaiting_state_change.end() )
+          pthread_cond_signal(&m_present_page_descriptor_cond);
+        
+        unlock();
       }
 
-      bool flush_low_threshold_reached( void ) {
-        return m_busy_pages.size() <= m_flush_low_water;
+      //
+      // Called from EvictWorkers to remove page from active list and place
+      // onto the free list.
+      //
+      void remove_page( PageDescriptor* pd ) {
+        void* page_addr = pd->get_page_addr();
+
+        lock();
+        m_present_pages.erase(page_addr);
+        free_page_descriptor( pd );
+
+        pd->set_state_free();
+
+        if ( m_fill_waiting_count )
+          pthread_cond_signal(&m_available_descriptor_cond);
+
+        auto pp = map_of_pages_awaiting_state_change.find(page_addr);
+        if ( pp != map_of_pages_awaiting_state_change.end() )
+          pthread_cond_signal(&m_present_page_descriptor_cond);
+        unlock();
+      }
+
+      //
+      // Called by Evict Manager to determine when to stop evicting (no lock)
+      //
+      bool evict_low_threshold_reached( void ) {
+        return m_busy_pages.size() <= m_evict_low_water;
+      }
+
+      //
+      // Called from Evict Manager to begin eviction process on oldest present
+      // page
+      //
+      PageDescriptor* evict_oldest_page() {
+        lock();
+
+        if ( m_busy_pages.size() == 0 ) {
+          unlock();
+          return nullptr;
+        }
+
+        PageDescriptor* rval;
+
+        rval = m_busy_pages.front();
+
+        while ( rval->m_state != PageDescriptor::State::PRESENT ) {
+          m_stats.wait_on_oldest++;
+          m_last_pd_waiting = rval;
+          pthread_cond_wait(&m_oldest_page_ready_for_eviction, &m_mutex);
+        }
+        m_last_pd_waiting = nullptr;
+
+        m_busy_pages.pop();
+        m_stats.pages_deleted++;
+
+        rval->set_state_leaving();
+
+        unlock();
+        return rval;
+      }
+
+      //
+      // Called from Fill Manager
+      //
+      void process_page_event(
+            void* paddr
+          , bool iswrite
+          , WorkerPool* workers
+          , Store* store
+      )
+      {
+        WorkItem work;
+
+        lock();
+        auto pd = page_already_present(paddr);
+
+        if ( pd != nullptr ) {  // Page is already present
+          if (iswrite && pd->page_is_dirty() == false) {
+            work.page_desc = pd; work.store = nullptr;
+            pd->mark_page_dirty();
+            pd->set_state_updating();
+            UMAP_LOG(Debug, "PRE: " << pd << " From: " << this);
+          }
+          else {
+            UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
+            unlock();
+            return;
+          }
+        }
+        else {                  // This page has not been brought in yet
+          pd = get_page_descriptor(paddr);
+          work.page_desc = pd; work.store = store;
+          pd->set_state_filling();
+
+          add_page(pd);
+
+          if (iswrite)
+            pd->mark_page_dirty();
+
+          UMAP_LOG(Debug, "NEW: " << pd << " From: " << this);
+        }
+
+        workers->send_work(work);
+        unlock();
+      }
+
+    private:
+      bool evict_threshold_reached( void ) {
+        return m_busy_pages.size() >= m_evict_high_water;
       }
 
       // Return nullptr if page not present, PageDescriptor * otherwise
@@ -188,22 +251,6 @@ namespace Umap {
         m_present_pages[pd->get_page_addr()] = pd;
       }
 
-      void remove_page( PageDescriptor* pd ) {
-        void* page_addr = pd->get_page_addr();
-
-        m_present_pages.erase(page_addr);
-        free_page_descriptor( pd );
-
-        pd->set_state_free();
-
-        if ( m_fill_waiting_count )
-          pthread_cond_signal(&m_available_descriptor_cond);
-
-        auto pp = map_of_pages_awaiting_state_change.find(page_addr);
-        if ( pp != map_of_pages_awaiting_state_change.end() )
-          pthread_cond_signal(&m_present_page_descriptor_cond);
-      }
-
       PageDescriptor* get_page_descriptor( void* page_addr ) {
         while ( m_free_pages.size() == 0 )  {
           ++m_fill_waiting_count;
@@ -222,40 +269,6 @@ namespace Umap {
 
         m_stats.pages_inserted++;
         m_busy_pages.push(rval);
-
-        return rval;
-      }
-
-      void make_page_present(PageDescriptor* pd) {
-        void* page_addr = pd->get_page_addr();
-
-        pd->set_state_present();
-
-        if (m_last_pd_waiting == pd)
-            pthread_cond_signal(&m_oldest_page_ready_for_eviction);
-
-        auto pp = map_of_pages_awaiting_state_change.find(page_addr);
-        if ( pp != map_of_pages_awaiting_state_change.end() )
-          pthread_cond_signal(&m_present_page_descriptor_cond);
-      }
-
-      PageDescriptor* get_oldest_present_page_descriptor() {
-        if ( m_busy_pages.size() == 0 )
-          return nullptr;
-
-        PageDescriptor* rval;
-
-        rval = m_busy_pages.front();
-
-        while ( rval->m_state != PageDescriptor::State::PRESENT ) {
-          m_stats.wait_on_oldest++;
-          m_last_pd_waiting = rval;
-          pthread_cond_wait(&m_oldest_page_ready_for_eviction, &m_mutex);
-        }
-        m_last_pd_waiting = nullptr;
-
-        m_busy_pages.pop();
-        m_stats.pages_deleted++;
 
         return rval;
       }
@@ -285,7 +298,6 @@ namespace Umap {
         pthread_mutex_unlock(&m_mutex);
       }
 
-    private:
       uint64_t m_size;          // Maximum pages this buffer may have
       int m_fill_waiting_count; // # of IOs waiting to be filled
       PageDescriptor* m_last_pd_waiting;
@@ -296,8 +308,8 @@ namespace Umap {
       std::vector<PageDescriptor*> m_free_pages;
       std::queue<PageDescriptor*> m_busy_pages;
 
-      uint64_t m_flush_low_water;   // % to flush too
-      uint64_t m_flush_high_water;  // % to start flushing
+      uint64_t m_evict_low_water;   // % to evict too
+      uint64_t m_evict_high_water;  // % to start evicting
 
       pthread_mutex_t m_mutex;
       pthread_cond_t m_available_descriptor_cond;
@@ -333,27 +345,14 @@ namespace Umap {
         << ", m_present_pages.size(): " << std::setw(2) << b->m_present_pages.size()
         << ", m_free_pages.size(): " << std::setw(2) << b->m_free_pages.size()
         << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
-        << ", m_flush_low_water: " << std::setw(2) << b->m_flush_low_water
-        << ", m_flush_high_water: " << std::setw(2) << b->m_flush_high_water
+        << ", m_evict_low_water: " << std::setw(2) << b->m_evict_low_water
+        << ", m_evict_high_water: " << std::setw(2) << b->m_evict_high_water
         << " }";
     }
     else {
       os << "{ nullptr }";
     }
 
-    return os;
-  }
-
-  std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor* pd)
-  {
-    if (pd != nullptr) {
-      os << "{ m_page: " << (void*)(pd->m_page)
-         << ", m_state: " << pd->print_state()
-         << ", m_is_dirty: " << pd->m_is_dirty << " }";
-    }
-    else {
-      os << "{ nullptr }";
-    }
     return os;
   }
 } // end of namespace Umap

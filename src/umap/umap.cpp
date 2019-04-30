@@ -129,33 +129,33 @@ void     umapcfg_set_num_fillers( uint64_t num_fillers )
   Umap::Region::getInstance()->set_num_fillers(num_fillers);
 }
 
-uint64_t umapcfg_get_num_flushers( void )
+uint64_t umapcfg_get_num_evictors( void )
 {
-  return Umap::Region::getInstance()->get_num_flushers();
+  return Umap::Region::getInstance()->get_num_evictors();
 }
-void     umapcfg_set_num_flushers( uint64_t num_flushers )
+void     umapcfg_set_num_evictors( uint64_t num_evictors )
 {
-  Umap::Region::getInstance()->set_num_flushers(num_flushers);
-}
-
-int umapcfg_get_flush_low_water_threshold( void )
-{
-  return Umap::Region::getInstance()->get_flush_low_water_threshold();
+  Umap::Region::getInstance()->set_num_evictors(num_evictors);
 }
 
-void umapcfg_set_flush_low_water_threshold( int threshold_percentage )
+int umapcfg_get_evict_low_water_threshold( void )
 {
-  Umap::Region::getInstance()->set_flush_low_water_threshold(threshold_percentage);
+  return Umap::Region::getInstance()->get_evict_low_water_threshold();
 }
 
-int umapcfg_get_flush_high_water_threshold( void )
+void umapcfg_set_evict_low_water_threshold( int threshold_percentage )
 {
-  return Umap::Region::getInstance()->get_flush_high_water_threshold();
+  Umap::Region::getInstance()->set_evict_low_water_threshold(threshold_percentage);
 }
 
-void umapcfg_set_flush_high_water_threshold( int threshold_percentage )
+int umapcfg_get_evict_high_water_threshold( void )
 {
-  Umap::Region::getInstance()->set_flush_high_water_threshold(threshold_percentage);
+  return Umap::Region::getInstance()->get_evict_high_water_threshold();
+}
+
+void umapcfg_set_evict_high_water_threshold( int threshold_percentage )
+{
+  Umap::Region::getInstance()->set_evict_high_water_threshold(threshold_percentage);
 }
 
 uint64_t umapcfg_get_max_fault_events( void )

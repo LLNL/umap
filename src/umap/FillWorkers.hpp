@@ -89,9 +89,7 @@ namespace Umap {
             }
           }
 
-          m_buffer->lock();
           m_buffer->make_page_present(w.page_desc);
-          m_buffer->unlock();
         }
 
         free(copyin_buf);

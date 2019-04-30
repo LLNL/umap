@@ -16,13 +16,14 @@
 #include <string>
 #include <vector>
 
+#include "umap/PageDescriptor.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
   struct WorkItem {
-    enum WorkType { NONE, EXIT, THRESHOLD, FLUSH };
+    enum WorkType { NONE, EXIT, THRESHOLD, EVICT };
     PageDescriptor* page_desc;  // Set to nullptr if time to stop
     Store* store;               // Set to nullptr if no I/O required
     WorkType type;

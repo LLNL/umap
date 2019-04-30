@@ -11,8 +11,9 @@ set(umapheaders
       Buffer.hpp
       FillManager.hpp
       FillWorkers.hpp
-      FlushManager.hpp
-      FlushWorkers.hpp
+      EvictManager.hpp
+      EvictWorkers.hpp
+      PageDescriptor.hpp
       Region.hpp
       Uffd.hpp
       umap.h

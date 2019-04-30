@@ -55,14 +55,14 @@ class Region {
     inline uint64_t get_num_fillers( void )  { return m_num_fillers; }
     void set_num_fillers( uint64_t num_fillers );
 
-    inline uint64_t get_num_flushers( void ) { return m_num_flushers; }
-    void set_num_flushers( uint64_t num_flushers );
+    inline uint64_t get_num_evictors( void ) { return m_num_evictors; }
+    void set_num_evictors( uint64_t num_evictors );
 
-    inline int get_flush_low_water_threshold( void ) { return m_flush_low_water_threshold; }
-    void set_flush_low_water_threshold( int percent );
+    inline int get_evict_low_water_threshold( void ) { return m_evict_low_water_threshold; }
+    void set_evict_low_water_threshold( int percent );
 
-    inline int get_flush_high_water_threshold( void ) { return m_flush_high_water_threshold; }
-    void set_flush_high_water_threshold( int percent );
+    inline int get_evict_high_water_threshold( void ) { return m_evict_high_water_threshold; }
+    void set_evict_high_water_threshold( int percent );
 
     inline uint64_t get_max_fault_events( void )     { return m_max_fault_events; }
     void set_max_fault_events( uint64_t max_events );
@@ -73,9 +73,9 @@ class Region {
     long     m_umap_page_size;
     uint64_t m_system_page_size;
     uint64_t m_num_fillers;
-    uint64_t m_num_flushers;
-    int m_flush_low_water_threshold;
-    int m_flush_high_water_threshold;
+    uint64_t m_num_evictors;
+    int m_evict_low_water_threshold;
+    int m_evict_high_water_threshold;
     uint64_t m_max_fault_events;
 
     std::unordered_map<void*, FillManager*> m_active_umaps;

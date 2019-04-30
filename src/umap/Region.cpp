@@ -88,20 +88,20 @@ Region::Region()
   else
     set_num_fillers(nthreads);
 
-  if ( (read_env_var("UMAP_PAGE_FLUSHERS", &env_value)) != nullptr )
-    set_num_flushers(env_value);
+  if ( (read_env_var("UMAP_PAGE_EVICTORS", &env_value)) != nullptr )
+    set_num_evictors(env_value);
   else
-    set_num_flushers(nthreads);
+    set_num_evictors(nthreads);
 
-  if ( (read_env_var("UMAP_FLUSH_HIGH_WATER_THRESHOLD", &env_value)) != nullptr )
-    set_flush_high_water_threshold(env_value);
+  if ( (read_env_var("UMAP_EVICT_HIGH_WATER_THRESHOLD", &env_value)) != nullptr )
+    set_evict_high_water_threshold(env_value);
   else
-    set_flush_high_water_threshold(90);
+    set_evict_high_water_threshold(90);
 
-  if ( (read_env_var("UMAP_FLUSH_LOW_WATER_THRESHOLD", &env_value)) != nullptr )
-    set_flush_low_water_threshold(env_value);
+  if ( (read_env_var("UMAP_EVICT_LOW_WATER_THRESHOLD", &env_value)) != nullptr )
+    set_evict_low_water_threshold(env_value);
   else
-    set_flush_low_water_threshold(70);
+    set_evict_low_water_threshold(70);
 
   if ( (read_env_var("UMAP_PAGESIZE", &env_value)) != nullptr )
     set_umap_page_size(env_value);
@@ -221,33 +221,33 @@ Region::set_num_fillers( uint64_t num_fillers )
 }
 
 void
-Region::set_num_flushers( uint64_t num_flushers )
+Region::set_num_evictors( uint64_t num_evictors )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
   }
 
-  m_num_flushers = num_flushers;
+  m_num_evictors = num_evictors;
 }
 
 void
-Region::set_flush_high_water_threshold( int percent )
+Region::set_evict_high_water_threshold( int percent )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
   }
 
-  m_flush_high_water_threshold = percent;
+  m_evict_high_water_threshold = percent;
 }
 
 void
-Region::set_flush_low_water_threshold( int percent )
+Region::set_evict_low_water_threshold( int percent )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");
   }
 
-  m_flush_low_water_threshold = percent;
+  m_evict_low_water_threshold = percent;
 }
 
 void

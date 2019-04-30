@@ -141,7 +141,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
    */
   if (testops->uffdthreads != umapcfg_get_num_fillers()) {
     umapcfg_set_num_fillers(testops->uffdthreads);
-    umapcfg_set_num_flushers(testops->uffdthreads);
+    umapcfg_set_num_evictors(testops->uffdthreads);
   }
 
   umapcfg_set_max_pages_in_buffer(testops->bufsize);

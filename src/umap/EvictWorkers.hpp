@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_FlushWorkers_HPP
-#define _UMAP_FlushWorkers_HPP
+#ifndef _UMAP_EvictWorkers_HPP
+#define _UMAP_EvictWorkers_HPP
 
 #include "umap/config.h"
 
@@ -22,34 +22,12 @@
 
 namespace Umap {
 
-struct FlushWorkItem {
-  void* region;
-  PageDescriptor* page_desk;
-  Store* store;   // Set to nullptr if no I/O required
-};
-
-class FlushWorkers : public WorkerPool {
-  public:
-    FlushWorkers(uint64_t num_flushers, Buffer* buffer, Uffd* uffd)
-      :   WorkerPool("Flush Workers", num_flushers), m_buffer(buffer)
-        , m_uffd(uffd)
-    {
-      start_thread_pool();
-    }
-
-    ~FlushWorkers( void ) {
-      stop_thread_pool();
-    }
-
+class EvictWorkers : public WorkerPool {
   private:
     Buffer* m_buffer;
     Uffd* m_uffd;
 
-    inline void ThreadEntry() {
-      FlushWorker();
-    }
-
-    void FlushWorker( void ) {
+    void EvictWorker( void ) {
       uint64_t page_size = Region::getInstance()->get_umap_page_size();
 
       while ( 1 ) {
@@ -73,12 +51,25 @@ class FlushWorkers : public WorkerPool {
         if (madvise(page_addr, page_size, MADV_DONTNEED) == -1)
           UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
 
-        m_buffer->lock();
         m_buffer->remove_page(w.page_desc);
-        m_buffer->unlock();
       }
+    }
+
+    inline void ThreadEntry() {
+      EvictWorker();
+    }
+
+  public:
+    EvictWorkers(uint64_t num_evictors, Buffer* buffer, Uffd* uffd)
+      :   WorkerPool("Evict Workers", num_evictors), m_buffer(buffer)
+        , m_uffd(uffd)
+    {
+      start_thread_pool();
+    }
+
+    ~EvictWorkers( void ) {
+      stop_thread_pool();
     }
 };
 } // end of namespace Umap
-
-#endif // _UMAP_FlushWorkers_HPP
+#endif // _UMAP_EvictWorkers_HPP
