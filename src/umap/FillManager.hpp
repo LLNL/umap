@@ -57,20 +57,10 @@ namespace Umap {
             m_buffer->process_page_event(event.aligned_page_address
                 , event.is_write_fault
                 , m_fill_workers
+                , m_evict_manager
                 , m_store
             );
           }
-
-#if 0
-          if (m_buffer->evict_threshold_reached()) {
-            WorkItem w;
-
-            w.type = Umap::WorkItem::WorkType::THRESHOLD;
-            w.page_desc = nullptr;
-            w.store = nullptr;
-            m_evict_manager->send_work(w);
-          }
-#endif
         }
       }
 

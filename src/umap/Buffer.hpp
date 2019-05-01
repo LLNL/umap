@@ -105,7 +105,7 @@ namespace Umap {
 
         auto pp = map_of_pages_awaiting_state_change.find(page_addr);
         if ( pp != map_of_pages_awaiting_state_change.end() )
-          pthread_cond_signal(&m_present_page_descriptor_cond);
+          pthread_cond_broadcast(&m_present_page_descriptor_cond);
         
         unlock();
       }
@@ -128,7 +128,7 @@ namespace Umap {
 
         auto pp = map_of_pages_awaiting_state_change.find(page_addr);
         if ( pp != map_of_pages_awaiting_state_change.end() )
-          pthread_cond_signal(&m_present_page_descriptor_cond);
+          pthread_cond_broadcast(&m_present_page_descriptor_cond);
         unlock();
       }
 
@@ -177,7 +177,8 @@ namespace Umap {
       void process_page_event(
             void* paddr
           , bool iswrite
-          , WorkerPool* workers
+          , WorkerPool* fill_workers
+          , WorkerPool* evict_workers
           , Store* store
       )
       {
@@ -212,15 +213,24 @@ namespace Umap {
           UMAP_LOG(Debug, "NEW: " << pd << " From: " << this);
         }
 
-        workers->send_work(work);
+        fill_workers->send_work(work);
+
+        //
+        // Kick the eviction daemon if the high water mark has been reached
+        //
+        if ( m_busy_pages.size() == m_evict_high_water ) {
+          WorkItem w;
+
+          w.type = Umap::WorkItem::WorkType::THRESHOLD;
+          w.page_desc = nullptr;
+          w.store = nullptr;
+          evict_workers->send_work(w);
+        }
+
         unlock();
       }
 
     private:
-      bool evict_threshold_reached( void ) {
-        return m_busy_pages.size() >= m_evict_high_water;
-      }
-
       // Return nullptr if page not present, PageDescriptor * otherwise
       PageDescriptor* page_already_present( void* page_addr ) {
         while (1) {

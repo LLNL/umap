@@ -26,13 +26,13 @@ namespace Umap {
  * \param flags Same as input argument of mmap(2)
  */
 void* umap_ex(
-    void*       addr
-  , std::size_t length
-  , int         prot
-  , int        flags
-  , int        fd
-  , off_t      offset
-  , Store*     store
+    void*         addr
+  , std::size_t   length
+  , int           prot
+  , int           flags
+  , int           fd
+  , off_t         offset
+  , Umap::Store*  store
 );
 } // namespace Umap
 #endif // __cplusplus
