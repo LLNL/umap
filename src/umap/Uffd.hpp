@@ -240,6 +240,10 @@ class Uffd {
       return ( (uint64_t)page - (uint64_t)m_region );
     }
 
+    void* end_of_region_for_page(void* page) {
+      return ( (void*)(m_region + m_region_size) );
+    }
+
   private:
     char*    m_region;
     uint64_t m_region_size;

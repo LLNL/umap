@@ -112,6 +112,11 @@ Region::Region()
     set_max_pages_in_buffer(env_value);
   else
     set_max_pages_in_buffer( get_max_pages_in_memory() );
+
+  if ( (read_env_var("UMAP_READ_AHEAD", &env_value)) != nullptr )
+    set_read_ahead(env_value);
+  else
+    set_read_ahead(0);
 }
 
 uint64_t
@@ -166,7 +171,21 @@ Region::set_max_pages_in_buffer( uint64_t max_pages )
     << " to " << get_max_pages_in_buffer() << " pages");
 }
 
-void Region::set_umap_page_size( uint64_t page_size )
+void 
+Region::set_read_ahead(uint64_t num_pages)
+{
+  if ( m_active_umaps.size() != 0 )
+    UMAP_ERROR("Cannot change configuration when umaps are active");
+
+  m_read_ahead = num_pages;
+
+  UMAP_LOG(Debug,
+    "Read ahead set to: " 
+    << " to " << m_read_ahead << " pages");
+}
+
+void
+Region::set_umap_page_size( uint64_t page_size )
 {
   if ( m_active_umaps.size() != 0 ) {
     UMAP_ERROR("Cannot change configuration when umaps are active");

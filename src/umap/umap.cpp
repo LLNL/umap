@@ -111,6 +111,16 @@ void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages )
   Umap::Region::getInstance()->set_max_pages_in_buffer(max_pages);
 }
 
+uint64_t umapcfg_get_read_ahead( void )
+{
+  return Umap::Region::getInstance()->get_read_ahead();
+}
+
+void     umapcfg_set_read_ahead( uint64_t num_pages )
+{
+  Umap::Region::getInstance()->set_read_ahead(num_pages);
+}
+
 uint64_t umapcfg_get_umap_page_size( void )
 {
   return Umap::Region::getInstance()->get_umap_page_size();

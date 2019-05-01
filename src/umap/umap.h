@@ -65,6 +65,9 @@ long     umapcfg_get_system_page_size( void );
 uint64_t umapcfg_get_max_pages_in_buffer( void );
 void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages );
 
+uint64_t umapcfg_get_read_ahead( void );
+void     umapcfg_set_read_ahead( uint64_t num_pages );
+
 uint64_t umapcfg_get_umap_page_size( void );
 void     umapcfg_set_umap_page_size( uint64_t page_size );
 

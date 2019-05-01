@@ -23,39 +23,21 @@
 
 namespace Umap {
   class FillWorkers : public WorkerPool {
-    public:
-      FillWorkers(Uffd* uffd, Buffer* buffer)
-        :   WorkerPool("Fill Workers", Region::getInstance()->get_num_fillers())
-          , m_uffd(uffd)
-          , m_buffer(buffer)
-      {
-        start_thread_pool();
-      }
-
-      ~FillWorkers( void ) {
-        stop_thread_pool();
-      }
-
     private:
-      Uffd* m_uffd;
-      Buffer* m_buffer;
-
-      void ThreadEntry( void ) {
-        FillWorker();
-      }
-
       void FillWorker( void ) {
         char* copyin_buf;
         uint64_t page_size = Region::getInstance()->get_umap_page_size();
+        uint64_t read_ahead = Region::getInstance()->get_read_ahead();
+        std::size_t sz = 2 * page_size;
 
-        if (posix_memalign((void**)&copyin_buf, page_size, page_size*2)) {
+        if (posix_memalign((void**)&copyin_buf, page_size, sz)) {
           UMAP_ERROR("posix_memalign failed to allocated "
-              << page_size*2 << " bytes of memory");
+              << sz << " bytes of memory");
         }
 
         if (copyin_buf == nullptr) {
           UMAP_ERROR("posix_memalign failed to allocated "
-              << page_size*2 << " bytes of memory");
+              << sz << " bytes of memory");
         }
 
         while ( 1 ) {
@@ -93,6 +75,28 @@ namespace Umap {
         }
 
         free(copyin_buf);
+      }
+
+      void ThreadEntry( void ) {
+        FillWorker();
+      }
+
+      Uffd* m_uffd;
+      Buffer* m_buffer;
+      uint64_t m_read_ahead;
+
+    public:
+      FillWorkers(Uffd* uffd, Buffer* buffer)
+        :   WorkerPool("Fill Workers", Region::getInstance()->get_num_fillers())
+          , m_uffd(uffd)
+          , m_buffer(buffer)
+          , m_read_ahead(Region::getInstance()->get_read_ahead())
+      {
+        start_thread_pool();
+      }
+
+      ~FillWorkers( void ) {
+        stop_thread_pool();
       }
   };
 } // end of namespace Umap

@@ -49,6 +49,9 @@ class Region {
     inline uint64_t get_max_pages_in_buffer( void )  { return m_max_pages_in_buffer; }
     void set_max_pages_in_buffer( uint64_t max_pages );
 
+    inline uint64_t get_read_ahead( void ) { return m_read_ahead; }
+    void set_read_ahead(uint64_t num_pages);
+
     inline uint64_t get_umap_page_size( void )       { return m_umap_page_size; }
     void set_umap_page_size( uint64_t page_size );
 
@@ -70,6 +73,7 @@ class Region {
   private:
     Version  m_version;
     uint64_t m_max_pages_in_buffer;
+    uint64_t m_read_ahead;
     long     m_umap_page_size;
     uint64_t m_system_page_size;
     uint64_t m_num_fillers;

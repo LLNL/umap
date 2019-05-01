@@ -38,8 +38,9 @@ namespace Umap {
         UMAP_LOG(Debug,    "\n             m_store: " <<  (void*)m_store
                         << "\n         m_page_size: " <<  m_page_size
                         << "\n  m_max_fault_events: " <<  m_max_fault_events
-                        << "\n           m_uffd_fd: " <<  m_uffd_fd
         );
+
+        uint64_t read_ahead = Region::getInstance()->get_read_ahead();
 
         while ( 1 ) {
           auto pe = m_uffd->get_page_events();
@@ -60,6 +61,27 @@ namespace Umap {
                 , m_evict_manager
                 , m_store
             );
+
+            //
+            // Do read ahead if possible
+            //
+            if (!event.is_write_fault && read_ahead && m_buffer->evict_low_threshold_reached()) {
+              char* paddr = (char*)(event.aligned_page_address);
+              char* end = (char*)(m_uffd->end_of_region_for_page((void*)paddr));
+
+              for ( int i = 0; i < read_ahead; ++i ) {
+                paddr += m_page_size;
+                if (paddr >= end)
+                  break;
+
+                m_buffer->process_page_event((void*)paddr
+                  , false
+                  , m_fill_workers
+                  , m_evict_manager
+                  , m_store
+                );
+              }
+            }
           }
         }
       }
@@ -67,7 +89,6 @@ namespace Umap {
       Store*    m_store;
       uint64_t  m_page_size;
       uint64_t  m_max_fault_events;
-      int       m_uffd_fd;
 
       Uffd* m_uffd;
 
