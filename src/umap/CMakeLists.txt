@@ -9,16 +9,16 @@ project(umap_libraries)
 set(umapheaders
       config.h
       Buffer.hpp
-      FillManager.hpp
-      FillWorkers.hpp
       EvictManager.hpp
       EvictWorkers.hpp
+      FillManager.hpp
+      FillWorkers.hpp
       PageDescriptor.hpp
       Region.hpp
       Uffd.hpp
       umap.h
-      WorkerPool.hpp
       WorkQueue.hpp
+      WorkerPool.hpp
       store/StoreFile.h
       store/Store.hpp
       util/Exception.hpp
