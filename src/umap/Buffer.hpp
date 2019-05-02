@@ -359,7 +359,6 @@ namespace Umap {
         << ", m_evict_low_water: " << std::setw(2) << b->m_evict_low_water
         << ", m_evict_high_water: " << std::setw(2) << b->m_evict_high_water
         << " }\n"
-        << b->m_stats << std::endl;
     }
     else {
       os << "{ nullptr }";
