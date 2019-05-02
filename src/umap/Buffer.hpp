@@ -28,6 +28,7 @@ namespace Umap {
   struct BufferStats {
     BufferStats() :   lock_collision(0), lock(0), pages_inserted(0)
                     , pages_deleted(0), wait_for_present(0), not_avail(0)
+                    , wait_on_oldest(0)
     {};
 
     uint64_t lock_collision;
@@ -357,7 +358,8 @@ namespace Umap {
         << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
         << ", m_evict_low_water: " << std::setw(2) << b->m_evict_low_water
         << ", m_evict_high_water: " << std::setw(2) << b->m_evict_high_water
-        << " }";
+        << " }\n"
+        << b->m_stats << std::endl;
     }
     else {
       os << "{ nullptr }";
