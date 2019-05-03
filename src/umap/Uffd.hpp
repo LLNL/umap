@@ -31,9 +31,11 @@
 
 namespace Umap {
 
-struct PageEvent {
-  void* aligned_page_address;
-  bool is_write_fault;
+class PageEvent {
+  public:
+    PageEvent(void* paddr, bool iswrite) : aligned_page_address(paddr), is_write_fault(iswrite) {}
+    void* aligned_page_address;
+    bool is_write_fault;
 };
 
 struct less_than_key {
@@ -110,10 +112,7 @@ class Uffd {
 
       if (pollfd[1].revents & POLLIN || pollfd[2].revents & POLLIN) {
         UMAP_LOG(Debug, "Good bye");
-        PageEvent pe;
-        pe.aligned_page_address = (char*)nullptr;
-        pe.is_write_fault = false;
-        rval.push_back(pe);
+        rval.push_back(PageEvent(nullptr, false));
         return rval;
       }
 
@@ -159,14 +158,12 @@ class Uffd {
 
         last_addr = m_events[i].arg.pagefault.address;
 
-        PageEvent pe;
-        pe.aligned_page_address = (char*)(m_events[i].arg.pagefault.address);
 #ifndef UMAP_RO_MODE
-        pe.is_write_fault = (m_events[i].arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE) != 0);
+        bool iswrite = (m_events[i].arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE) != 0);
 #else
-        pe.is_write_fault = false;
+        bool iswrite = false;
 #endif
-        rval.push_back(pe);
+        rval.push_back(PageEvent((void*)(m_events[i].arg.pagefault.address), iswrite));
       }
       return rval;
     }
