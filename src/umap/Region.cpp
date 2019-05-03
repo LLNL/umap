@@ -124,7 +124,7 @@ Region::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
-  const uint64_t percent = 80;  // 80% of memory is max
+  const uint64_t percent = 95;  // 95% of memory is max
 
   // Lazily set total_mem_kb global
   if ( ! total_mem_kb ) {
