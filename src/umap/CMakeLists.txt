@@ -34,9 +34,6 @@ set(umapsrc
     util/Logger.cpp
     ${umapheaders})
 
-if ( ENABLE_LOGGING )
-endif()
-
 find_package(Threads REQUIRED)
 add_library(umap SHARED ${umapsrc} )
 add_library(umap-static STATIC ${umapsrc} )
@@ -50,4 +47,6 @@ install(TARGETS umap umap-static
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin )
 
-install(FILES umap.h store/Store.hpp DESTINATION include/umap)
+install(FILES umap.h DESTINATION include/umap)
+
+install(FILES store/Store.hpp DESTINATION include/umap/store )
