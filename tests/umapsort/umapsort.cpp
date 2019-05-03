@@ -61,7 +61,7 @@ uint64_t dump_page( uint64_t* region, uint64_t index )
 
 void validatedata(uint64_t *region, uint64_t rlen) {
   if (sort_ascending == true) {
-// #pragma omp parallel for
+#pragma omp parallel for
     for(uint64_t i = 0; i < rlen; ++i) {
         if (region[i] != (i+1)) {
             fprintf(stderr, "Worker %d found an error at index %lu, %lu != lt %lu!\n",
@@ -91,7 +91,7 @@ void validatedata(uint64_t *region, uint64_t rlen) {
     }
   }
   else {
-// #pragma omp parallel for
+#pragma omp parallel for
     for(uint64_t i = 0; i < rlen; ++i) {
         if(region[i] != (rlen - i)) {
             fprintf(stderr, "Worker %d found an error at index %lu, %lu != %lu!\n",
