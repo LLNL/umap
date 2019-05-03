@@ -10,6 +10,8 @@
 #include <algorithm>            // sort()
 #include <cassert>              // assert()
 #include <cstdint>              // uint64_t
+#include <iomanip>
+#include <iostream>
 #include <vector>               // We all have lists to manage
 
 #include <errno.h>              // strerror()
@@ -42,7 +44,7 @@ struct less_than_key {
   inline bool operator() (const struct uffd_msg& lhs, const struct uffd_msg& rhs)
   {
     if (lhs.arg.pagefault.address == rhs.arg.pagefault.address)
-      return (lhs.arg.pagefault.flags >= rhs.arg.pagefault.flags);
+      return (lhs.arg.pagefault.flags > rhs.arg.pagefault.flags);
     else
       return (lhs.arg.pagefault.address < rhs.arg.pagefault.address);
   }
@@ -137,7 +139,7 @@ class Uffd {
 
       int msgs = readres / sizeof(struct uffd_msg);
 
-      assert("invalid message size" && msgs >= 1);
+      assert("invalid message size" && msgs >= 1 && msgs < m_max_fault_events);
 
       //
       // Since uffd page events arrive on the system page boundary which could
@@ -146,13 +148,50 @@ class Uffd {
       // events are then sorted in page base address / operation type order and
       // are processed only once while duplicates are skipped.
       //
-      for (int i = 0; i < msgs; ++i)
+      for (int i = 0; i < msgs; ++i) {
+#ifdef instrumentation_to_track_corrupt_sorted_list
+        UMAP_LOG(Error, 
+               "Unsorted: "
+            << std::setw(3) << i << " " << msgs << " "
+            << "sizeof(uffd_msg): " << sizeof(struct uffd_msg)
+            << ", &msg: " << (void*) &m_events[i]
+            << ", event: " << std::hex << (uint64_t) m_events[i].event
+            << ", flags: " << std::hex << (uint64_t) m_events[i].arg.pagefault.flags
+            << ", address: " << (void*) (m_events[i].arg.pagefault.address)
+        );
+#endif
         m_events[i].arg.pagefault.address &= ~(m_page_size-1);
+      }
 
-      std::sort(m_events.begin(), m_events.begin()+msgs, less_than_key());
+#ifdef instrumentation_to_track_corrupt_sorted_list
+      UMAP_LOG(Error, 
+          " PreSort: msgs: " << std::setw(3) << msgs
+          << ", m_events.size: " << m_events.size()
+          << ", m_events.capacity: " << m_events.capacity());
+#endif
+
+      std::sort(&m_events[0], &m_events[msgs], less_than_key());
+
+#ifdef instrumentation_to_track_corrupt_sorted_list
+      UMAP_LOG(Error, 
+          "PostSort: msgs: " << std::setw(3) << msgs
+          << ", m_events.size: " << m_events.size()
+          << ", m_events.capacity: " << m_events.capacity());
+#endif
 
       uint64_t last_addr = 0;
       for (int i = 0; i < msgs; ++i) {
+#ifdef instrumentation_to_track_corrupt_sorted_list
+        UMAP_LOG(Error, 
+               "Sorted:   "
+            << std::setw(3) << i << " " << msgs << " "
+            << "sizeof(uffd_msg): " << sizeof(struct uffd_msg)
+            << ", &msg: " << (void*) &m_events[i]
+            << ", event: " << std::hex << (uint64_t) m_events[i].event
+            << ", flags: " << std::hex << (uint64_t) m_events[i].arg.pagefault.flags
+            << ", address: " << (void*) (m_events[i].arg.pagefault.address)
+        );
+#endif
         if (m_events[i].arg.pagefault.address == last_addr)
           continue;
 
