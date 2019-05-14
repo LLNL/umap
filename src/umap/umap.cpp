@@ -12,13 +12,13 @@
 
 #include "umap/config.h"
 
-#include "umap/Region.hpp"
+#include "umap/RegionManager.hpp"
 #include "umap/umap.h"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 void* umap(
-    void* base_addr
+    void* region_addr
   , uint64_t region_size
   , int prot
   , int flags
@@ -26,12 +26,19 @@ void* umap(
   , off_t offset
 )
 {
-  return Umap::umap_ex(base_addr, region_size, prot, flags, fd, 0, nullptr);
+  UMAP_LOG(Debug, 
+      "region_addr: " << region_addr
+      << ", region_size: " << region_size
+      << ", prot: " << prot
+      << ", flags: " << flags
+      << ", offset: " << offset
+  );
+  return Umap::umap_ex(region_addr, region_size, prot, flags, fd, 0, nullptr);
 }
 
 namespace Umap {
 void* umap_ex(
-    void* base_addr
+    void* region_addr
   , uint64_t region_size
   , int prot
   , int flags
@@ -40,18 +47,31 @@ void* umap_ex(
   , Store* store
 )
 {
-  auto fm = Region::getInstance();
-  auto umap_psize = fm->get_umap_page_size();
+  auto rm = RegionManager::getInstance();
+  auto umap_psize = rm->get_umap_page_size();
 
+  UMAP_LOG(Debug, 
+      "region_addr: " << region_addr
+      << ", region_size: " << region_size
+      << ", prot: " << prot
+      << ", flags: " << flags
+      << ", offset: " << offset
+      << ", store: " << store
+      << ", umap_psize: " << umap_psize
+  );
+
+  //
+  // TODO: Allow for non-page-multiple size and zero-fill like mmap does
+  //
   if ( ( region_size % umap_psize ) ) {
     UMAP_ERROR("Region size " << region_size 
                 << " is not a multple of umapPageSize (" 
-                << fm->get_umap_page_size() << ")");
+                << rm->get_umap_page_size() << ")");
   }
 
-  if ( ( (uint64_t)base_addr & (umap_psize - 1) ) ) {
-    UMAP_ERROR("base_addr must be page aligned: " << base_addr
-      << ", page size is: " << fm->get_umap_page_size());
+  if ( ( (uint64_t)region_addr & (umap_psize - 1) ) ) {
+    UMAP_ERROR("region_addr must be page aligned: " << region_addr
+      << ", page size is: " << rm->get_umap_page_size());
   }
 
   if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
@@ -68,7 +88,7 @@ void* umap_ex(
   //
   uint64_t mmap_size = region_size + umap_psize;
 
-  void* mmap_region = mmap(base_addr, mmap_size,
+  void* mmap_region = mmap(region_addr, mmap_size,
                         prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
 
   if (mmap_region == MAP_FAILED) {
@@ -83,7 +103,7 @@ void* umap_ex(
   if ( store == nullptr )
     store = Store::make_store(umap_region, umap_size, umap_psize, fd);
 
-  fm->makeFillManager(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
+  rm->addRegion(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
   return umap_region;
 }
@@ -91,88 +111,54 @@ void* umap_ex(
 
 int uunmap(void*  addr, uint64_t length)
 {
-  auto fm = Umap::Region::getInstance();
-  fm->destroyFillManager((char*)addr);
+  UMAP_LOG(Debug, "add: " << addr << ", length: " << length);
+  auto rm = Umap::RegionManager::getInstance();
+  rm->removeRegion((char*)addr);
+  UMAP_LOG(Debug, "Done");
   return 0;
 }
 
 long     umapcfg_get_system_page_size( void )
 {
-  return Umap::Region::getInstance()->get_system_page_size();
+  return Umap::RegionManager::getInstance()->get_system_page_size();
 }
 
 uint64_t umapcfg_get_max_pages_in_buffer( void )
 {
-  return Umap::Region::getInstance()->get_max_pages_in_buffer();
-}
-
-void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages )
-{
-  Umap::Region::getInstance()->set_max_pages_in_buffer(max_pages);
+  return Umap::RegionManager::getInstance()->get_max_pages_in_buffer();
 }
 
 uint64_t umapcfg_get_read_ahead( void )
 {
-  return Umap::Region::getInstance()->get_read_ahead();
-}
-
-void     umapcfg_set_read_ahead( uint64_t num_pages )
-{
-  Umap::Region::getInstance()->set_read_ahead(num_pages);
+  return Umap::RegionManager::getInstance()->get_read_ahead();
 }
 
 uint64_t umapcfg_get_umap_page_size( void )
 {
-  return Umap::Region::getInstance()->get_umap_page_size();
-}
-void     umapcfg_set_umap_page_size( uint64_t page_size )
-{
-  Umap::Region::getInstance()->set_umap_page_size(page_size);
+  return Umap::RegionManager::getInstance()->get_umap_page_size();
 }
 
 uint64_t umapcfg_get_num_fillers( void )
 {
-  return Umap::Region::getInstance()->get_num_fillers();
-}
-void     umapcfg_set_num_fillers( uint64_t num_fillers )
-{
-  Umap::Region::getInstance()->set_num_fillers(num_fillers);
+  return Umap::RegionManager::getInstance()->get_num_fillers();
 }
 
 uint64_t umapcfg_get_num_evictors( void )
 {
-  return Umap::Region::getInstance()->get_num_evictors();
-}
-void     umapcfg_set_num_evictors( uint64_t num_evictors )
-{
-  Umap::Region::getInstance()->set_num_evictors(num_evictors);
+  return Umap::RegionManager::getInstance()->get_num_evictors();
 }
 
 int umapcfg_get_evict_low_water_threshold( void )
 {
-  return Umap::Region::getInstance()->get_evict_low_water_threshold();
-}
-
-void umapcfg_set_evict_low_water_threshold( int threshold_percentage )
-{
-  Umap::Region::getInstance()->set_evict_low_water_threshold(threshold_percentage);
+  return Umap::RegionManager::getInstance()->get_evict_low_water_threshold();
 }
 
 int umapcfg_get_evict_high_water_threshold( void )
 {
-  return Umap::Region::getInstance()->get_evict_high_water_threshold();
-}
-
-void umapcfg_set_evict_high_water_threshold( int threshold_percentage )
-{
-  Umap::Region::getInstance()->set_evict_high_water_threshold(threshold_percentage);
+  return Umap::RegionManager::getInstance()->get_evict_high_water_threshold();
 }
 
 uint64_t umapcfg_get_max_fault_events( void )
 {
-  return Umap::Region::getInstance()->get_max_fault_events();
-}
-void     umapcfg_set_max_fault_events( uint64_t max_events )
-{
-  Umap::Region::getInstance()->set_max_fault_events(max_events);
+  return Umap::RegionManager::getInstance()->get_max_fault_events();
 }

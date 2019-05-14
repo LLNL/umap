@@ -17,19 +17,19 @@
 #include <vector>
 
 #include "umap/PageDescriptor.hpp"
-#include "umap/WorkerPool.hpp"
 #include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
   struct WorkItem {
     enum WorkType { NONE, EXIT, THRESHOLD, EVICT };
-    PageDescriptor* page_desc;  // Set to nullptr if time to stop
+    PageDescriptor* page_desc;
     Store* store;               // Set to nullptr if no I/O required
+    uint64_t offset;
     WorkType type;
   };
 
-  std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
+  static std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
   {
     os << "{ page_desc: " << b.page_desc
        << ", store: " << b.store
@@ -61,6 +61,10 @@ namespace Umap {
 
       WorkItem get_work() {
         return m_wq->dequeue();
+      }
+
+      bool wq_is_empty( void ) {
+        return m_wq->is_empty();
       }
 
       void start_thread_pool() {

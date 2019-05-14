@@ -52,14 +52,18 @@ static void usage(char* pname)
   << " --noinit               - Use previously initialized file\n"
   << " --usemmap              - Use mmap instead of umap\n"
   << " --shuffle              - Shuffle memory accesses (instead of sequential access)\n"
-  << " -p # of pages          - default: " << NUMPAGES << endl
-  << " -t # of threads        - default: " << NUMTHREADS << endl
-  << " -u # of page fillers   - default: " << umapcfg_get_num_fillers() << " UFFD page fillers\n"
-  << " -b # page buffer size  - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
+  << " -p # of pages          - default: " << NUMPAGES << " test pages\n"
+  << " -t # of threads        - default: " << NUMTHREADS << " application threads\n"
   << " -a # pages to access   - default: 0 - access all pages\n"
   << " -f [file name]         - backing file name.  Or file basename if multiple files\n"
   << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n"
-  << " -P # page size         - default: " << umapcfg_get_umap_page_size() << endl;
+  << " \n"
+  << " Environment Variable Configuration:\n"
+  << " UMAP_PAGE_FILLERS(env) - currently: " << umapcfg_get_num_fillers() << " fillers\n"
+  << " UMAP_PAGE_EVICTORS(env)- currently: " << umapcfg_get_num_evictors() << " evictors\n"
+  << " UMAP_BUFSIZE(env)      - currently: " << umapcfg_get_max_pages_in_buffer() << " pages\n"
+  << " UMAP_PAGESIZE(env)     - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
+  ;
   exit(1);
 }
 
@@ -92,7 +96,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
       {0,           0,            0,     0 }
     };
 
-    c = getopt_long(argc, argv, "p:t:f:b:d:u:a:P:", long_options, &option_index);
+    c = getopt_long(argc, argv, "p:t:f:d:a:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -103,27 +107,12 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
 
         usage(pname);
         break;
-
-      case 'P':
-        if ((testops->pagesize = strtol(optarg, nullptr, 0)) > 0) {
-          umapcfg_set_umap_page_size(testops->pagesize);
-          break;
-        }
-        goto R0;
       case 'p':
         if ((testops->numpages = strtoull(optarg, nullptr, 0)) > 0)
           break;
         goto R0;
       case 't':
         if ((testops->numthreads = strtoull(optarg, nullptr, 0)) > 0)
-          break;
-        else goto R0;
-      case 'b':
-        if ((testops->bufsize = strtoull(optarg, nullptr, 0)) > 0)
-          break;
-        else goto R0;
-      case 'u':
-        if ((testops->uffdthreads = strtoull(optarg, nullptr, 0)) > 0)
           break;
         else goto R0;
       case 'a':
@@ -153,20 +142,6 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
     cerr << endl;
     usage(pname);
   }
-
-  /*
-   * Note: Care must be taken when configuring the number of threads
-   * and the buffer size of umap.  When the buffer size is set, it
-   * apportions the buffer evenly to the umap threads.  So setting the
-   * buffer size requires that the number of threads be set properly
-   * first.
-   */
-  if (testops->uffdthreads != umapcfg_get_num_fillers()) {
-    umapcfg_set_num_fillers(testops->uffdthreads);
-    umapcfg_set_num_evictors(testops->uffdthreads);
-  }
-
-  umapcfg_set_max_pages_in_buffer(testops->bufsize);
 }
 
 long umt_getpagesize(void)

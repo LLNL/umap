@@ -11,10 +11,10 @@ set(umapheaders
       Buffer.hpp
       EvictManager.hpp
       EvictWorkers.hpp
-      FillManager.hpp
       FillWorkers.hpp
       PageDescriptor.hpp
-      Region.hpp
+      RegionManager.hpp
+      RegionDescriptor.hpp
       Uffd.hpp
       umap.h
       WorkQueue.hpp
@@ -26,7 +26,13 @@ set(umapheaders
       util/Macros.hpp)
 
 set(umapsrc
-    Region.cpp
+    Buffer.cpp
+    EvictManager.cpp
+    EvictWorkers.cpp
+    FillWorkers.cpp
+    PageDescriptor.cpp
+    RegionManager.cpp
+    Uffd.cpp
     umap.cpp
     store/Store.cpp
     store/StoreFile.cpp

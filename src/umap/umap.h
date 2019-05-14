@@ -60,31 +60,14 @@ int uunmap(
   , size_t length
 );
 
-long     umapcfg_get_system_page_size( void );
-
-uint64_t umapcfg_get_max_pages_in_buffer( void );
-void     umapcfg_set_max_pages_in_buffer( uint64_t max_pages );
-
-uint64_t umapcfg_get_read_ahead( void );
-void     umapcfg_set_read_ahead( uint64_t num_pages );
-
 uint64_t umapcfg_get_umap_page_size( void );
-void     umapcfg_set_umap_page_size( uint64_t page_size );
-
-uint64_t umapcfg_get_num_fillers( void );
-void     umapcfg_set_num_fillers( uint64_t num_fillers );
-
-uint64_t umapcfg_get_num_evictors( void );
-void     umapcfg_set_num_evictors( uint64_t num_evictors );
-
-int umapcfg_get_evict_low_water_threshold( void );
-void     umapcfg_set_evict_low_water_threshold( int threshold_percentage );
-
-int umapcfg_get_evict_high_water_threshold( void );
-void     umapcfg_set_evict_high_water_threshold( int threshold_percentage );
-
 uint64_t umapcfg_get_max_fault_events( void );
-void     umapcfg_set_max_fault_events( uint64_t max_events );
+uint64_t umapcfg_get_num_fillers( void );
+uint64_t umapcfg_get_num_evictors( void );
+uint64_t umapcfg_get_max_pages_in_buffer( void );
+uint64_t umapcfg_get_read_ahead( void );
+int      umapcfg_get_evict_low_water_threshold( void );
+int      umapcfg_get_evict_high_water_threshold( void );
 
 #ifdef __cplusplus
 }

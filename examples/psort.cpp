@@ -119,8 +119,9 @@ int main(int argc, char **argv)
 
   // Optional: Make umap's pages size double the default system page size
   //
-  uint64_t psize = umapcfg_get_umap_page_size() * 2;
-  umapcfg_set_umap_page_size( psize );
+  // Use UMAP_PAGE_SIZE environment variable to set page size for umap
+  //
+  uint64_t psize = umapcfg_get_umap_page_size();
 
   const uint64_t pagesInTest = 64;
   const uint64_t elemPerPage = psize / sizeof(uint64_t);
@@ -131,8 +132,8 @@ int main(int argc, char **argv)
   // Optional: Set umap's buffer to half the number of pages we need so that
   //           we may simulate an out-of-core experience
   //
-  umapcfg_set_max_pages_in_buffer( pagesInTest / 2 );
-  //umapcfg_set_max_pages_in_buffer( pagesInTest );
+  // Use UMAP_BUFSIZE environment variable to set number of pages in buffer
+  //
 
   initialize_and_sort_file(filename, arraySize, totalBytes);
   verify_sortfile(filename, arraySize, totalBytes);

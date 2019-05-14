@@ -40,7 +40,14 @@ static void usage(char* pname)
   << " -r # of load reader threads  - default: " << NUMLOADREADERS << endl
   << " -w # of load writer threads  - default: " << NUMLOADWRITERS << endl
   << " -f [backing file name]       - default: " << FILENAME << endl
-  << " -d # seconds to run test     - default: " << TESTDURATION << " seconds\n";
+  << " -d # seconds to run test     - default: " << TESTDURATION << " seconds\n"
+  << " \n"
+  << " Environment Variable Configuration:\n"
+  << " UMAP_PAGE_FILLERS(env) - currently: " << umapcfg_get_num_fillers() << " fillers\n"
+  << " UMAP_PAGE_EVICTORS(env)- currently: " << umapcfg_get_num_evictors() << " evictors\n"
+  << " UMAP_BUFSIZE(env)      - currently: " << umapcfg_get_max_pages_in_buffer() << " pages\n"
+  << " UMAP_PAGESIZE(env)     - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
+  ;
   exit(1);
 }
 
@@ -128,7 +135,5 @@ void getoptions(options_t& testops, int& argc, char **argv)
     cerr << endl;
     usage(pname);
   }
-
-  umapcfg_set_max_pages_in_buffer(testops.page_buffer_size);
 }
 
