@@ -4,17 +4,22 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _UMAP_Region_HPP
-#define _UMAP_Region_HPP
+#ifndef _UMAP_RegionManager_HPP
+#define _UMAP_RegionManager_HPP
 
 #include <cstdint>
 #include <unordered_map>
 
+#include "umap/Buffer.hpp"
+#include "umap/EvictManager.hpp"
+#include "umap/FillWorkers.hpp"
+#include "umap/Uffd.hpp"
 #include "umap/store/Store.hpp"
+#include "umap/RegionDescriptor.hpp"
 
 namespace Umap {
-
-class FillManager;
+class FillWorkers;
+class EvictManager;
 
 struct Version {
   int major;
@@ -28,11 +33,11 @@ struct Version {
 // working.  So, we only allow changing configuration when there are no active
 // monitors
 //
-class Region {
+class RegionManager {
   public:
-    static Region* getInstance( void );
+    static RegionManager* getInstance( void );
 
-    void makeFillManager(
+    void addRegion(
           Store*   store
         , char*    region
         , uint64_t region_size
@@ -40,35 +45,22 @@ class Region {
         , uint64_t mmap_region_size
     );
 
-    void destroyFillManager( char* mmap_region );
-
-    inline Version  get_umap_version( void )         { return m_version; }
-
-    inline long     get_system_page_size( void )     { return m_system_page_size; }
-
-    inline uint64_t get_max_pages_in_buffer( void )  { return m_max_pages_in_buffer; }
-    void set_max_pages_in_buffer( uint64_t max_pages );
-
-    inline uint64_t get_read_ahead( void ) { return m_read_ahead; }
-    void set_read_ahead(uint64_t num_pages);
-
-    inline uint64_t get_umap_page_size( void )       { return m_umap_page_size; }
-    void set_umap_page_size( uint64_t page_size );
-
-    inline uint64_t get_num_fillers( void )  { return m_num_fillers; }
-    void set_num_fillers( uint64_t num_fillers );
-
-    inline uint64_t get_num_evictors( void ) { return m_num_evictors; }
-    void set_num_evictors( uint64_t num_evictors );
-
-    inline int get_evict_low_water_threshold( void ) { return m_evict_low_water_threshold; }
-    void set_evict_low_water_threshold( int percent );
-
-    inline int get_evict_high_water_threshold( void ) { return m_evict_high_water_threshold; }
-    void set_evict_high_water_threshold( int percent );
-
-    inline uint64_t get_max_fault_events( void )     { return m_max_fault_events; }
-    void set_max_fault_events( uint64_t max_events );
+    void removeRegion( char* mmap_region );
+    Version  get_umap_version( void ) { return m_version; }
+    long     get_system_page_size( void ) { return m_system_page_size; }
+    uint64_t get_max_pages_in_buffer( void ) { return m_max_pages_in_buffer; }
+    uint64_t get_read_ahead( void ) { return m_read_ahead; }
+    uint64_t get_umap_page_size( void ) { return m_umap_page_size; }
+    uint64_t get_num_fillers( void ) { return m_num_fillers; }
+    uint64_t get_num_evictors( void ) { return m_num_evictors; }
+    int get_evict_low_water_threshold( void ) { return m_evict_low_water_threshold; }
+    int get_evict_high_water_threshold( void ) { return m_evict_high_water_threshold; }
+    uint64_t get_max_fault_events( void ) { return m_max_fault_events; }
+    Buffer* get_buffer_h() { return m_buffer; }
+    Uffd* get_uffd_h() { return m_uffd; }
+    FillWorkers* get_fill_workers_h() { return m_fill_workers; }
+    EvictManager* get_evict_manager() { return m_evict_manager; }
+    RegionDescriptor* containing_region( char* vaddr );
 
   private:
     Version  m_version;
@@ -81,15 +73,28 @@ class Region {
     int m_evict_low_water_threshold;
     int m_evict_high_water_threshold;
     uint64_t m_max_fault_events;
+    Buffer* m_buffer;
+    Uffd* m_uffd;
+    FillWorkers* m_fill_workers;
+    EvictManager* m_evict_manager;
 
-    std::unordered_map<void*, FillManager*> m_active_umaps;
+    std::unordered_map<void*, RegionDescriptor*> m_active_regions;
 
-    static Region* s_fault_monitor_manager_instance;
+    static RegionManager* s_fault_monitor_manager_instance;
 
-    Region( void );
+    RegionManager( void );
 
     uint64_t* read_env_var( const char* env, uint64_t* val);
     uint64_t        get_max_pages_in_memory( void );
+    void set_max_fault_events( uint64_t max_events );
+    void set_max_pages_in_buffer( uint64_t max_pages );
+    void set_read_ahead(uint64_t num_pages);
+    void set_umap_page_size( uint64_t page_size );
+    void set_num_fillers( uint64_t num_fillers );
+    void set_num_evictors( uint64_t num_evictors );
+    void set_evict_low_water_threshold( int percent );
+    void set_evict_high_water_threshold( int percent );
 };
+
 } // end of namespace Umap
-#endif // UMPIRE_Region_HPP
+#endif // _UMAP_RegionManager_HPP

@@ -15,70 +15,88 @@
 #include <unordered_map>
 #include <unistd.h>       // sysconf()
 
-#include "umap/FillManager.hpp"
-#include "umap/Region.hpp"
+#include "umap/Buffer.hpp"
+#include "umap/EvictManager.hpp"
+#include "umap/FillWorkers.hpp"
+#include "umap/RegionManager.hpp"
+#include "umap/RegionDescriptor.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
 
-Region* Region::s_fault_monitor_manager_instance = nullptr;
-static const uint64_t MAX_FAULT_EVENTS = 256;
+RegionManager* RegionManager::s_fault_monitor_manager_instance = nullptr;
 
-Region* Region::getInstance( void )
-{
-  if (!s_fault_monitor_manager_instance)
-    s_fault_monitor_manager_instance = new Region();
+RegionManager* RegionManager::getInstance( void ) {
+  if (!s_fault_monitor_manager_instance) {
+    s_fault_monitor_manager_instance = new RegionManager();
+  }
 
   return s_fault_monitor_manager_instance;
 }
 
-void Region::makeFillManager(
-    Store*   store
-  , char*    region
-  , uint64_t region_size
-  , char*    mmap_region
-  , uint64_t mmap_region_size
-)
-{
-  m_active_umaps[(void*)region] = new FillManager(
-                                                  store
-                                                , region
-                                                , region_size
-                                                , mmap_region
-                                                , mmap_region_size
-                                                , get_umap_page_size()
-                                                , get_max_fault_events()
-                                            );
+void RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size) {
+  UMAP_LOG(Debug, 
+      "store: " << store
+      << ", region: " << (void*)region
+      << ", region_size: " << region_size
+      << ", mmap_region: " << (void*)mmap_region
+      << ", mmap_region_size: " << mmap_region_size);
+
+  if ( m_active_regions.empty() ) {
+    UMAP_LOG(Debug, "No active regions, initializing engine");
+    UMAP_LOG(Debug, "Creating Buffer");
+    m_buffer = new Buffer();
+    UMAP_LOG(Debug, "Creating Uffd");
+    m_uffd = new Uffd();
+    UMAP_LOG(Debug, "Creating FillWorkers");
+    m_fill_workers = new FillWorkers();
+    UMAP_LOG(Debug, "Creating EvictManager");
+    m_evict_manager = new EvictManager();
+  }
+  else {
+    UMAP_LOG(Debug, "Active regions present, adding new region");
+  }
+
+  auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
+  m_active_regions[(void*)region] = rd;
+  m_uffd->register_region(rd);
 }
 
-void
-Region::destroyFillManager( char* region )
-{
+void RegionManager::removeRegion( char* region ) {
   UMAP_LOG(Debug, "region: " << (void*)region);
 
-  auto it = m_active_umaps.find(region);
+  auto it = m_active_regions.find(region);
 
-  if (it == m_active_umaps.end())
+  if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
+  m_uffd->unregister_region(it->second);
+
   delete it->second;
-  m_active_umaps.erase(it);
+  m_active_regions.erase(it);
+
+  if ( m_active_regions.empty() ) {
+    delete m_evict_manager; m_evict_manager = nullptr;
+    delete m_fill_workers; m_fill_workers = nullptr;
+    delete m_uffd; m_uffd = nullptr;
+    delete m_buffer; m_buffer = nullptr;
+  }
 }
 
-Region::Region()
-{
+RegionManager::RegionManager() {
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
   m_version.patch = UMAP_VERSION_PATCH;
 
   m_system_page_size = sysconf(_SC_PAGESIZE);
 
+  const uint64_t MAX_FAULT_EVENTS = 256;
   uint64_t env_value = 0;
   if ( (read_env_var("UMAP_MAX_FAULT_EVENTS", &env_value)) != nullptr )
     set_max_fault_events(env_value);
   else
-    set_max_fault_events(Umap::MAX_FAULT_EVENTS);
+    set_max_fault_events(MAX_FAULT_EVENTS);
 
   unsigned int nthreads = std::thread::hardware_concurrency();
   nthreads = (nthreads == 0) ? 16 : nthreads;
@@ -119,8 +137,7 @@ Region::Region()
     set_read_ahead(0);
 }
 
-uint64_t
-Region::get_max_pages_in_memory( void )
+uint64_t RegionManager::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
@@ -146,13 +163,7 @@ Region::get_max_pages_in_memory( void )
   return ( ((total_mem_kb / (get_umap_page_size() / oneK)) * percent) / 100 );
 }
 
-void
-Region::set_max_pages_in_buffer( uint64_t max_pages )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
-  }
-
+void RegionManager::set_max_pages_in_buffer( uint64_t max_pages ) {
   uint64_t max_pages_in_mem = get_max_pages_in_memory();
   uint64_t old_max_pages_in_buffer = get_max_pages_in_buffer();
 
@@ -171,29 +182,12 @@ Region::set_max_pages_in_buffer( uint64_t max_pages )
     << " to " << get_max_pages_in_buffer() << " pages");
 }
 
-void 
-Region::set_read_ahead(uint64_t num_pages)
-{
-  if ( m_active_umaps.size() != 0 )
-    UMAP_ERROR("Cannot change configuration when umaps are active");
+void RegionManager::set_read_ahead(uint64_t num_pages) { m_read_ahead = num_pages; }
 
-  m_read_ahead = num_pages;
-
-  UMAP_LOG(Debug,
-    "Read ahead set to: " 
-    << " to " << m_read_ahead << " pages");
-}
-
-void
-Region::set_umap_page_size( uint64_t page_size )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
-  }
-
-  /*
-   * Must be multiple of system page size
-   */
+void RegionManager::set_umap_page_size( uint64_t page_size ) {
+  //
+  // Must be multiple of system page size
+  //
   if ( page_size % get_system_page_size() ) {
     UMAP_ERROR("Specified page size (" << page_size 
         << ") must be a multiple of the system page size (" 
@@ -207,11 +201,7 @@ Region::set_umap_page_size( uint64_t page_size )
   m_umap_page_size = page_size;
 }
 
-uint64_t* Region::read_env_var(
-    const char* env
-  , uint64_t*  val
-)
-{
+uint64_t* RegionManager::read_env_var( const char* env, uint64_t*  val ) {
   // return a pointer to val on success, null on failure
   char* val_ptr = 0;
   if ( (val_ptr = getenv(env)) ) {
@@ -229,54 +219,24 @@ uint64_t* Region::read_env_var(
   return nullptr;
 }
 
-void
-Region::set_num_fillers( uint64_t num_fillers )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
+RegionDescriptor* RegionManager::containing_region( char* vaddr ) {
+
+  // TODO: change this to judy array once implementation works properly
+  for ( auto it : m_active_regions ) {
+    char* b = it.second->get_region();
+    char* e = it.second->get_end_of_region();
+    if ( vaddr >= b && vaddr < e )
+      return it.second;
   }
 
-  m_num_fillers = num_fillers;
+  UMAP_ERROR("Unable to find addr: " << (void*)vaddr << " in region map");
+
+  return nullptr;
 }
 
-void
-Region::set_num_evictors( uint64_t num_evictors )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
-  }
-
-  m_num_evictors = num_evictors;
-}
-
-void
-Region::set_evict_high_water_threshold( int percent )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
-  }
-
-  m_evict_high_water_threshold = percent;
-}
-
-void
-Region::set_evict_low_water_threshold( int percent )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
-  }
-
-  m_evict_low_water_threshold = percent;
-}
-
-void
-Region::set_max_fault_events( uint64_t max_events )
-{
-  if ( m_active_umaps.size() != 0 ) {
-    UMAP_ERROR("Cannot change configuration when umaps are active");
-  }
-
-  m_max_fault_events = max_events;
-}
-
+void RegionManager::set_num_fillers( uint64_t num_fillers ) { m_num_fillers = num_fillers; }
+void RegionManager::set_num_evictors( uint64_t num_evictors ) { m_num_evictors = num_evictors; }
+void RegionManager::set_evict_high_water_threshold( int percent ) { m_evict_high_water_threshold = percent; }
+void RegionManager::set_evict_low_water_threshold( int percent ) { m_evict_low_water_threshold = percent; }
+void RegionManager::set_max_fault_events( uint64_t max_events ) { m_max_fault_events = max_events; }
 } // end of namespace Umap
