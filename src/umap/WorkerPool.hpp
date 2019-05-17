@@ -29,10 +29,17 @@ namespace Umap {
 
   static std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
   {
-    os << "{ page_desc: " << b.page_desc
-       << ", type: " << b.type
-       << " }";
+    os << "{ page_desc: " << b.page_desc;
 
+    switch (b.type) {
+      default: os << ", type: Unknown(" << b.type << ")"; break;
+      case Umap::WorkItem::WorkType::NONE: os << ", type: " << "NONE"; break;
+      case Umap::WorkItem::WorkType::EXIT: os << ", type: " << "EXIT"; break;
+      case Umap::WorkItem::WorkType::THRESHOLD: os << ", type: " << "THRESHOLD"; break;
+      case Umap::WorkItem::WorkType::EVICT: os << ", type: " << "EVICT"; break;
+    }
+
+    os << " }";
     return os;
   }
 

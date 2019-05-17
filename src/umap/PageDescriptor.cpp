@@ -67,4 +67,17 @@ namespace Umap {
     }
     return os;
   }
+
+  std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor::State st)
+  {
+    switch (st) {
+      default:                                    os << "???";    break;
+      case Umap::PageDescriptor::State::FREE:     os << "FREE";   break;
+      case Umap::PageDescriptor::State::FILLING:  os << "FILLING";    break;
+      case Umap::PageDescriptor::State::PRESENT:  os << "PRESENT";    break;
+      case Umap::PageDescriptor::State::UPDATING: os << "UPDATING";   break;
+      case Umap::PageDescriptor::State::LEAVING:  os << "LEAVING";    break;
+    }
+    return os;
+  }
 } // end of namespace Umap

@@ -72,8 +72,6 @@ namespace Umap {
 
     pd->set_state_free();
 
-    pd->page = nullptr;
-
     //
     // We only put the page descriptor back onto the free list when
     // if it isn't deferred.  Note: It will be marked as deferred when
@@ -83,6 +81,8 @@ namespace Umap {
     //
     if ( ! pd->deferred )
       release_page_descriptor(pd);
+
+    pd->page = nullptr;
 
     unlock();
   }
@@ -236,6 +236,7 @@ namespace Umap {
       //
       if ( pp != m_present_pages.end() ) {
         if ( pp->second->state != PageDescriptor::State::PRESENT ) {
+          UMAP_LOG(Debug, "Waiting for state: (ANY)" << ", " << pp->second);
           await_state_change_notification( pp->second );
         }
         else {
@@ -309,6 +310,7 @@ namespace Umap {
 
   void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st) {
     while ( pd->state != st ) {
+      UMAP_LOG(Debug, "Waiting for state: " << st << ", " << pd);
       await_state_change_notification(pd);
     }
   }
@@ -322,6 +324,9 @@ namespace Umap {
   void Buffer::await_state_change_notification( PageDescriptor* pd ) {
     m_stats.waits++;
     ++m_waits_for_state_change;
+    UMAP_LOG(Debug, "m_waits_for_state_change: " 
+        << m_waits_for_state_change
+        << ", " << pd);
     m_pages_awaiting_state_change[pd->page] = m_waits_for_state_change;
     pthread_cond_wait(&m_state_change_cond, &m_mutex);
     --m_waits_for_state_change;
@@ -339,7 +344,7 @@ namespace Umap {
         << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
         << ", m_evict_low_water: " << std::setw(2) << b->m_evict_low_water
         << ", m_evict_high_water: " << std::setw(2) << b->m_evict_high_water
-        << " }\n"
+        << " }"
         ;
     }
     else {

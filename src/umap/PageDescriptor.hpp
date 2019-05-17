@@ -30,6 +30,7 @@ namespace Umap {
     void set_state_leaving( void );
   };
 
+  std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor::State st);
   std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor* pd);
 } // end of namespace Umap
 
