@@ -24,17 +24,9 @@ namespace Umap {
                         , Store* store )
         : m_umap_region(umap_region), m_umap_region_size(umap_size)
         , m_mmap_region(mmap_region), m_mmap_region_size(mmap_size)
-        , m_store(store)
-        , m_evict_count(0)
-      {
-        pthread_mutex_init(&m_mutex, NULL);
-        pthread_cond_init(&m_pages_evicted_cond, NULL);
-      }
+        , m_store(store) {}
 
-      ~RegionDescriptor( void ) {
-        pthread_cond_destroy(&m_pages_evicted_cond);
-        pthread_mutex_destroy(&m_mutex);
-      }
+      ~RegionDescriptor( void ) {}
 
       inline uint64_t store_offset( char* addr )
                                        { return (uint64_t)(addr - start()); }
@@ -49,10 +41,8 @@ namespace Umap {
       }
 
       inline void erase_page_descriptor(PageDescriptor* pd) {
+        UMAP_LOG(Debug, "Erasing PD: " << pd);
         m_active_pages.erase(pd);
-        if (pd->deferred) {
-          decrement_evict_count();
-        }
       }
 
       inline PageDescriptor* get_next_page_descriptor( void ) {
@@ -67,52 +57,12 @@ namespace Umap {
         return rval;
       }
 
-      inline void wait_for_eviction_completion( void ) {
-        int err;
-
-        if ( (err = pthread_mutex_lock(&m_mutex)) != 0 )
-          UMAP_ERROR("pthread_mutex_lock failed: " << strerror(err));
-
-        while ( m_evict_count != 0 ) {
-          UMAP_LOG(Debug, "evict_count: " << m_evict_count);
-          pthread_cond_wait(&m_pages_evicted_cond, &m_mutex);
-        }
-
-        pthread_mutex_unlock(&m_mutex);
-      }
-
-      inline void     set_evict_count( void ) {
-        m_evict_count = m_active_pages.size();
-      }
-
-      inline void     increment_evict_count( void ) {
-        ++m_evict_count;
-      }
-
-      inline void decrement_evict_count( void ) {
-        int err;
-
-        if ( (err = pthread_mutex_lock(&m_mutex)) != 0 )
-          UMAP_ERROR("pthread_mutex_lock failed: " << strerror(err));
-
-        --m_evict_count;
-        UMAP_LOG(Debug, "evict_count: " << m_evict_count);
-        if ( m_evict_count == 0 )
-          pthread_cond_signal(&m_pages_evicted_cond);
-
-        pthread_mutex_unlock(&m_mutex);
-      }
-
     private:
       char*    m_umap_region;
       uint64_t m_umap_region_size;
       char*    m_mmap_region;
       uint64_t m_mmap_region_size;
       Store*   m_store;
-      uint64_t m_evict_count;
-
-      pthread_mutex_t m_mutex;
-      pthread_cond_t  m_pages_evicted_cond;
 
       std::unordered_set<PageDescriptor*> m_active_pages;
   };

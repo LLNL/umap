@@ -66,6 +66,7 @@ namespace Umap {
   void Buffer::remove_page( PageDescriptor* pd ) {
     lock();
 
+    UMAP_LOG(Debug, "Removing page: " << pd);
     pd->region->erase_page_descriptor(pd);
 
     m_present_pages.erase(pd->page);
@@ -82,6 +83,8 @@ namespace Umap {
     if ( ! pd->deferred )
       release_page_descriptor(pd);
 
+    wakeup_page_state_waiters(pd);
+
     pd->page = nullptr;
 
     unlock();
@@ -92,8 +95,6 @@ namespace Umap {
 
       if ( m_waits_for_avail_pd )
         pthread_cond_signal(&m_avail_pd_cond);
-
-      wakeup_page_state_waiters(pd);
   }
 
   //
@@ -149,19 +150,16 @@ namespace Umap {
   void Buffer::evict_region(RegionDescriptor* rd) {
     lock();
 
-    rd->set_evict_count();
-
     while ( rd->count() ) {
       auto pd = rd->get_next_page_descriptor();
       pd->deferred = true;
       wait_for_page_state(pd, PageDescriptor::State::PRESENT);
       pd->set_state_leaving();
       m_rm->get_evict_manager()->schedule_eviction(pd);
+      wait_for_page_state(pd, PageDescriptor::State::FREE);
     }
 
     unlock();
-
-    rd->wait_for_eviction_completion();
   }
 
   //

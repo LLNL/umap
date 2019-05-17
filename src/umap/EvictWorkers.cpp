@@ -53,6 +53,7 @@ namespace Umap {
       if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
         UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
 
+      UMAP_LOG(Debug, "Removing page: " << w.page_desc);
       m_buffer->remove_page(w.page_desc);
     }
   }
