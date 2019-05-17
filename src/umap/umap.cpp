@@ -111,7 +111,7 @@ void* umap_ex(
 
 int uunmap(void*  addr, uint64_t length)
 {
-  UMAP_LOG(Debug, "add: " << addr << ", length: " << length);
+  UMAP_LOG(Debug, "addr: " << addr << ", length: " << length);
   auto rm = Umap::RegionManager::getInstance();
   rm->removeRegion((char*)addr);
   UMAP_LOG(Debug, "Done");

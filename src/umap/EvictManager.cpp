@@ -26,9 +26,13 @@ EvictManager::EvictManager( void ) :
 }
 
 EvictManager::~EvictManager( void ) {
+  UMAP_LOG(Debug, "Calling EvictAll");
   EvictAll();
+  UMAP_LOG(Debug, "Calling stop_thread_pool");
   stop_thread_pool();
+  UMAP_LOG(Debug, "Deleting eviction workers");
   delete m_evict_workers;
+  UMAP_LOG(Debug, "Done");
 }
 
 void EvictManager::EvictMgr( void ) {
@@ -48,32 +52,27 @@ void EvictManager::EvictMgr( void ) {
 
       UMAP_LOG(Debug, m_buffer << ", " << work.page_desc);
 
-      if (work.page_desc->is_dirty)
-        work.store = work.page_desc->region->get_store();
-      else
-        work.store = nullptr;
-
       m_evict_workers->send_work(work);
     }
   }
 }
 
-void EvictManager::EvictAll( void ) {
-  for ( auto pd = m_buffer->evict_oldest_page();
-        pd != nullptr;
-        pd = m_buffer->evict_oldest_page()) {
-    WorkItem work;
-
-    work.type = Umap::WorkItem::WorkType::EVICT;
-    work.page_desc = pd;
-
-    if (pd->is_dirty)
-      work.store = pd->region->get_store();
-    else
-      work.store = nullptr;
-
-    m_evict_workers->send_work(work);
+void EvictManager::EvictAll( void )
+{
+  UMAP_LOG(Debug, "Entered");
+  for (auto pd = m_buffer->evict_oldest_page(); pd != nullptr; pd = m_buffer->evict_oldest_page()) {
+    UMAP_LOG(Debug, "evicting: " << pd);
+    schedule_eviction(pd);
   }
+  UMAP_LOG(Debug, "Done");
+}
+
+void EvictManager::schedule_eviction(PageDescriptor* pd)
+{
+
+  WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::EVICT };
+
+  m_evict_workers->send_work(work);
 }
 
 void EvictManager::ThreadEntry() {

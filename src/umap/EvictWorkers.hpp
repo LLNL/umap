@@ -10,6 +10,7 @@
 #include "umap/config.h"
 
 #include "umap/Buffer.hpp"
+#include "umap/PageDescriptor.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/WorkerPool.hpp"
 

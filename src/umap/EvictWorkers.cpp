@@ -38,17 +38,19 @@ namespace Umap {
       if ( w.type == Umap::WorkItem::WorkType::EXIT )
         break;    // Time to leave
 
-      auto page_addr = w.page_desc->page;
+      auto pd = w.page_desc;
 
-      if ( w.store != nullptr ) {
-        uint64_t offset = w.offset;
-        m_uffd->enable_write_protect(page_addr);
+      if ( pd->dirty ) {
+        auto store = pd->region->store();
+        auto offset = pd->region->store_offset(pd->page);
 
-        if (w.store->write_to_store((char*)page_addr, page_size, offset) == -1)
+        m_uffd->enable_write_protect(pd->page);
+
+        if (store->write_to_store((char*)pd->page, page_size, offset) == -1)
           UMAP_ERROR("write_to_store failed: " << errno << " (" << strerror(errno) << ")");
       }
 
-      if (madvise(page_addr, page_size, MADV_DONTNEED) == -1)
+      if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
         UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
 
       m_buffer->remove_page(w.page_desc);

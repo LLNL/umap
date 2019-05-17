@@ -6,23 +6,27 @@
 //////////////////////////////////////////////////////////////////////////////
 #ifndef _UMAP_PageDescriptor_HPP
 #define _UMAP_PageDescriptor_HPP
-#include <iostream>
 
-#include "umap/RegionDescriptor.hpp"
+#include <iostream>
+#include <string>
 
 namespace Umap {
+  class RegionDescriptor;
+
   struct PageDescriptor {
-    enum State { FREE, FILLING, PRESENT, UPDATING, LEAVING };
-    void* page;
+    enum State { FREE = 0, FILLING, PRESENT, UPDATING, LEAVING };
+    char*             page;
     RegionDescriptor* region;
-    bool is_dirty;
-    State state;
+    State             state;
+    bool              dirty;
+    bool              deferred;
+    bool              has_data;
 
     std::string print_state( void ) const;
     void set_state_free( void );
     void set_state_filling( void );
-    void set_state_present( void );
     void set_state_updating( void );
+    void set_state_present( void );
     void set_state_leaving( void );
   };
 

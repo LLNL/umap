@@ -71,17 +71,25 @@ void RegionManager::removeRegion( char* region ) {
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
+  UMAP_LOG(Debug, "Calling unregister_region");
   m_uffd->unregister_region(it->second);
 
+  UMAP_LOG(Debug, "Deleting region");
   delete it->second;
+  UMAP_LOG(Debug, "Erasing from list region");
   m_active_regions.erase(it);
 
   if ( m_active_regions.empty() ) {
+    UMAP_LOG(Debug, "Deleting eviction manager");
     delete m_evict_manager; m_evict_manager = nullptr;
+    UMAP_LOG(Debug, "Deleting fill workers");
     delete m_fill_workers; m_fill_workers = nullptr;
+    UMAP_LOG(Debug, "Deleting m_uffd");
     delete m_uffd; m_uffd = nullptr;
+    UMAP_LOG(Debug, "Deleting m_buffer");
     delete m_buffer; m_buffer = nullptr;
   }
+  UMAP_LOG(Debug, "Done");
 }
 
 RegionManager::RegionManager() {
@@ -223,8 +231,8 @@ RegionDescriptor* RegionManager::containing_region( char* vaddr ) {
 
   // TODO: change this to judy array once implementation works properly
   for ( auto it : m_active_regions ) {
-    char* b = it.second->get_region();
-    char* e = it.second->get_end_of_region();
+    char* b = it.second->start();
+    char* e = it.second->end();
     if ( vaddr >= b && vaddr < e )
       return it.second;
   }

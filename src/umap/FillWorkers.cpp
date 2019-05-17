@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////
 // Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
@@ -44,27 +44,22 @@ namespace Umap {
       if (w.type == Umap::WorkItem::WorkType::EXIT)
         break;    // Time to leave
 
-      if ( w.store == nullptr ) {
-        //
-        // The only reason we would not be given a store object is
-        // when a present page has become dirty.  At this point, the only
-        // thing we do is disable write protect on the present page and
-        // wake up the faulting thread
-        //
+      if ( w.page_desc->dirty && w.page_desc->has_data ) {
         m_uffd->disable_write_protect(w.page_desc->page);
       }
       else {
-        uint64_t offset = w.offset;
+        uint64_t offset = w.page_desc->region->store_offset(w.page_desc->page);
 
-        if (w.store->read_from_store(copyin_buf, page_size, offset) == -1)
+        if (w.page_desc->region->store()->read_from_store(copyin_buf, page_size, offset) == -1)
           UMAP_ERROR("read_from_store failed");
 
-        if ( ! w.page_desc->is_dirty ) {
+        if ( ! w.page_desc->dirty ) {
           m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
         }
         else {
           m_uffd->copy_in_page(copyin_buf, w.page_desc->page);
         }
+        w.page_desc->has_data = true;
       }
 
       m_buffer->make_page_present(w.page_desc);

@@ -22,10 +22,8 @@
 
 #include "umap/config.h"
 #include "umap/Uffd.hpp"
-#include "umap/FillManager.hpp"
 #include "umap/RegionDescriptor.hpp"
 #include "umap/RegionManager.hpp"
-// #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
@@ -223,7 +221,7 @@ namespace Umap {
 
   void Uffd::register_region( RegionDescriptor* rd ) {
     struct uffdio_register uffdio_register = {
-        .range = {  .start = (__u64)(rd->get_region()), .len = rd->get_size() }
+        .range = {  .start = (__u64)(rd->start()), .len = rd->size() }
 #ifndef UMAP_RO_MODE
       , .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
 #else
@@ -245,8 +243,14 @@ namespace Umap {
   }
 
   void Uffd::unregister_region( RegionDescriptor* rd ) {
+    //
+    // Make sure and evict any/all active pages from this region that are still
+    // in the Buffer
+    //
+    m_buffer->evict_region(rd);
+
     struct uffdio_register uffdio_register = {
-        .range = { .start = (__u64)(rd->get_region()), .len = rd->get_size() }
+        .range = { .start = (__u64)(rd->start()), .len = rd->size() }
       , .mode = 0
     };
 

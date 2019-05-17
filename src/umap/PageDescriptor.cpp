@@ -55,9 +55,12 @@ namespace Umap {
   std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor* pd)
   {
     if (pd != nullptr) {
-      os << "{ page: " << (void*)(pd->page)
-         << ", state: " << pd->print_state()
-         << ", is_dirty: " << pd->is_dirty << " }";
+      os << "{ "
+         << " page: "      << (void*)(pd->page)
+         << ", state: "    << pd->print_state()
+         << ", dirty: "    << (pd->dirty    ? "TRUE" : "FALSE")
+         << ", deferred: " << (pd->deferred ? "TRUE" : "FALSE")
+         << " }";
     }
     else {
       os << "{ nullptr }";

@@ -24,15 +24,12 @@ namespace Umap {
   struct WorkItem {
     enum WorkType { NONE, EXIT, THRESHOLD, EVICT };
     PageDescriptor* page_desc;
-    Store* store;               // Set to nullptr if no I/O required
-    uint64_t offset;
     WorkType type;
   };
 
   static std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
   {
     os << "{ page_desc: " << b.page_desc
-       << ", store: " << b.store
        << ", type: " << b.type
        << " }";
 
@@ -88,7 +85,7 @@ namespace Umap {
         UMAP_LOG(Debug, "Stopping " <<  m_pool_name << " Pool of "
             << m_num_threads << " threads");
 
-        WorkItem w = {.page_desc = nullptr, .store = nullptr, .type = Umap::WorkItem::WorkType::EXIT };
+        WorkItem w = {.page_desc = nullptr, .type = Umap::WorkItem::WorkType::EXIT };
 
         //
         // This will inform all of the threads it is time to go away

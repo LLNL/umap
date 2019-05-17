@@ -10,6 +10,8 @@
 #include "umap/EvictWorkers.hpp"
 
 #include "umap/Buffer.hpp"
+#include "umap/PageDescriptor.hpp"
+#include "umap/RegionDescriptor.hpp"
 #include "umap/WorkerPool.hpp"
 
 namespace Umap {
@@ -19,6 +21,7 @@ namespace Umap {
     public:
       EvictManager( void );
       ~EvictManager( void );
+      void schedule_eviction(PageDescriptor* pd);
 
     private:
       Buffer* m_buffer;
