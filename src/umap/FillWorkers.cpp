@@ -1,4 +1,4 @@
-  //////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 // Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
@@ -44,7 +44,7 @@ namespace Umap {
       if (w.type == Umap::WorkItem::WorkType::EXIT)
         break;    // Time to leave
 
-      if ( w.page_desc->dirty && w.page_desc->has_data ) {
+      if ( w.page_desc->dirty && w.page_desc->data_present ) {
         m_uffd->disable_write_protect(w.page_desc->page);
       }
       else {
@@ -59,10 +59,10 @@ namespace Umap {
         else {
           m_uffd->copy_in_page(copyin_buf, w.page_desc->page);
         }
-        w.page_desc->has_data = true;
+        w.page_desc->data_present = true;
       }
 
-      m_buffer->make_page_present(w.page_desc);
+      m_buffer->mark_page_as_present(w.page_desc);
     }
 
     free(copyin_buf);

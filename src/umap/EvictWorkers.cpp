@@ -16,49 +16,53 @@
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
-  EvictWorkers::EvictWorkers(uint64_t num_evictors, Buffer* buffer, Uffd* uffd)
-    :   WorkerPool("Evict Workers", num_evictors), m_buffer(buffer)
-      , m_uffd(uffd)
-  {
-    start_thread_pool();
-  }
+void EvictWorkers::EvictWorker( void )
+{
+  uint64_t page_size = RegionManager::getInstance()->get_umap_page_size();
 
-  EvictWorkers::~EvictWorkers( void ) {
-    stop_thread_pool();
-  }
+  while ( 1 ) {
+    auto w = get_work();
 
-  void EvictWorkers::EvictWorker( void ) {
-    uint64_t page_size = RegionManager::getInstance()->get_umap_page_size();
+    UMAP_LOG(Debug, " " << w << " " << m_buffer);
 
-    while ( 1 ) {
-      auto w = get_work();
+    if ( w.type == Umap::WorkItem::WorkType::EXIT )
+      break;    // Time to leave
 
-      UMAP_LOG(Debug, " " << w << " " << m_buffer);
+    auto pd = w.page_desc;
 
-      if ( w.type == Umap::WorkItem::WorkType::EXIT )
-        break;    // Time to leave
+    if ( pd->dirty ) {
+      auto store = pd->region->store();
+      auto offset = pd->region->store_offset(pd->page);
 
-      auto pd = w.page_desc;
+      m_uffd->enable_write_protect(pd->page);
 
-      if ( pd->dirty ) {
-        auto store = pd->region->store();
-        auto offset = pd->region->store_offset(pd->page);
-
-        m_uffd->enable_write_protect(pd->page);
-
-        if (store->write_to_store((char*)pd->page, page_size, offset) == -1)
-          UMAP_ERROR("write_to_store failed: " << errno << " (" << strerror(errno) << ")");
-      }
-
-      if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
-        UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
-
-      UMAP_LOG(Debug, "Removing page: " << w.page_desc);
-      m_buffer->remove_page(w.page_desc);
+      if (store->write_to_store(pd->page, page_size, offset) == -1)
+        UMAP_ERROR("write_to_store failed: "
+            << errno << " (" << strerror(errno) << ")");
     }
-  }
 
-  void EvictWorkers::ThreadEntry( void ) {
-    EvictWorkers::EvictWorker();
+    if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
+      UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+
+    UMAP_LOG(Debug, "Removing page: " << w.page_desc);
+    m_buffer->mark_page_as_free(w.page_desc);
   }
+}
+
+EvictWorkers::EvictWorkers(uint64_t num_evictors, Buffer* buffer, Uffd* uffd)
+  :   WorkerPool("Evict Workers", num_evictors), m_buffer(buffer)
+    , m_uffd(uffd)
+{
+  start_thread_pool();
+}
+
+EvictWorkers::~EvictWorkers( void )
+{
+  stop_thread_pool();
+}
+
+void EvictWorkers::ThreadEntry( void )
+{
+  EvictWorkers::EvictWorker();
+}
 } // end of namespace Umap

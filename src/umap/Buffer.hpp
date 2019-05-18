@@ -34,16 +34,17 @@ namespace Umap {
     friend std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b);
     friend std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats);
     public:
-      explicit Buffer( void );
-      ~Buffer( void );
+      void mark_page_as_present(PageDescriptor* pd);
+      void mark_page_as_free( PageDescriptor* pd );
 
-      void make_page_present(PageDescriptor* pd);
-      void remove_page( PageDescriptor* pd );
-      void release_page_descriptor( PageDescriptor* pd );
-      bool evict_low_threshold_reached( void );
+      bool low_threshold_reached( void );
+
       PageDescriptor* evict_oldest_page( void );
       void process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd);
       void evict_region(RegionDescriptor* rd);
+
+      explicit Buffer( void );
+      ~Buffer( void );
 
     private:
       RegionManager* m_rm;
@@ -68,6 +69,8 @@ namespace Umap {
       std::unordered_map<char*, int> m_pages_awaiting_state_change;
 
       BufferStats m_stats;
+
+      void release_page_descriptor( PageDescriptor* pd );
 
       PageDescriptor* page_already_present( char* page_addr );
       PageDescriptor* get_page_descriptor( char* page_addr, RegionDescriptor* rd );

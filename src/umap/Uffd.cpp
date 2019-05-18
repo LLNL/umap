@@ -69,9 +69,7 @@ namespace Umap {
       if ( !(pollfd[0].revents & POLLIN) )
         continue;
 
-      int readres = read(  m_uffd_fd
-                         , &m_events[0]
-                         , m_max_fault_events * sizeof(struct uffd_msg));
+      int readres = read(m_uffd_fd, &m_events[0], m_max_fault_events * sizeof(struct uffd_msg));
 
       if (readres == -1) {
         if (errno == EAGAIN)
@@ -80,8 +78,7 @@ namespace Umap {
         UMAP_ERROR("read failed: " << strerror(errno));
       }
 
-      assert("Invalid read result returned" && 
-                (readres % sizeof(struct uffd_msg) == 0));
+      assert("Invalid read result returned" && (readres % sizeof(struct uffd_msg) == 0));
 
       int msgs = readres / sizeof(struct uffd_msg);
 
@@ -112,6 +109,10 @@ namespace Umap {
         bool iswrite = false;
 #endif
 
+        //
+        // TODO: Since the addresses are sorted, we could optimize the
+        // search to continue from where it last found something.
+        //
         auto rd = m_rm->containing_region(last_addr);
         m_buffer->process_page_event(last_addr, iswrite, rd);
       }

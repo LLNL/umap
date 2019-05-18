@@ -20,7 +20,7 @@ namespace Umap {
     State             state;
     bool              dirty;
     bool              deferred;
-    bool              has_data;
+    bool              data_present;
 
     std::string print_state( void ) const;
     void set_state_free( void );

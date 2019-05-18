@@ -7,6 +7,7 @@
 #ifndef _UMAP_RegionDescriptor_HPP
 #define _UMAP_RegionDescriptor_HPP
 
+#include <cassert>
 #include <cstdint>
 #include <pthread.h>
 #include <string.h>
@@ -28,8 +29,11 @@ namespace Umap {
 
       ~RegionDescriptor( void ) {}
 
-      inline uint64_t store_offset( char* addr )
-                                       { return (uint64_t)(addr - start()); }
+      inline uint64_t store_offset( char* addr ) {
+        assert("Invalid address for calculating offset" && addr >= start() && addr < end());
+        return (uint64_t)(addr - start());
+      }
+
       inline uint64_t size( void )     { return m_umap_region_size;         }
       inline Store*   store( void )    { return m_store;                    }
       inline char*    start( void )    { return m_umap_region;              }
