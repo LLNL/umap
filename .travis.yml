@@ -13,7 +13,7 @@ matrix:
     - COMPILER=g++
     - IMG=gcc-5
     - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
-    - DO_MEMCHECK=yes
+    - DO_MEMCHECK=no
   - compiler: gcc6
     env:
     - COMPILER=g++
