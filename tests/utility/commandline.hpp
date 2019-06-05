@@ -7,10 +7,6 @@
 #ifndef _COMMANDLING_HPP
 #define _COMMANDLING_HPP
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif // _GNU_SOURCE
-
 #include <stdint.h>
 #include <iostream>     // cout/cerr
 #include <unistd.h>     // getopt()

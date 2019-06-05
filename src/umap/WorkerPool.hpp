@@ -7,10 +7,6 @@
 #ifndef _UMAP_Pthread_HPP
 #define _UMAP_Pthread_HPP
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE     // Needed for pthread_setname_np
-#endif // GNU_SOURCE
-
 #include <cstdint>
 #include <pthread.h>
 #include <string>
