@@ -7,10 +7,6 @@
 #ifndef _UMAP_FILE_HPP_
 #define _UMAP_FILE_HPP_
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include <iostream>
 #include <string>
 #include <sstream>

@@ -4,9 +4,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif // _GNU_SOURCE
 
 #include <iostream>     // cout/cerr
 #include <unistd.h>     // getopt()
@@ -33,14 +30,21 @@ static void usage(char* pname)
   << " --noinit                     - No Initialization\n"
   << " --directio                   - Use O_DIRECT for file IO\n"
   << " --usemmap                    - Use mmap instead of umap\n"
-  << " -b # of pages in page buffer - default: " << umap_cfg_get_bufsize() << " Pages\n"
+  << " -b # of pages in page buffer - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
   << " -c # of churn pages          - default: " << NUMCHURNPAGES << " Pages\n"
   << " -l # of load pages           - default: " << NUMLOADPAGES << " Pages\n"
   << " -t # of churn threads        - default: " << NUMCHURNTHREADS << endl
   << " -r # of load reader threads  - default: " << NUMLOADREADERS << endl
   << " -w # of load writer threads  - default: " << NUMLOADWRITERS << endl
   << " -f [backing file name]       - default: " << FILENAME << endl
-  << " -d # seconds to run test     - default: " << TESTDURATION << " seconds\n";
+  << " -d # seconds to run test     - default: " << TESTDURATION << " seconds\n"
+  << " \n"
+  << " Environment Variable Configuration:\n"
+  << " UMAP_PAGE_FILLERS(env) - currently: " << umapcfg_get_num_fillers() << " fillers\n"
+  << " UMAP_PAGE_EVICTORS(env)- currently: " << umapcfg_get_num_evictors() << " evictors\n"
+  << " UMAP_BUFSIZE(env)      - currently: " << umapcfg_get_max_pages_in_buffer() << " pages\n"
+  << " UMAP_PAGESIZE(env)     - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
+  ;
   exit(1);
 }
 
@@ -60,7 +64,7 @@ void getoptions(options_t& testops, int& argc, char **argv)
   testops.num_load_writer_threads=NUMLOADWRITERS;
   testops.fn=FILENAME;
   testops.testduration=TESTDURATION;
-  testops.page_buffer_size = umap_cfg_get_bufsize();
+  testops.page_buffer_size = umapcfg_get_max_pages_in_buffer();
 
   while (1) {
     int option_index = 0;
@@ -128,7 +132,5 @@ void getoptions(options_t& testops, int& argc, char **argv)
     cerr << endl;
     usage(pname);
   }
-
-  umap_cfg_set_bufsize(testops.page_buffer_size);
 }
 

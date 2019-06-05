@@ -63,6 +63,7 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
   }
 
   uint64_t *arr = (uint64_t *) base_addr;
+
   cout << "Initializing Array\n";
 
 #pragma omp parallel for
@@ -71,6 +72,7 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
 
   cout << "Sorting Data\n";
   __gnu_parallel::sort(arr, &arr[arraysize], std::less<uint64_t>(), __gnu_parallel::quicksort_tag());
+
 
   if (uunmap(base_addr, totalbytes) < 0) {
     int eno = errno;
@@ -117,8 +119,9 @@ int main(int argc, char **argv)
 
   // Optional: Make umap's pages size double the default system page size
   //
-  uint64_t psize = umap_cfg_get_pagesize() * 2;
-  umap_cfg_set_pagesize( psize );
+  // Use UMAP_PAGE_SIZE environment variable to set page size for umap
+  //
+  uint64_t psize = umapcfg_get_umap_page_size();
 
   const uint64_t pagesInTest = 64;
   const uint64_t elemPerPage = psize / sizeof(uint64_t);
@@ -129,7 +132,8 @@ int main(int argc, char **argv)
   // Optional: Set umap's buffer to half the number of pages we need so that
   //           we may simulate an out-of-core experience
   //
-  umap_cfg_set_bufsize( pagesInTest / 2 );
+  // Use UMAP_BUFSIZE environment variable to set number of pages in buffer
+  //
 
   initialize_and_sort_file(filename, arraySize, totalBytes);
   verify_sortfile(filename, arraySize, totalBytes);

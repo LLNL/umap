@@ -6,4 +6,3 @@
 #############################################################################
 add_subdirectory(churn)
 add_subdirectory(pfbenchmark)
-add_subdirectory(umapsort)

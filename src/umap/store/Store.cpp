@@ -5,10 +5,12 @@
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
 #include "umap/umap.h"
-#include "umap/Store.h"
-#include "StoreFile.h"
+#include "umap/store/Store.hpp"
+#include "umap/store/StoreFile.h"
 
-Store* Store::make_store(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd_)
-{
-  return new StoreFile{_region_, _rsize_, _alignsize_, _fd_};
+namespace Umap {
+  Store* Store::make_store(void* _region_, size_t _rsize_, size_t _alignsize_, int _fd_)
+  {
+    return new StoreFile{_region_, _rsize_, _alignsize_, _fd_};
+  }
 }

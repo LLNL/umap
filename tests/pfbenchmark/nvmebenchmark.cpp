@@ -17,10 +17,6 @@
  * or randomly (if "--shuffle" command line option is specified).
  */
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif // _GNU_SOURCE
-
 #include <iostream>
 #include <chrono>
 #include <omp.h>
