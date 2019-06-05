@@ -19,7 +19,7 @@
 
 #ifdef __cplusplus
 namespace Umap {
-/** Allow application to create region of memory to a peristant store
+/** Allow application to create region of memory to a persistent store
  * \param addr Same as input argument for mmap(2)
  * \param length Same as input argument of mmap(2)
  * \param prot Same as input argument of mmap(2)
@@ -40,7 +40,7 @@ void* umap_ex(
 #ifdef __cplusplus
 extern "C" {
 #endif
-/** Allow application to create region of memory to a peristant store
+/** Allow application to create region of memory to a persistent store
  * \param addr Same as input argument for mmap(2)
  * \param length Same as input argument of mmap(2)
  * \param prot Same as input argument of mmap(2)
