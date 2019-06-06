@@ -1,5 +1,6 @@
 # UMAP v1.0.0
 
+[![Travis Build Status](https://travis-ci.com/LLNL/umap.svg?branch=develop)](https://travis-ci.com/LLNL/Umpire)
 [![Documentation Status](https://readthedocs.org/projects/llnl-umap/badge/?version=develop)](https://llnl-umap.readthedocs.io/en/develop/?badge=develop)
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
