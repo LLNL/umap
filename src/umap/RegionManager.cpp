@@ -36,7 +36,7 @@ RegionManager* RegionManager::getInstance( void ) {
 }
 
 void RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size) {
-  UMAP_LOG(Debug, 
+  UMAP_LOG(Debug,
       "store: " << store
       << ", region: " << (void*)region
       << ", region_size: " << region_size
@@ -149,14 +149,14 @@ uint64_t RegionManager::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
-  const uint64_t percent = 95;  // 95% of memory is max
+  const uint64_t percent = 98;  // 98% of available memory
 
   // Lazily set total_mem_kb global
   if ( ! total_mem_kb ) {
     std::string token;
     std::ifstream file("/proc/meminfo");
     while (file >> token) {
-      if (token == "MemTotal:") {
+      if (token == "MemFree:") {
         unsigned long mem;
         if (file >> mem) {
           total_mem_kb = mem;
@@ -185,8 +185,8 @@ void RegionManager::set_max_pages_in_buffer( uint64_t max_pages ) {
   m_max_pages_in_buffer = max_pages;
 
   UMAP_LOG(Debug,
-    "Maximum pages in page buffer changed from " 
-    << old_max_pages_in_buffer 
+    "Maximum pages in page buffer changed from "
+    << old_max_pages_in_buffer
     << " to " << get_max_pages_in_buffer() << " pages");
 }
 
@@ -197,13 +197,13 @@ void RegionManager::set_umap_page_size( uint64_t page_size ) {
   // Must be multiple of system page size
   //
   if ( page_size % get_system_page_size() ) {
-    UMAP_ERROR("Specified page size (" << page_size 
-        << ") must be a multiple of the system page size (" 
+    UMAP_ERROR("Specified page size (" << page_size
+        << ") must be a multiple of the system page size ("
         << get_system_page_size() << ")");
   }
 
-  UMAP_LOG(Debug, 
-      "Adjusting page size from " 
+  UMAP_LOG(Debug,
+      "Adjusting page size from "
       << get_umap_page_size() << " to " << page_size);
 
   m_umap_page_size = page_size;
