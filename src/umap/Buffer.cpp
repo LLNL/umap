@@ -41,6 +41,7 @@ void Buffer::mark_page_as_free( PageDescriptor* pd )
   m_present_pages.erase(pd->page);
 
   pd->set_state_free();
+  pd->spurious_count = 0;
 
   //
   // We only put the page descriptor back onto the free list if it isn't
@@ -158,6 +159,14 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
       UMAP_LOG(Debug, "PRE: " << pd << " From: " << this);
     }
     else {
+      static int hiwat = 0;
+
+      pd->spurious_count++;
+      if (pd->spurious_count > hiwat) {
+        hiwat = pd->spurious_count;
+        UMAP_LOG(Info, "New Spurious cound high water mark: " << hiwat);
+      }
+
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
       unlock();
       return;
@@ -237,6 +246,7 @@ PageDescriptor* Buffer::get_page_descriptor(char* vaddr, RegionDescriptor* rd)
   rval->dirty = false;
   rval->deferred = false;
   rval->set_state_filling();
+  rval->spurious_count = 0;
 
   m_stats.pages_inserted++;
   auto it = m_busy_pages.begin();
@@ -333,7 +343,7 @@ Buffer::Buffer( void )
 }
 
 Buffer::~Buffer( void ) {
-  std::cout << m_stats << std::endl;
+  UMAP_LOG(Debug, m_stats);
 
   assert("Pages are still present" && m_present_pages.size() == 0);
   pthread_cond_destroy(&m_avail_pd_cond);
@@ -347,12 +357,9 @@ std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b)
   if ( b != nullptr ) {
     os << "{ m_size: " << b->m_size
       << ", m_waits_for_avail_pd: " << b->m_waits_for_avail_pd
-      << ", m_array: " << (void*)(b->m_array)
       << ", m_present_pages.size(): " << std::setw(2) << b->m_present_pages.size()
       << ", m_free_pages.size(): " << std::setw(2) << b->m_free_pages.size()
       << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
-      << ", m_evict_low_water: " << std::setw(2) << b->m_evict_low_water
-      << ", m_evict_high_water: " << std::setw(2) << b->m_evict_high_water
       << " }"
       ;
   }

@@ -56,11 +56,17 @@ namespace Umap {
   {
     if (pd != nullptr) {
       os << "{ "
-         << " page: "      << (void*)(pd->page)
-         << ", state: "    << pd->print_state()
-         << ", dirty: "    << (pd->dirty    ? "TRUE" : "FALSE")
-         << ", deferred: " << (pd->deferred ? "TRUE" : "FALSE")
-         << " }";
+         << (void*)(pd->page)
+         << ", "    << pd->print_state();
+
+      if ( pd->dirty )
+         os << ", DIRTY";
+      if ( pd->deferred )
+         os << ", DEFERRED";
+      if ( pd->spurious_count )
+         os << ", spurious: " << pd->spurious_count;
+
+      os << " }";
     }
     else {
       os << "{ nullptr }";
