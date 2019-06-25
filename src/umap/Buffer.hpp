@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <unordered_map>
 #include <vector>
+#include <deque>
 
 #include "umap/RegionDescriptor.hpp"
 #include "umap/PageDescriptor.hpp"
@@ -54,7 +55,7 @@ namespace Umap {
       std::unordered_map<char*, PageDescriptor*> m_present_pages;
 
       std::vector<PageDescriptor*> m_free_pages;
-      std::vector<PageDescriptor*> m_busy_pages;
+      std::deque<PageDescriptor*> m_busy_pages;
 
       uint64_t m_evict_low_water;   // % to evict too
       uint64_t m_evict_high_water;  // % to start evicting
@@ -66,7 +67,6 @@ namespace Umap {
 
       int m_waits_for_state_change;
       pthread_cond_t m_state_change_cond;
-      std::unordered_map<char*, int> m_pages_awaiting_state_change;
 
       BufferStats m_stats;
 
@@ -79,8 +79,6 @@ namespace Umap {
       void lock();
       void unlock();
       void wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st);
-      void wakeup_page_state_waiters( PageDescriptor* pd );
-      void await_state_change_notification( PageDescriptor* pd );
   };
 
   std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats);

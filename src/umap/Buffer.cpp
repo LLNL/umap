@@ -23,7 +23,9 @@ void Buffer::mark_page_as_present(PageDescriptor* pd)
   lock();
 
   pd->set_state_present();
-  wakeup_page_state_waiters(pd);
+
+  if ( m_waits_for_state_change )
+    pthread_cond_broadcast( &m_state_change_cond );
 
   unlock();
 }
@@ -52,7 +54,8 @@ void Buffer::mark_page_as_free( PageDescriptor* pd )
   if ( ! pd->deferred )
     release_page_descriptor(pd);
 
-  wakeup_page_state_waiters(pd);
+  if ( m_waits_for_state_change )
+    pthread_cond_broadcast( &m_state_change_cond );
 
   pd->page = nullptr;
 
@@ -64,7 +67,7 @@ void Buffer::release_page_descriptor( PageDescriptor* pd )
     m_free_pages.push_back(pd);
 
     if ( m_waits_for_avail_pd )
-      pthread_cond_signal(&m_avail_pd_cond);
+      pthread_cond_broadcast(&m_avail_pd_cond);
 }
 
 //
@@ -208,22 +211,28 @@ PageDescriptor* Buffer::page_already_present( char* page_addr )
   while (1) {
     auto pp = m_present_pages.find(page_addr);
   
+    //
+    // Most likely case
+    //
+    if ( pp == m_present_pages.end() )
+      return nullptr;
+
+    //
+    // Next most likely is that it is just present in the buffer
+    //
+    if ( pp->second->state == PageDescriptor::State::PRESENT )
+      return pp->second;
+
     // There is a chance that the state of this page is not/no-longer
     // PRESENT.  If this is the case, we need to wait for it to finish
     // with whatever is happening to it and then check again
     //
-    if ( pp != m_present_pages.end() ) {
-      if ( pp->second->state != PageDescriptor::State::PRESENT ) {
-        UMAP_LOG(Debug, "Waiting for state: (ANY)" << ", " << pp->second);
-        await_state_change_notification( pp->second );
-      }
-      else {
-        return pp->second;
-      }
-    }
-    else {
-      return nullptr;
-    }
+    UMAP_LOG(Debug, "Waiting for state: (ANY)" << ", " << pp->second);
+
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+    pthread_cond_wait(&m_state_change_cond, &m_mutex);
+    --m_waits_for_state_change;
   }
 }
 
@@ -232,7 +241,11 @@ PageDescriptor* Buffer::get_page_descriptor(char* vaddr, RegionDescriptor* rd)
   while ( m_free_pages.size() == 0 )  {
     ++m_waits_for_avail_pd;
     m_stats.not_avail++;
+
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
     pthread_cond_wait(&m_avail_pd_cond, &m_mutex);
+
     --m_waits_for_avail_pd;
   }
 
@@ -249,8 +262,7 @@ PageDescriptor* Buffer::get_page_descriptor(char* vaddr, RegionDescriptor* rd)
   rval->spurious_count = 0;
 
   m_stats.pages_inserted++;
-  auto it = m_busy_pages.begin();
-  m_busy_pages.insert(it, rval);
+  m_busy_pages.push_front(rval);
 
   return rval;
 }
@@ -293,31 +305,18 @@ void Buffer::unlock()
 
 void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
 {
+  UMAP_LOG(Debug, "Waiting for state: " << st << ", " << pd);
+
   while ( pd->state != st ) {
-    UMAP_LOG(Debug, "Waiting for state: " << st << ", " << pd);
-    await_state_change_notification(pd);
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+    pthread_cond_wait(&m_state_change_cond, &m_mutex);
+
+    --m_waits_for_state_change;
   }
-}
-
-void Buffer::wakeup_page_state_waiters( PageDescriptor* pd )
-{
-    auto pp = m_pages_awaiting_state_change.find(pd->page);
-    if ( pp != m_pages_awaiting_state_change.end() )
-      pthread_cond_broadcast(&m_state_change_cond);
-}
-
-void Buffer::await_state_change_notification( PageDescriptor* pd )
-{
-  m_stats.waits++;
-  ++m_waits_for_state_change;
-  UMAP_LOG(Debug, "m_waits_for_state_change: " 
-      << m_waits_for_state_change
-      << ", " << pd);
-  m_pages_awaiting_state_change[pd->page] = m_waits_for_state_change;
-  pthread_cond_wait(&m_state_change_cond, &m_mutex);
-  --m_waits_for_state_change;
-  if (m_waits_for_state_change == 0)
-    m_pages_awaiting_state_change.erase(pd->page);
 }
 
 Buffer::Buffer( void )
