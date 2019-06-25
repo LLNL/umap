@@ -51,7 +51,7 @@ void EvictWorkers::EvictWorker( void )
 
 EvictWorkers::EvictWorkers(uint64_t num_evictors, Buffer* buffer, Uffd* uffd)
   :   WorkerPool("Evict Workers", num_evictors), m_buffer(buffer)
-    , m_uffd(uffd), m_num_evictors(num_evictors)
+    , m_uffd(uffd)
 {
   start_thread_pool();
 }
