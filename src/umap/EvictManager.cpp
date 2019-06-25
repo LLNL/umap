@@ -41,10 +41,14 @@ void EvictManager::EvictMgr( void ) {
 void EvictManager::EvictAll( void )
 {
   UMAP_LOG(Debug, "Entered");
+
   for (auto pd = m_buffer->evict_oldest_page(); pd != nullptr; pd = m_buffer->evict_oldest_page()) {
     UMAP_LOG(Debug, "evicting: " << pd);
     schedule_eviction(pd);
   }
+
+  m_evict_workers->wait_for_idle();
+
   UMAP_LOG(Debug, "Done");
 }
 

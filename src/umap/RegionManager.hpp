@@ -61,6 +61,7 @@ class RegionManager {
     FillWorkers* get_fill_workers_h() { return m_fill_workers; }
     EvictManager* get_evict_manager() { return m_evict_manager; }
     RegionDescriptor* containing_region( char* vaddr );
+    uint64_t get_num_active_regions( void ) { return (uint64_t)m_active_regions.size(); }
 
   private:
     Version  m_version;

@@ -21,6 +21,7 @@ namespace Umap {
     bool              dirty;
     bool              deferred;
     bool              data_present;
+    int               spurious_count;
 
     std::string print_state( void ) const;
     void set_state_free( void );
