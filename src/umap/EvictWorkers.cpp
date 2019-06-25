@@ -41,8 +41,10 @@ void EvictWorkers::EvictWorker( void )
             << errno << " (" << strerror(errno) << ")");
     }
 
-    if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
-      UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+    if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
+      if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
+        UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+    }
 
     UMAP_LOG(Debug, "Removing page: " << w.page_desc);
     m_buffer->mark_page_as_free(w.page_desc);

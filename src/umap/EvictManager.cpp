@@ -44,7 +44,13 @@ void EvictManager::EvictAll( void )
 
   for (auto pd = m_buffer->evict_oldest_page(); pd != nullptr; pd = m_buffer->evict_oldest_page()) {
     UMAP_LOG(Debug, "evicting: " << pd);
-    schedule_eviction(pd);
+    if (pd->dirty) {
+      WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::FAST_EVICT };
+      m_evict_workers->send_work(work);
+    }
+    else {
+      m_buffer->mark_page_as_free(pd);
+    }
   }
 
   m_evict_workers->wait_for_idle();
@@ -54,7 +60,6 @@ void EvictManager::EvictAll( void )
 
 void EvictManager::schedule_eviction(PageDescriptor* pd)
 {
-
   WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::EVICT };
 
   m_evict_workers->send_work(work);
