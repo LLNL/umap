@@ -22,13 +22,13 @@ namespace Umap {
       EvictManager( void );
       ~EvictManager( void );
       void schedule_eviction(PageDescriptor* pd);
+      void EvictAll( void );
 
     private:
       Buffer* m_buffer;
       EvictWorkers* m_evict_workers;
 
       void EvictMgr(void);
-      void EvictAll( void );
       void ThreadEntry( void );
   };
 } // end of namespace Umap

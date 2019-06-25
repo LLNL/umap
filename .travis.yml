@@ -1,0 +1,63 @@
+services: docker
+dist: trusty
+language: cpp
+env:
+  global:
+  - DO_BUILD=yes
+  - DO_TEST=no
+  - GTEST_COLOR=1
+matrix:
+  include:
+  - compiler: gcc5
+    env:
+    - COMPILER=g++
+    - IMG=gcc-5
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - DO_MEMCHECK=no
+  - compiler: gcc6
+    env:
+    - COMPILER=g++
+    - IMG=gcc-6
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+  - compiler: gcc7
+    env:
+    - COMPILER=g++
+    - IMG=gcc-7
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+  - compiler: gcc8
+    env:
+    - COMPILER=g++
+    - IMG=gcc-8
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+  - compiler: gcc8
+    env:
+    - COMPILER=g++
+    - IMG=gcc-8
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=On"
+  - compiler: clang4
+    env:
+    - COMPILER=clang++
+    - IMG=clang-4
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+  - compiler: clang5
+    env:
+    - COMPILER=clang++
+    - IMG=clang-5
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+  - compiler: clang6
+    env:
+    - COMPILER=clang++
+    - IMG=clang-6
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+  - compiler: clang6
+    env:
+    - COMPILER=clang++
+    - IMG=clang-6
+    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=On"
+
+script:
+- docker run --rm --user='root' -v ${TRAVIS_BUILD_DIR}:/home/axom axom/compilers:$IMG chown -R axom /home/axom
+- docker run --rm  -v ${TRAVIS_BUILD_DIR}:/home/axom -e COMPILER -e DO_BUILD -e DO_TEST -e DO_MEMCHECK -e CMAKE_EXTRA_FLAGS -e GTEST_COLOR axom/compilers:$IMG ./scripts/travis/build_and_test.sh
+
+after_success:
+- if [[ "${CMAKE_EXTRA_FLAGS}" == *"ENABLE_COVERAGE"* ]] ; then bash <(curl -s https://codecov.io/bash) -a "-f" >& /dev/null; fi

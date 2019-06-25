@@ -44,7 +44,7 @@ namespace Umap {
       WorkerPool(const std::string& pool_name, uint64_t num_threads)
         :   m_pool_name(pool_name)
           , m_num_threads(num_threads)
-          , m_wq(new WorkQueue<WorkItem>)
+          , m_wq(new WorkQueue<WorkItem>(num_threads))
       {
         if (m_pool_name.length() > 15)
           m_pool_name.resize(15);
@@ -105,6 +105,10 @@ namespace Umap {
         m_threads.clear();
 
         UMAP_LOG(Debug, m_pool_name << " stopped");
+      }
+
+      void wait_for_idle( void ) {
+        m_wq->wait_for_idle();
       }
 
     protected:
