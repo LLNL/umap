@@ -1,6 +1,6 @@
-******
-UMAP
-******
+***********
+UMAP v2.0.0
+***********
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
 space page fault handler based on the userfaultfd Linux feature (starting with
