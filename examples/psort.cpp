@@ -16,25 +16,25 @@
 #include <omp.h>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 #include "errno.h"
 #include "umap/umap.h"
 
-using namespace std;
-
-void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t totalbytes )
+void
+initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t totalbytes, uint64_t psize )
 {
   if ( unlink(fname) ) {
     int eno = errno;
     if ( eno != ENOENT ) {
-      cerr << "Failed to unlink " << fname << ": " 
-        << strerror(eno) << " Errno=" << eno << endl;
+      std::cerr << "Failed to unlink " << fname << ": " 
+        << strerror(eno) << " Errno=" << eno << std::endl;
     }
   }
 
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
     int eno = errno;
-    cerr << "Failed to create " << fname << ": " << strerror(eno) << endl;
+    std::cerr << "Failed to create " << fname << ": " << strerror(eno) << std::endl;
     return;
   }
 
@@ -43,7 +43,7 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
     int x;
     if ( ( x = posix_fallocate(fd, 0, totalbytes) != 0 ) ) {
       int eno = errno;
-      cerr << "Failed to pre-allocate " << fname << ": " << strerror(eno) << endl;
+      std::cerr << "Failed to pre-allocate " << fname << ": " << strerror(eno) << std::endl;
       return;
     }
   } catch(const std::exception& e) {
@@ -51,69 +51,82 @@ void initialize_and_sort_file( const char* fname, uint64_t arraysize, uint64_t t
     return;
   } catch(...) {
     int eno = errno;
-    cerr << "Failed to pre-allocate " << fname << ": " << strerror(eno) << endl;
+    std::cerr << "Failed to pre-allocate " << fname << ": " << strerror(eno) << std::endl;
     return;
   }
 
   void* base_addr = umap(NULL, totalbytes, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
   if ( base_addr == UMAP_FAILED ) {
     int eno = errno;
-    cerr << "Failed to umap " << fname << ": " << strerror(eno) << endl;
+    std::cerr << "Failed to umap " << fname << ": " << strerror(eno) << std::endl;
     return;
   }
 
+  std::vector<umap_prefetch_item> pfi;
+  char* base = (char*)base_addr;
+  uint64_t PagesInTest = totalbytes / psize;
+
+  std::cout << "Prefetching Pages\n";
+  for ( int i{0}; i < PagesInTest; ++i) {
+    umap_prefetch_item x = { .page_base_addr = &base[i * psize] };
+    pfi.push_back(x);
+  };
+  umap_prefetch(PagesInTest, &pfi[0]);
+
   uint64_t *arr = (uint64_t *) base_addr;
 
-  cout << "Initializing Array\n";
+  std::cout << "Initializing Array\n";
 
 #pragma omp parallel for
   for(uint64_t i=0; i < arraysize; ++i)
     arr[i] = (uint64_t) (arraysize - i);
 
-  cout << "Sorting Data\n";
+  std::cout << "Sorting Data\n";
   __gnu_parallel::sort(arr, &arr[arraysize], std::less<uint64_t>(), __gnu_parallel::quicksort_tag());
 
 
   if (uunmap(base_addr, totalbytes) < 0) {
     int eno = errno;
-    cerr << "Failed to uumap " << fname << ": " << strerror(eno) << endl;
+    std::cerr << "Failed to uumap " << fname << ": " << strerror(eno) << std::endl;
     return;
   }
   close(fd);
 }
 
-void verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
+void
+verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
 {
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
-    cerr << "Failed to create " << fname << endl;
+    std::cerr << "Failed to create " << fname << std::endl;
     return;
   }
 
   void* base_addr = umap(NULL, totalbytes, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
   if ( base_addr == UMAP_FAILED ) {
-    cerr << "umap failed\n";
+    std::cerr << "umap failed\n";
     return;
   }
   uint64_t *arr = (uint64_t *) base_addr;
 
-  cout << "Verifying Data with\n";
+  std::cout << "Verifying Data with\n";
 
 #pragma omp parallel for
   for(uint64_t i = 0; i < arraysize; ++i)
     if (arr[i] != (i+1)) {
-      cerr << "Data miscompare\n";
+      std::cerr << "Data miscompare\n";
       i = arraysize;
     }
 
   if (uunmap(base_addr, totalbytes) < 0) {
-    cerr << "uunamp failed\n";
+    std::cerr << "uunamp failed\n";
     return;
   }
   close(fd);
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
   const char* filename = argv[1];
 
@@ -134,8 +147,7 @@ int main(int argc, char **argv)
   //
   // Use UMAP_BUFSIZE environment variable to set number of pages in buffer
   //
-
-  initialize_and_sort_file(filename, arraySize, totalBytes);
+  initialize_and_sort_file(filename, arraySize, totalBytes, psize);
   verify_sortfile(filename, arraySize, totalBytes);
   return 0;
 }

@@ -48,6 +48,7 @@ namespace Umap {
       Uffd( void );
       ~Uffd( void);
 
+      void process_page(bool iswrite, char* addr );
       void register_region( RegionDescriptor* region );
       void unregister_region( RegionDescriptor* region );
 

@@ -27,7 +27,9 @@ namespace Umap {
 
 RegionManager* RegionManager::s_fault_monitor_manager_instance = nullptr;
 
-RegionManager* RegionManager::getInstance( void ) {
+RegionManager*
+RegionManager::getInstance( void )
+{
   if (!s_fault_monitor_manager_instance) {
     s_fault_monitor_manager_instance = new RegionManager();
   }
@@ -35,7 +37,9 @@ RegionManager* RegionManager::getInstance( void ) {
   return s_fault_monitor_manager_instance;
 }
 
-void RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size) {
+void
+RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size)
+{
   UMAP_LOG(Debug,
       "store: " << store
       << ", region: " << (void*)region
@@ -63,7 +67,9 @@ void RegionManager::addRegion(Store* store, char* region, uint64_t region_size, 
   m_uffd->register_region(rd);
 }
 
-void RegionManager::removeRegion( char* region ) {
+void
+RegionManager::removeRegion( char* region )
+{
   UMAP_LOG(Debug, "region: " << (void*)region);
 
   auto it = m_active_regions.find(region);
@@ -92,7 +98,15 @@ void RegionManager::removeRegion( char* region ) {
   UMAP_LOG(Debug, "Done");
 }
 
-RegionManager::RegionManager() {
+void
+RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
+{
+  for (int i{0}; i < npages; ++i)
+    m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
+}
+
+RegionManager::RegionManager()
+{
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
   m_version.patch = UMAP_VERSION_PATCH;
@@ -145,7 +159,8 @@ RegionManager::RegionManager() {
     set_read_ahead(0);
 }
 
-uint64_t RegionManager::get_max_pages_in_memory( void )
+uint64_t
+RegionManager::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
@@ -171,7 +186,9 @@ uint64_t RegionManager::get_max_pages_in_memory( void )
   return ( ((total_mem_kb / (get_umap_page_size() / oneK)) * percent) / 100 );
 }
 
-void RegionManager::set_max_pages_in_buffer( uint64_t max_pages ) {
+void
+RegionManager::set_max_pages_in_buffer( uint64_t max_pages )
+{
   uint64_t max_pages_in_mem = get_max_pages_in_memory();
   uint64_t old_max_pages_in_buffer = get_max_pages_in_buffer();
 
@@ -190,9 +207,15 @@ void RegionManager::set_max_pages_in_buffer( uint64_t max_pages ) {
     << " to " << get_max_pages_in_buffer() << " pages");
 }
 
-void RegionManager::set_read_ahead(uint64_t num_pages) { m_read_ahead = num_pages; }
+void
+RegionManager::set_read_ahead(uint64_t num_pages)
+{
+  m_read_ahead = num_pages;
+}
 
-void RegionManager::set_umap_page_size( uint64_t page_size ) {
+void
+RegionManager::set_umap_page_size( uint64_t page_size )
+{
   //
   // Must be multiple of system page size
   //
@@ -209,7 +232,9 @@ void RegionManager::set_umap_page_size( uint64_t page_size ) {
   m_umap_page_size = page_size;
 }
 
-uint64_t* RegionManager::read_env_var( const char* env, uint64_t*  val ) {
+uint64_t*
+RegionManager::read_env_var( const char* env, uint64_t*  val )
+{
   // return a pointer to val on success, null on failure
   char* val_ptr = 0;
   if ( (val_ptr = getenv(env)) ) {
@@ -227,8 +252,9 @@ uint64_t* RegionManager::read_env_var( const char* env, uint64_t*  val ) {
   return nullptr;
 }
 
-RegionDescriptor* RegionManager::containing_region( char* vaddr ) {
-
+RegionDescriptor*
+RegionManager::containing_region( char* vaddr )
+{
   // TODO: change this to judy array once implementation works properly
   for ( auto it : m_active_regions ) {
     char* b = it.second->start();
@@ -242,9 +268,30 @@ RegionDescriptor* RegionManager::containing_region( char* vaddr ) {
   return nullptr;
 }
 
-void RegionManager::set_num_fillers( uint64_t num_fillers ) { m_num_fillers = num_fillers; }
-void RegionManager::set_num_evictors( uint64_t num_evictors ) { m_num_evictors = num_evictors; }
-void RegionManager::set_evict_high_water_threshold( int percent ) { m_evict_high_water_threshold = percent; }
-void RegionManager::set_evict_low_water_threshold( int percent ) { m_evict_low_water_threshold = percent; }
-void RegionManager::set_max_fault_events( uint64_t max_events ) { m_max_fault_events = max_events; }
+void
+RegionManager::set_num_fillers( uint64_t num_fillers )
+{
+  m_num_fillers = num_fillers;
+}
+
+void
+RegionManager::set_num_evictors( uint64_t num_evictors )
+{
+  m_num_evictors = num_evictors;
+}
+void
+RegionManager::set_evict_high_water_threshold( int percent )
+{
+  m_evict_high_water_threshold = percent;
+}
+void
+RegionManager::set_evict_low_water_threshold( int percent )
+{
+  m_evict_low_water_threshold = percent;
+}
+void
+RegionManager::set_max_fault_events( uint64_t max_events )
+{
+  m_max_fault_events = max_events;
+}
 } // end of namespace Umap

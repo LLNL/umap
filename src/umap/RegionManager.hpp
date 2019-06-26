@@ -14,6 +14,7 @@
 #include "umap/EvictManager.hpp"
 #include "umap/FillWorkers.hpp"
 #include "umap/Uffd.hpp"
+#include "umap/umap.h"
 #include "umap/store/Store.hpp"
 #include "umap/RegionDescriptor.hpp"
 
@@ -45,6 +46,7 @@ class RegionManager {
         , uint64_t mmap_region_size
     );
 
+    void prefetch(int npages, umap_prefetch_item* page_array);
     void removeRegion( char* mmap_region );
     Version  get_umap_version( void ) { return m_version; }
     long     get_system_page_size( void ) { return m_system_page_size; }

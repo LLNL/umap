@@ -17,7 +17,8 @@
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 
-void* umap(
+void*
+umap(
     void* region_addr
   , uint64_t region_size
   , int prot
@@ -36,8 +37,79 @@ void* umap(
   return Umap::umap_ex(region_addr, region_size, prot, flags, fd, 0, nullptr);
 }
 
+int
+uunmap(void*  addr, uint64_t length)
+{
+  UMAP_LOG(Debug, "addr: " << addr << ", length: " << length);
+  auto rm = Umap::RegionManager::getInstance();
+  rm->removeRegion((char*)addr);
+  UMAP_LOG(Debug, "Done");
+  return 0;
+}
+
+void umap_prefetch( int npages, umap_prefetch_item* page_array )
+{
+  Umap::RegionManager::getInstance()->prefetch(npages, page_array);
+}
+
+long
+umapcfg_get_system_page_size( void )
+{
+  return Umap::RegionManager::getInstance()->get_system_page_size();
+}
+
+uint64_t
+umapcfg_get_max_pages_in_buffer( void )
+{
+  return Umap::RegionManager::getInstance()->get_max_pages_in_buffer();
+}
+
+uint64_t
+umapcfg_get_read_ahead( void )
+{
+  return Umap::RegionManager::getInstance()->get_read_ahead();
+}
+
+uint64_t
+umapcfg_get_umap_page_size( void )
+{
+  return Umap::RegionManager::getInstance()->get_umap_page_size();
+}
+
+uint64_t
+umapcfg_get_num_fillers( void )
+{
+  return Umap::RegionManager::getInstance()->get_num_fillers();
+}
+
+uint64_t
+umapcfg_get_num_evictors( void )
+{
+  return Umap::RegionManager::getInstance()->get_num_evictors();
+}
+
+int
+umapcfg_get_evict_low_water_threshold( void )
+{
+  return Umap::RegionManager::getInstance()->get_evict_low_water_threshold();
+}
+
+int
+umapcfg_get_evict_high_water_threshold( void )
+{
+  return Umap::RegionManager::getInstance()->get_evict_high_water_threshold();
+}
+
+uint64_t
+umapcfg_get_max_fault_events( void )
+{
+  return Umap::RegionManager::getInstance()->get_max_fault_events();
+}
+
 namespace Umap {
-void* umap_ex(
+
+void*
+umap_ex(
     void* region_addr
   , uint64_t region_size
   , int prot
@@ -108,57 +180,3 @@ void* umap_ex(
   return umap_region;
 }
 } // namespace Umap
-
-int uunmap(void*  addr, uint64_t length)
-{
-  UMAP_LOG(Debug, "addr: " << addr << ", length: " << length);
-  auto rm = Umap::RegionManager::getInstance();
-  rm->removeRegion((char*)addr);
-  UMAP_LOG(Debug, "Done");
-  return 0;
-}
-
-long     umapcfg_get_system_page_size( void )
-{
-  return Umap::RegionManager::getInstance()->get_system_page_size();
-}
-
-uint64_t umapcfg_get_max_pages_in_buffer( void )
-{
-  return Umap::RegionManager::getInstance()->get_max_pages_in_buffer();
-}
-
-uint64_t umapcfg_get_read_ahead( void )
-{
-  return Umap::RegionManager::getInstance()->get_read_ahead();
-}
-
-uint64_t umapcfg_get_umap_page_size( void )
-{
-  return Umap::RegionManager::getInstance()->get_umap_page_size();
-}
-
-uint64_t umapcfg_get_num_fillers( void )
-{
-  return Umap::RegionManager::getInstance()->get_num_fillers();
-}
-
-uint64_t umapcfg_get_num_evictors( void )
-{
-  return Umap::RegionManager::getInstance()->get_num_evictors();
-}
-
-int umapcfg_get_evict_low_water_threshold( void )
-{
-  return Umap::RegionManager::getInstance()->get_evict_low_water_threshold();
-}
-
-int umapcfg_get_evict_high_water_threshold( void )
-{
-  return Umap::RegionManager::getInstance()->get_evict_high_water_threshold();
-}
-
-uint64_t umapcfg_get_max_fault_events( void )
-{
-  return Umap::RegionManager::getInstance()->get_max_fault_events();
-}
