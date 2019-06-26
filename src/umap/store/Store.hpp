@@ -6,9 +6,10 @@
 //////////////////////////////////////////////////////////////////////////////
 #ifndef _UMAP_STORE_H_
 #define _UMAP_STORE_H_
-#include <unistd.h>
 #include <cstdint>
+#include <unistd.h>
 
+namespace Umap {
 class Store {
   public:
     static Store* make_store(void* _region_, std::size_t _rsize_, std::size_t _alignsize_, int _fd_);
@@ -16,4 +17,5 @@ class Store {
     virtual ssize_t read_from_store(char* buf, std::size_t nb, off_t off) = 0;
     virtual ssize_t  write_to_store(char* buf, std::size_t nb, off_t off) = 0;
 };
+} // end of namespace Umap
 #endif
