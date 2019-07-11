@@ -52,6 +52,6 @@ The following environment varialbles may be set:
 
 * ``UMAP_READ_AHEAD``
   This is the number of umap pages that Umap will read-ahead on whenever the
-  Buffer is less than the UMAP_EVICT_LOW_WATER_THRESHOLD amount.
+  Buffer is less than the ``UMAP_EVICT_LOW_WATER_THRESHOLD`` amount.
 
   Default: 0
