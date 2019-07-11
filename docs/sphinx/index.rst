@@ -28,6 +28,7 @@ Any questions? File an issue on GitHub.
   :caption: Reference
 
   advanced_configuration
+  environment_variables
 
 .. toctree::
   :maxdepth: 2
