@@ -25,6 +25,9 @@ configure_file(
 include_directories ( "${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/src")
 
 add_subdirectory(src)
-add_subdirectory(examples)
-add_subdirectory(tests)
+
+if (ENABLE_TESTS)
+  add_subdirectory(examples)
+  add_subdirectory(tests)
+endif()
 
