@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 #include "umap/Buffer.hpp"
+#include "umap/config.h"
 #include "umap/FillWorkers.hpp"
 #include "umap/PageDescriptor.hpp"
 #include "umap/RegionManager.hpp"
@@ -345,7 +346,9 @@ Buffer::Buffer( void )
 }
 
 Buffer::~Buffer( void ) {
-  UMAP_LOG(Debug, m_stats);
+#ifdef UMAP_DISPLAY_STATS
+  std::cout << m_stats << std::endl;
+#endif
 
   assert("Pages are still present" && m_present_pages.size() == 0);
   pthread_cond_destroy(&m_avail_pd_cond);

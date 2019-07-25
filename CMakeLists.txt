@@ -12,12 +12,14 @@ project(umap
 
 OPTION (ENABLE_TESTS "Selects whether tests are built." On)
 OPTION (ENABLE_LOGGING "Build umap with Logging enabled" On)
+OPTION (ENABLE_DISPLAY_STATS "Display umap statistics when closing" Off)
 
 include(cmake/BuildEnv.cmake)
 include(cmake/BuildType.cmake)
 include(cmake/SetupUmapThirdParty.cmake)
 
 set(UMAP_DEBUG_LOGGING ${ENABLE_LOGGING})
+set(UMAP_DISPLAY_STATS ${ENABLE_DISPLAY_STATS})
 configure_file(
   ${PROJECT_SOURCE_DIR}/config/config.h.in
   ${PROJECT_BINARY_DIR}/src/umap/config.h)
