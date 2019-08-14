@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "umap/Buffer.hpp"
+#include "umap/BufferManager.hpp"
 #include "umap/EvictManager.hpp"
 #include "umap/FillWorkers.hpp"
 #include "umap/Uffd.hpp"
@@ -50,7 +50,8 @@ class RegionManager {
     void removeRegion( char* mmap_region );
     Version  get_umap_version( void ) { return m_version; }
     long     get_system_page_size( void ) { return m_system_page_size; }
-    uint64_t get_max_pages_in_buffer( void ) { return m_max_pages_in_buffer; }
+    uint64_t get_pages_per_buffer( void ) { return m_pages_per_buffer; }
+    uint64_t get_number_of_buffers( void ) { return m_number_of_buffers; }
     uint64_t get_read_ahead( void ) { return m_read_ahead; }
     uint64_t get_umap_page_size( void ) { return m_umap_page_size; }
     uint64_t get_num_fillers( void ) { return m_num_fillers; }
@@ -58,7 +59,7 @@ class RegionManager {
     int get_evict_low_water_threshold( void ) { return m_evict_low_water_threshold; }
     int get_evict_high_water_threshold( void ) { return m_evict_high_water_threshold; }
     uint64_t get_max_fault_events( void ) { return m_max_fault_events; }
-    Buffer* get_buffer_h() { return m_buffer; }
+    BufferManager* get_buffer_manager_h() { return m_buffer_manager; }
     Uffd* get_uffd_h() { return m_uffd; }
     FillWorkers* get_fill_workers_h() { return m_fill_workers; }
     EvictManager* get_evict_manager() { return m_evict_manager; }
@@ -67,16 +68,17 @@ class RegionManager {
 
   private:
     Version  m_version;
-    uint64_t m_max_pages_in_buffer;
+    uint64_t m_pages_per_buffer;
     uint64_t m_read_ahead;
     long     m_umap_page_size;
     uint64_t m_system_page_size;
+    uint64_t m_number_of_buffers;
     uint64_t m_num_fillers;
     uint64_t m_num_evictors;
     int m_evict_low_water_threshold;
     int m_evict_high_water_threshold;
     uint64_t m_max_fault_events;
-    Buffer* m_buffer;
+    BufferManager* m_buffer_manager;
     Uffd* m_uffd;
     FillWorkers* m_fill_workers;
     EvictManager* m_evict_manager;
@@ -90,7 +92,8 @@ class RegionManager {
     uint64_t* read_env_var( const char* env, uint64_t* val);
     uint64_t        get_max_pages_in_memory( void );
     void set_max_fault_events( uint64_t max_events );
-    void set_max_pages_in_buffer( uint64_t max_pages );
+    void set_pages_per_buffer( uint64_t pages );
+    void set_number_of_buffers( uint64_t num_buffers );
     void set_read_ahead(uint64_t num_pages);
     void set_umap_page_size( uint64_t page_size );
     void set_num_fillers( uint64_t num_fillers );

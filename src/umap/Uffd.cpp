@@ -129,7 +129,7 @@ Uffd::process_page( bool iswrite, char* addr )
   if ( rd == nullptr )
     UMAP_ERROR("Invalid page: " << addr);
 
-  m_buffer->process_page_event(addr, iswrite, rd);
+  m_buffer_manager->getBufferManager(static_cast<void*>(addr))->process_page_event(addr, iswrite, rd);
 }
 
 void
@@ -143,7 +143,7 @@ Uffd::Uffd( void )
     , m_rm(RegionManager::getInstance())
     , m_max_fault_events(m_rm->get_max_fault_events())
     , m_page_size(m_rm->get_umap_page_size())
-    , m_buffer(m_rm->get_buffer_h())
+    , m_buffer_manager(m_rm->get_buffer_manager_h())
 {
   UMAP_LOG(Debug, "\n maximum fault events: " << m_max_fault_events
                   << "\n            page size: " << m_page_size);
@@ -273,7 +273,7 @@ Uffd::unregister_region( RegionDescriptor* rd )
   // Make sure and evict any/all active pages from this region that are still
   // in the Buffer
   //
-  m_buffer->evict_region(rd);
+  m_buffer_manager->evict_region(rd);
 
   struct uffdio_register uffdio_register = {
       .range = { .start = (__u64)(rd->start()), .len = rd->size() }

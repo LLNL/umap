@@ -39,7 +39,7 @@ namespace Umap {
     while ( 1 ) {
       auto w = get_work();
 
-      UMAP_LOG(Debug, ": " << w << " " << m_buffer);
+      UMAP_LOG(Debug, ": " << w << " " << w.buffer);
 
       if (w.type == Umap::WorkItem::WorkType::EXIT)
         break;    // Time to leave
@@ -62,7 +62,7 @@ namespace Umap {
         w.page_desc->data_present = true;
       }
 
-      m_buffer->mark_page_as_present(w.page_desc);
+      w.buffer->mark_page_as_present(w.page_desc);
     }
 
     free(copyin_buf);
@@ -75,7 +75,6 @@ namespace Umap {
   FillWorkers::FillWorkers( void )
     :   WorkerPool("Fill Workers", RegionManager::getInstance()->get_num_fillers())
       , m_uffd(RegionManager::getInstance()->get_uffd_h())
-      , m_buffer(RegionManager::getInstance()->get_buffer_h())
       , m_read_ahead(RegionManager::getInstance()->get_read_ahead())
   {
     start_thread_pool();

@@ -16,6 +16,7 @@
 #include <unistd.h>       // sysconf()
 
 #include "umap/Buffer.hpp"
+#include "umap/BufferManager.hpp"
 #include "umap/EvictManager.hpp"
 #include "umap/FillWorkers.hpp"
 #include "umap/RegionManager.hpp"
@@ -50,7 +51,7 @@ RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char*
   if ( m_active_regions.empty() ) {
     UMAP_LOG(Debug, "No active regions, initializing engine");
     UMAP_LOG(Debug, "Creating Buffer");
-    m_buffer = new Buffer();
+    m_buffer_manager = new BufferManager();
     UMAP_LOG(Debug, "Creating Uffd");
     m_uffd = new Uffd();
     UMAP_LOG(Debug, "Creating FillWorkers");
@@ -92,8 +93,8 @@ RegionManager::removeRegion( char* region )
     delete m_fill_workers; m_fill_workers = nullptr;
     UMAP_LOG(Debug, "Deleting m_uffd");
     delete m_uffd; m_uffd = nullptr;
-    UMAP_LOG(Debug, "Deleting m_buffer");
-    delete m_buffer; m_buffer = nullptr;
+    UMAP_LOG(Debug, "Deleting m_buffer_manager");
+    delete m_buffer_manager; m_buffer_manager = nullptr;
   }
   UMAP_LOG(Debug, "Done");
 }
@@ -148,10 +149,15 @@ RegionManager::RegionManager()
   else
     set_umap_page_size(m_system_page_size);
 
-  if ( (read_env_var("UMAP_BUFSIZE", &env_value)) != nullptr )
-    set_max_pages_in_buffer(env_value);
+  if ( (read_env_var("UMAP_NUMBER_OF_BUFFERS", &env_value)) != nullptr )
+    set_number_of_buffers(env_value);
   else
-    set_max_pages_in_buffer( get_max_pages_in_memory() );
+    set_number_of_buffers(1);
+
+  if ( (read_env_var("UMAP_PAGES_PER_BUFFER", &env_value)) != nullptr )
+    set_pages_per_buffer(env_value);
+  else
+    set_pages_per_buffer( get_max_pages_in_memory() / m_number_of_buffers );
 
   if ( (read_env_var("UMAP_READ_AHEAD", &env_value)) != nullptr )
     set_read_ahead(env_value);
@@ -186,25 +192,37 @@ RegionManager::get_max_pages_in_memory( void )
   return ( ((total_mem_kb / (get_umap_page_size() / oneK)) * percent) / 100 );
 }
 
-void
-RegionManager::set_max_pages_in_buffer( uint64_t max_pages )
+void RegionManager::set_number_of_buffers( uint64_t num_buffers )
 {
-  uint64_t max_pages_in_mem = get_max_pages_in_memory();
-  uint64_t old_max_pages_in_buffer = get_max_pages_in_buffer();
+  m_number_of_buffers = num_buffers;
+}
 
-  if ( max_pages > max_pages_in_mem ) {
-    UMAP_ERROR("Cannot set maximum pages to "
-        << max_pages
-        << " because it must be less than the maximum pages in memory "
-        << max_pages_in_mem);
-  }
-
-  m_max_pages_in_buffer = max_pages;
+void RegionManager::set_pages_per_buffer( uint64_t num_pages )
+{
+  const uint64_t max_pages_per_buffer = get_max_pages_in_memory() / m_number_of_buffers;
+  const uint64_t old_pages_per_buffer = m_pages_per_buffer;
 
   UMAP_LOG(Debug,
-    "Maximum pages in page buffer changed from "
-    << old_max_pages_in_buffer
-    << " to " << get_max_pages_in_buffer() << " pages");
+      "num_pages: " << num_pages << " " << std::endl
+      << "pages_of_memory: " << get_max_pages_in_memory() << " " << std::endl
+      << "m_number_of_buffers: " << m_number_of_buffers << " " << std::endl
+      << "max_pages_per_buffer: " << max_pages_per_buffer << " " << std::endl
+      << "old_pages_per_buffer: " << old_pages_per_buffer << " " << std::endl
+  );
+
+  if ( num_pages > max_pages_per_buffer ) {
+    UMAP_ERROR("Cannot set maximum pages to "
+        << num_pages
+        << " because it must be less than the maximum pages in memory "
+        << max_pages_per_buffer);
+  }
+
+  m_pages_per_buffer = num_pages;
+
+  UMAP_LOG(Debug,
+    "Pages per buffer changed from "
+    << old_pages_per_buffer
+    << " to " << m_pages_per_buffer << " pages");
 }
 
 void

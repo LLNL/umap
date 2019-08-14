@@ -23,7 +23,7 @@ void EvictWorkers::EvictWorker( void )
   while ( 1 ) {
     auto w = get_work();
 
-    UMAP_LOG(Debug, " " << w << " " << m_buffer);
+    UMAP_LOG(Debug, " " << w << " " << w.buffer);
 
     if ( w.type == Umap::WorkItem::WorkType::EXIT )
       break;    // Time to leave
@@ -47,13 +47,12 @@ void EvictWorkers::EvictWorker( void )
     }
 
     UMAP_LOG(Debug, "Removing page: " << w.page_desc);
-    m_buffer->mark_page_as_free(w.page_desc);
+    w.buffer->mark_page_as_free(w.page_desc);
   }
 }
 
-EvictWorkers::EvictWorkers(uint64_t num_evictors, Buffer* buffer, Uffd* uffd)
-  :   WorkerPool("Evict Workers", num_evictors), m_buffer(buffer)
-    , m_uffd(uffd)
+EvictWorkers::EvictWorkers(uint64_t num_evictors, Uffd* uffd)
+  :   WorkerPool("Evict Workers", num_evictors), m_uffd(uffd)
 {
   start_thread_pool();
 }

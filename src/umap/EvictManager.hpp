@@ -7,25 +7,27 @@
 #ifndef _UMAP_EvictManager_HPP
 #define _UMAP_EvictManager_HPP
 
-#include "umap/EvictWorkers.hpp"
-
 #include "umap/Buffer.hpp"
+#include "umap/BufferManager.hpp"
+#include "umap/EvictWorkers.hpp"
 #include "umap/PageDescriptor.hpp"
 #include "umap/RegionDescriptor.hpp"
 #include "umap/WorkerPool.hpp"
 
 namespace Umap {
   class EvictWorkers;
+  class BufferManager;
+  class Buffer;
 
   class EvictManager : public WorkerPool {
     public:
       EvictManager( void );
       ~EvictManager( void );
-      void schedule_eviction(PageDescriptor* pd);
+      void schedule_eviction(PageDescriptor* pd, Buffer* bd);
       void EvictAll( void );
 
     private:
-      Buffer* m_buffer;
+      BufferManager* m_buffer_manager;
       EvictWorkers* m_evict_workers;
 
       void EvictMgr(void);

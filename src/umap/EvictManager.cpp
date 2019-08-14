@@ -6,6 +6,7 @@
 //////////////////////////////////////////////////////////////////////////////
 
 #include "umap/Buffer.hpp"
+#include "umap/BufferManager.hpp"
 #include "umap/EvictManager.hpp"
 #include "umap/EvictWorkers.hpp"
 #include "umap/RegionManager.hpp"
@@ -23,15 +24,16 @@ void EvictManager::EvictMgr( void ) {
     if ( w.type == Umap::WorkItem::WorkType::EXIT )
       break;    // Time to leave
 
-    while ( ! m_buffer->low_threshold_reached() ) {
+    while ( ! w.buffer->low_threshold_reached() ) {
       WorkItem work;
       work.type = Umap::WorkItem::WorkType::EVICT;
-      work.page_desc = m_buffer->evict_oldest_page(); // Could block
+      work.page_desc = w.buffer->evict_oldest_page(); // Could block
+      work.buffer = w.buffer;
 
       if ( work.page_desc == nullptr )
         break;
 
-      UMAP_LOG(Debug, m_buffer << ", " << work.page_desc);
+      UMAP_LOG(Debug, w.buffer << ", " << work.page_desc);
 
       m_evict_workers->send_work(work);
     }
@@ -41,36 +43,21 @@ void EvictManager::EvictMgr( void ) {
 void EvictManager::EvictAll( void )
 {
   UMAP_LOG(Debug, "Entered");
-
-  for (auto pd = m_buffer->evict_oldest_page(); pd != nullptr; pd = m_buffer->evict_oldest_page()) {
-    UMAP_LOG(Debug, "evicting: " << pd);
-    if (pd->dirty) {
-      WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::FAST_EVICT };
-      m_evict_workers->send_work(work);
-    }
-    else {
-      m_buffer->mark_page_as_free(pd);
-    }
-  }
-
-  m_evict_workers->wait_for_idle();
-
+  RegionManager::getInstance()->get_buffer_manager_h()->evictAll(m_evict_workers);
   UMAP_LOG(Debug, "Done");
 }
 
-void EvictManager::schedule_eviction(PageDescriptor* pd)
+void EvictManager::schedule_eviction(PageDescriptor* pd, Buffer* bd)
 {
-  WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::EVICT };
+  WorkItem work = { .page_desc = pd, .buffer = bd, .type = Umap::WorkItem::WorkType::EVICT };
 
   m_evict_workers->send_work(work);
 }
 
-EvictManager::EvictManager( void ) :
-        WorkerPool("Evict Manager", 1)
-      , m_buffer(RegionManager::getInstance()->get_buffer_h())
+EvictManager::EvictManager( void ) : WorkerPool("Evict Manager", 1)
 {
   m_evict_workers = new EvictWorkers(  RegionManager::getInstance()->get_num_evictors()
-                                     , m_buffer, RegionManager::getInstance()->get_uffd_h());
+                                     , RegionManager::getInstance()->get_uffd_h());
   start_thread_pool();
 }
 

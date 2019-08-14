@@ -65,11 +65,15 @@ struct umap_prefetch_item {
 };
 
 void umap_prefetch( int npages, struct umap_prefetch_item* page_array );
+
 uint64_t umapcfg_get_umap_page_size( void );
+
+uint64_t umapcfg_get_pages_per_buffer( void );
+uint64_t umapcfg_get_number_of_buffers( void );
+
 uint64_t umapcfg_get_max_fault_events( void );
 uint64_t umapcfg_get_num_fillers( void );
 uint64_t umapcfg_get_num_evictors( void );
-uint64_t umapcfg_get_max_pages_in_buffer( void );
 uint64_t umapcfg_get_read_ahead( void );
 int      umapcfg_get_evict_low_water_threshold( void );
 int      umapcfg_get_evict_high_water_threshold( void );

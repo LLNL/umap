@@ -44,11 +44,15 @@ The following environment varialbles may be set:
 
   Default: System Page Size
 
-* ``UMAP_BUFSIZE``
-  This is the total number of umap pages that may be present within the Umap
-  Buffer.
+* ``UMAP_NUMBER_OF_BUFFERS``
+  This is the number of buffers that the buffer space is dividied in to.
 
-  Default: (90% of free memory)
+  Default: 1
+
+* ``UMAP_PAGES_PER_BUFFER``
+  This is the integer number of pages that each buffer in the buffer space has.
+
+  Default: (90% of free memory) / ``UMAP_NUMBER_OF_BUFFERS``
 
 * ``UMAP_READ_AHEAD``
   This is the number of umap pages that Umap will read-ahead on whenever the

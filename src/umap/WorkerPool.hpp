@@ -12,14 +12,17 @@
 #include <string>
 #include <vector>
 
+#include "umap/Buffer.hpp"
 #include "umap/PageDescriptor.hpp"
 #include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
+  class Buffer;
   struct WorkItem {
     enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FAST_EVICT };
     PageDescriptor* page_desc;
+    Buffer* buffer;
     WorkType type;
   };
 

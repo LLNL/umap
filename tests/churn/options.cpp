@@ -30,7 +30,7 @@ static void usage(char* pname)
   << " --noinit                     - No Initialization\n"
   << " --directio                   - Use O_DIRECT for file IO\n"
   << " --usemmap                    - Use mmap instead of umap\n"
-  << " -b # of pages in page buffer - default: " << umapcfg_get_max_pages_in_buffer() << " Pages\n"
+  << " -b # of pages per buffer     - default: " << umapcfg_get_pages_per_buffer() << " Pages\n"
   << " -c # of churn pages          - default: " << NUMCHURNPAGES << " Pages\n"
   << " -l # of load pages           - default: " << NUMLOADPAGES << " Pages\n"
   << " -t # of churn threads        - default: " << NUMCHURNTHREADS << endl
@@ -40,10 +40,11 @@ static void usage(char* pname)
   << " -d # seconds to run test     - default: " << TESTDURATION << " seconds\n"
   << " \n"
   << " Environment Variable Configuration:\n"
-  << " UMAP_PAGE_FILLERS(env) - currently: " << umapcfg_get_num_fillers() << " fillers\n"
-  << " UMAP_PAGE_EVICTORS(env)- currently: " << umapcfg_get_num_evictors() << " evictors\n"
-  << " UMAP_BUFSIZE(env)      - currently: " << umapcfg_get_max_pages_in_buffer() << " pages\n"
-  << " UMAP_PAGESIZE(env)     - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
+  << " UMAP_PAGE_FILLERS(env)      - currently: " << umapcfg_get_num_fillers() << " fillers\n"
+  << " UMAP_PAGE_EVICTORS(env)     - currently: " << umapcfg_get_num_evictors() << " evictors\n"
+  << " UMAP_PAGES_PER_BUFFER(env)  - currently: " << umapcfg_get_pages_per_buffer() << " pages\n"
+  << " UMAP_NUMBER_OF_BUFFERS(env) - currently: " << umapcfg_get_number_of_buffers() << std::endl
+  << " UMAP_PAGESIZE(env)          - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
   ;
   exit(1);
 }
@@ -64,7 +65,7 @@ void getoptions(options_t& testops, int& argc, char **argv)
   testops.num_load_writer_threads=NUMLOADWRITERS;
   testops.fn=FILENAME;
   testops.testduration=TESTDURATION;
-  testops.page_buffer_size = umapcfg_get_max_pages_in_buffer();
+  testops.page_buffer_size = umapcfg_get_pages_per_buffer();
 
   while (1) {
     int option_index = 0;

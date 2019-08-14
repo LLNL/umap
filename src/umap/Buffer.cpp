@@ -135,7 +135,7 @@ void Buffer::evict_region(RegionDescriptor* rd)
       pd->deferred = true;
       wait_for_page_state(pd, PageDescriptor::State::PRESENT);
       pd->set_state_leaving();
-      m_rm->get_evict_manager()->schedule_eviction(pd);
+      m_rm->get_evict_manager()->schedule_eviction(pd, this);
       wait_for_page_state(pd, PageDescriptor::State::FREE);
     }
     unlock();
@@ -154,6 +154,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
 {
   WorkItem work;
   work.type = Umap::WorkItem::WorkType::NONE;
+  work.buffer = this;
 
   lock();
   auto pd = page_already_present(paddr);
@@ -171,7 +172,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
       pd->spurious_count++;
       if (pd->spurious_count > hiwat) {
         hiwat = pd->spurious_count;
-        UMAP_LOG(Info, "New Spurious cound high water mark: " << hiwat);
+        UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
       }
 
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
@@ -182,6 +183,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
   else {                  // This page has not been brought in yet
     pd = get_page_descriptor(paddr, rd);
     pd->data_present = false;
+
     work.page_desc = pd;
 
     rd->insert_page_descriptor(pd);
@@ -203,6 +205,8 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
 
     w.type = Umap::WorkItem::WorkType::THRESHOLD;
     w.page_desc = nullptr;
+    w.buffer = this;
+
     m_rm->get_evict_manager()->send_work(w);
   }
 
@@ -323,17 +327,13 @@ void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
   }
 }
 
-Buffer::Buffer( void )
+Buffer::Buffer( PageDescriptor* array )
   :     m_rm(RegionManager::getInstance())
-      , m_size(m_rm->get_max_pages_in_buffer())
+      , m_size(m_rm->get_pages_per_buffer())
+      , m_array(array)
       , m_waits_for_avail_pd(0)
       , m_waits_for_state_change(0)
 {
-  m_array = (PageDescriptor *)calloc(m_size, sizeof(PageDescriptor));
-  if ( m_array == nullptr )
-    UMAP_ERROR("Failed to allocate " << m_size*sizeof(PageDescriptor)
-        << " bytes for buffer page descriptors");
-
   for ( int i = 0; i < m_size; ++i )
     m_free_pages.push_back(&m_array[i]);
 
@@ -346,15 +346,10 @@ Buffer::Buffer( void )
 }
 
 Buffer::~Buffer( void ) {
-#ifdef UMAP_DISPLAY_STATS
-  std::cout << m_stats << std::endl;
-#endif
-
   assert("Pages are still present" && m_present_pages.size() == 0);
   pthread_cond_destroy(&m_avail_pd_cond);
   pthread_cond_destroy(&m_state_change_cond);
   pthread_mutex_destroy(&m_mutex);
-  free(m_array);
 }
 
 std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b)
@@ -385,4 +380,19 @@ std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats)
     << "            waits: " << std::setw(12) << stats.waits;
   return os;
 }
+
+BufferStats operator+(const BufferStats& a, const BufferStats& b)
+{
+  BufferStats s;
+
+  s.lock_collision = a.lock_collision + b.lock_collision;
+  s.lock = a.lock + b.lock;
+  s.pages_inserted = a.pages_inserted + b.pages_inserted;
+  s.pages_deleted = a.pages_deleted + b.pages_deleted;
+  s.not_avail = a.not_avail + b.not_avail;
+  s.waits = a.waits + b.waits;
+
+  return s;
+};
+
 } // end of namespace Umap

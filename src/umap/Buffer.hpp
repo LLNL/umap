@@ -19,6 +19,7 @@ namespace Umap {
   class RegionManager;
 
   struct BufferStats {
+    friend BufferStats operator+(const BufferStats& a, const BufferStats& b);
     BufferStats() :   lock_collision(0), lock(0), pages_inserted(0)
                     , pages_deleted(0), not_avail(0), waits(0)
     {};
@@ -30,6 +31,8 @@ namespace Umap {
     uint64_t not_avail;
     uint64_t waits;
   };
+
+  BufferStats operator+(const BufferStats& a, const BufferStats& b);
 
   class Buffer {
     friend std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b);
@@ -44,7 +47,8 @@ namespace Umap {
       void process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd);
       void evict_region(RegionDescriptor* rd);
 
-      explicit Buffer( void );
+      BufferStats getStats() { return m_stats; }
+      explicit Buffer( PageDescriptor* array );
       ~Buffer( void );
 
     private:

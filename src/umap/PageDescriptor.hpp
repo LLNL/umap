@@ -12,11 +12,13 @@
 
 namespace Umap {
   class RegionDescriptor;
+  class Buffer;
 
   struct PageDescriptor {
     enum State { FREE = 0, FILLING, PRESENT, UPDATING, LEAVING };
     char*             page;
     RegionDescriptor* region;
+    Buffer*           buffer;
     State             state;
     bool              dirty;
     bool              deferred;

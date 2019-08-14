@@ -31,12 +31,14 @@
 #define UMAP_RO_MODE
 #endif
 
+#include "umap/BufferManager.hpp"
 #include "umap/RegionDescriptor.hpp"
 #include "umap/RegionManager.hpp"
 #include "umap/WorkerPool.hpp"
 
 namespace Umap {
   class RegionManager;
+  class BufferManager;
 
   class PageEvent {
     public:
@@ -61,7 +63,7 @@ namespace Umap {
       RegionManager*        m_rm;
       uint64_t              m_max_fault_events;
       uint64_t              m_page_size;
-      Buffer*               m_buffer;
+      BufferManager*        m_buffer_manager;
       int                   m_uffd_fd;
       int                   m_pipe[2];
       std::vector<uffd_msg> m_events;

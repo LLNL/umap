@@ -55,10 +55,11 @@ static void usage(char* pname)
   << " -d [directory name]    - backing directory name.  Or dir basename if multiple dirs\n"
   << " \n"
   << " Environment Variable Configuration:\n"
-  << " UMAP_PAGE_FILLERS(env) - currently: " << umapcfg_get_num_fillers() << " fillers\n"
-  << " UMAP_PAGE_EVICTORS(env)- currently: " << umapcfg_get_num_evictors() << " evictors\n"
-  << " UMAP_BUFSIZE(env)      - currently: " << umapcfg_get_max_pages_in_buffer() << " pages\n"
-  << " UMAP_PAGESIZE(env)     - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
+  << " UMAP_PAGE_FILLERS(env)      - currently: " << umapcfg_get_num_fillers() << " fillers\n"
+  << " UMAP_PAGE_EVICTORS(env)     - currently: " << umapcfg_get_num_evictors() << " evictors\n"
+  << " UMAP_PAGES_PER_BUFFER(env)  - currently: " << umapcfg_get_pages_per_buffer() << " pages\n"
+  << " UMAP_NUMBER_OF_BUFFERS(env) - currently: " << umapcfg_get_number_of_buffers() << std::endl
+  << " UMAP_PAGESIZE(env)          - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
   ;
   exit(1);
 }
@@ -75,7 +76,7 @@ void umt_getoptions(utility::umt_optstruct_t* testops, int argc, char *argv[])
   testops->pages_to_access = 0;
   testops->numpages = NUMPAGES;
   testops->numthreads = NUMTHREADS;
-  testops->bufsize = umapcfg_get_max_pages_in_buffer();
+  testops->bufsize = umapcfg_get_pages_per_buffer();
   testops->uffdthreads = umapcfg_get_num_fillers();
   testops->filename = FILENAME;
   testops->dirname = DIRNAME;

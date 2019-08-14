@@ -9,7 +9,6 @@
 
 #include "umap/config.h"
 
-#include "umap/Buffer.hpp"
 #include "umap/PageDescriptor.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/WorkerPool.hpp"
@@ -18,11 +17,10 @@ namespace Umap {
   class Uffd;
   class EvictWorkers : public WorkerPool {
     public:
-      EvictWorkers(uint64_t num_evictors, Buffer* buffer, Uffd* uffd);
+      EvictWorkers(uint64_t num_evictors, Uffd* uffd);
       ~EvictWorkers( void );
 
     private:
-      Buffer* m_buffer;
       Uffd* m_uffd;
 
       void EvictWorker( void );

@@ -58,10 +58,14 @@ umapcfg_get_system_page_size( void )
   return Umap::RegionManager::getInstance()->get_system_page_size();
 }
 
-uint64_t
-umapcfg_get_max_pages_in_buffer( void )
+uint64_t umapcfg_get_pages_per_buffer( void )
 {
-  return Umap::RegionManager::getInstance()->get_max_pages_in_buffer();
+  return Umap::RegionManager::getInstance()->get_pages_per_buffer();
+}
+
+uint64_t umapcfg_get_number_of_buffers( void )
+{
+  return Umap::RegionManager::getInstance()->get_number_of_buffers();
 }
 
 uint64_t

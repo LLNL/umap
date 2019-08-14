@@ -9,6 +9,7 @@ project(umap_libraries)
 set(umapheaders
       config.h
       Buffer.hpp
+      BufferManager.hpp
       EvictManager.hpp
       EvictWorkers.hpp
       FillWorkers.hpp
@@ -22,11 +23,13 @@ set(umapheaders
       store/StoreFile.h
       store/Store.hpp
       util/Exception.hpp
+      util/hash.hpp
       util/Logger.hpp
       util/Macros.hpp)
 
 set(umapsrc
     Buffer.cpp
+    BufferManager.cpp
     EvictManager.cpp
     EvictWorkers.cpp
     FillWorkers.cpp
