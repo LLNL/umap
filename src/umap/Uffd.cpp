@@ -125,7 +125,7 @@ Uffd::uffd_handler( void )
 void
 Uffd::process_page( bool iswrite, char* addr )
 {
-  auto rd = m_rm->containing_region(addr);
+  auto rd = m_rm.containing_region(addr);
   if ( rd == nullptr )
     UMAP_ERROR("Invalid page: " << addr);
 
@@ -141,9 +141,9 @@ Uffd::ThreadEntry()
 Uffd::Uffd( void )
   :   WorkerPool("Uffd Manager", 1)
     , m_rm(RegionManager::getInstance())
-    , m_max_fault_events(m_rm->get_max_fault_events())
-    , m_page_size(m_rm->get_umap_page_size())
-    , m_buffer(m_rm->get_buffer_h())
+    , m_max_fault_events(m_rm.get_max_fault_events())
+    , m_page_size(m_rm.get_umap_page_size())
+    , m_buffer(m_rm.get_buffer_h())
 {
   UMAP_LOG(Debug, "\n maximum fault events: " << m_max_fault_events
                   << "\n            page size: " << m_page_size);

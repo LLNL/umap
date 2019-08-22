@@ -8,6 +8,7 @@
 
 #include <cstdint>        // uint64_t
 #include <fstream>        // for reading meminfo
+#include <mutex>
 #include <stdlib.h>       // getenv()
 #include <sstream>        // string to integer operations
 #include <string>         // string to integer operations
@@ -25,16 +26,12 @@
 
 namespace Umap {
 
-RegionManager* RegionManager::s_fault_monitor_manager_instance = nullptr;
-
-RegionManager*
+RegionManager&
 RegionManager::getInstance( void )
 {
-  if (!s_fault_monitor_manager_instance) {
-    s_fault_monitor_manager_instance = new RegionManager();
-  }
+  static RegionManager region_manager_instance;
 
-  return s_fault_monitor_manager_instance;
+  return region_manager_instance;
 }
 
 void
@@ -47,15 +44,13 @@ RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char*
       << ", mmap_region: " << (void*)mmap_region
       << ", mmap_region_size: " << mmap_region_size);
 
+  std::lock_guard<std::mutex> lock(m_mutex);
+
   if ( m_active_regions.empty() ) {
     UMAP_LOG(Debug, "No active regions, initializing engine");
-    UMAP_LOG(Debug, "Creating Buffer");
     m_buffer = new Buffer();
-    UMAP_LOG(Debug, "Creating Uffd");
     m_uffd = new Uffd();
-    UMAP_LOG(Debug, "Creating FillWorkers");
     m_fill_workers = new FillWorkers();
-    UMAP_LOG(Debug, "Creating EvictManager");
     m_evict_manager = new EvictManager();
   }
   else {
@@ -72,30 +67,23 @@ RegionManager::removeRegion( char* region )
 {
   UMAP_LOG(Debug, "region: " << (void*)region);
 
+  std::lock_guard<std::mutex> lock(m_mutex);
   auto it = m_active_regions.find(region);
 
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
-  UMAP_LOG(Debug, "Calling unregister_region");
   m_uffd->unregister_region(it->second);
 
-  UMAP_LOG(Debug, "Deleting region");
   delete it->second;
-  UMAP_LOG(Debug, "Erasing from list region");
   m_active_regions.erase(it);
 
   if ( m_active_regions.empty() ) {
-    UMAP_LOG(Debug, "Deleting eviction manager");
     delete m_evict_manager; m_evict_manager = nullptr;
-    UMAP_LOG(Debug, "Deleting fill workers");
     delete m_fill_workers; m_fill_workers = nullptr;
-    UMAP_LOG(Debug, "Deleting m_uffd");
     delete m_uffd; m_uffd = nullptr;
-    UMAP_LOG(Debug, "Deleting m_buffer");
     delete m_buffer; m_buffer = nullptr;
   }
-  UMAP_LOG(Debug, "Done");
 }
 
 void
@@ -255,6 +243,8 @@ RegionManager::read_env_var( const char* env, uint64_t*  val )
 RegionDescriptor*
 RegionManager::containing_region( char* vaddr )
 {
+  std::lock_guard<std::mutex> lock(m_mutex);
+
   // TODO: change this to judy array once implementation works properly
   for ( auto it : m_active_regions ) {
     char* b = it.second->start();
