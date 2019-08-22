@@ -67,10 +67,10 @@ void EvictManager::schedule_eviction(PageDescriptor* pd)
 
 EvictManager::EvictManager( void ) :
         WorkerPool("Evict Manager", 1)
-      , m_buffer(RegionManager::getInstance()->get_buffer_h())
+      , m_buffer(RegionManager::getInstance().get_buffer_h())
 {
-  m_evict_workers = new EvictWorkers(  RegionManager::getInstance()->get_num_evictors()
-                                     , m_buffer, RegionManager::getInstance()->get_uffd_h());
+  m_evict_workers = new EvictWorkers(  RegionManager::getInstance().get_num_evictors()
+                                     , m_buffer, RegionManager::getInstance().get_uffd_h());
   start_thread_pool();
 }
 

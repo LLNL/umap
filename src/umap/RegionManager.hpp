@@ -8,6 +8,7 @@
 #define _UMAP_RegionManager_HPP
 
 #include <cstdint>
+#include <mutex>
 #include <unordered_map>
 
 #include "umap/Buffer.hpp"
@@ -36,7 +37,13 @@ struct Version {
 //
 class RegionManager {
   public:
-    static RegionManager* getInstance( void );
+    static RegionManager& getInstance( void );
+
+    // delete copy, move, and assign operators
+    RegionManager(RegionManager const&) = delete;             // Copy construct
+    RegionManager(RegionManager&&) = delete;                  // Move construct
+    RegionManager& operator=(RegionManager const&) = delete;  // Copy assign
+    RegionManager& operator=(RegionManager &&) = delete;      // Move assign
 
     void addRegion(
           Store*   store
@@ -80,10 +87,9 @@ class RegionManager {
     Uffd* m_uffd;
     FillWorkers* m_fill_workers;
     EvictManager* m_evict_manager;
+    std::mutex m_mutex;
 
     std::unordered_map<void*, RegionDescriptor*> m_active_regions;
-
-    static RegionManager* s_fault_monitor_manager_instance;
 
     RegionManager( void );
 

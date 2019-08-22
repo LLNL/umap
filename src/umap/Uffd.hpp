@@ -58,7 +58,7 @@ namespace Umap {
       void copy_in_page_and_write_protect(char* data, void* page_address);
 
     private:
-      RegionManager*        m_rm;
+      RegionManager&        m_rm;
       uint64_t              m_max_fault_events;
       uint64_t              m_page_size;
       Buffer*               m_buffer;

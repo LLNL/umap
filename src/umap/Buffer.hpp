@@ -48,7 +48,7 @@ namespace Umap {
       ~Buffer( void );
 
     private:
-      RegionManager* m_rm;
+      RegionManager& m_rm;
       uint64_t m_size;          // Maximum pages this buffer may have
       PageDescriptor* m_array;
 

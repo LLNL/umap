@@ -128,20 +128,20 @@ PageDescriptor* Buffer::evict_oldest_page()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
-  if (m_rm->get_num_active_regions() > 1) {
+  if (m_rm.get_num_active_regions() > 1) {
     lock();
     while ( rd->count() ) {
       auto pd = rd->get_next_page_descriptor();
       pd->deferred = true;
       wait_for_page_state(pd, PageDescriptor::State::PRESENT);
       pd->set_state_leaving();
-      m_rm->get_evict_manager()->schedule_eviction(pd);
+      m_rm.get_evict_manager()->schedule_eviction(pd);
       wait_for_page_state(pd, PageDescriptor::State::FREE);
     }
     unlock();
   }
   else {
-    m_rm->get_evict_manager()->EvictAll();
+    m_rm.get_evict_manager()->EvictAll();
   }
 }
 
@@ -171,7 +171,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
       pd->spurious_count++;
       if (pd->spurious_count > hiwat) {
         hiwat = pd->spurious_count;
-        UMAP_LOG(Info, "New Spurious cound high water mark: " << hiwat);
+        UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
       }
 
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
@@ -193,7 +193,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
     UMAP_LOG(Debug, "NEW: " << pd << " From: " << this);
   }
 
-  m_rm->get_fill_workers_h()->send_work(work);
+  m_rm.get_fill_workers_h()->send_work(work);
 
   //
   // Kick the eviction daemon if the high water mark has been reached
@@ -203,7 +203,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
 
     w.type = Umap::WorkItem::WorkType::THRESHOLD;
     w.page_desc = nullptr;
-    m_rm->get_evict_manager()->send_work(w);
+    m_rm.get_evict_manager()->send_work(w);
   }
 
   unlock();
@@ -325,7 +325,7 @@ void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
 
 Buffer::Buffer( void )
   :     m_rm(RegionManager::getInstance())
-      , m_size(m_rm->get_max_pages_in_buffer())
+      , m_size(m_rm.get_max_pages_in_buffer())
       , m_waits_for_avail_pd(0)
       , m_waits_for_state_change(0)
 {
@@ -341,8 +341,8 @@ Buffer::Buffer( void )
   pthread_cond_init(&m_avail_pd_cond, NULL);
   pthread_cond_init(&m_state_change_cond, NULL);
 
-  m_evict_low_water = apply_int_percentage(m_rm->get_evict_low_water_threshold(), m_size);
-  m_evict_high_water = apply_int_percentage(m_rm->get_evict_high_water_threshold(), m_size);
+  m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
+  m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
 }
 
 Buffer::~Buffer( void ) {

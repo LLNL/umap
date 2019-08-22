@@ -18,7 +18,7 @@
 namespace Umap {
 void EvictWorkers::EvictWorker( void )
 {
-  uint64_t page_size = RegionManager::getInstance()->get_umap_page_size();
+  uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
 
   while ( 1 ) {
     auto w = get_work();
