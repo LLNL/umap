@@ -37,13 +37,6 @@ RegionManager::getInstance( void )
 void
 RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size)
 {
-  UMAP_LOG(Debug,
-      "store: " << store
-      << ", region: " << (void*)region
-      << ", region_size: " << region_size
-      << ", mmap_region: " << (void*)mmap_region
-      << ", mmap_region_size: " << mmap_region_size);
-
   std::lock_guard<std::mutex> lock(m_mutex);
 
   if ( m_active_regions.empty() ) {
@@ -53,30 +46,41 @@ RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char*
     m_fill_workers = new FillWorkers();
     m_evict_manager = new EvictManager();
   }
-  else {
-    UMAP_LOG(Debug, "Active regions present, adding new region");
-  }
 
   auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
   m_active_regions[(void*)region] = rd;
+
+  UMAP_LOG(Debug,
+      "region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
+      << ", region_size: " << rd->size()
+      << ", number of regions: " << m_active_regions.size() + 1
+  );
+
   m_uffd->register_region(rd);
+  m_last_iter = m_active_regions.end();
 }
 
 void
 RegionManager::removeRegion( char* region )
 {
-  UMAP_LOG(Debug, "region: " << (void*)region);
-
   std::lock_guard<std::mutex> lock(m_mutex);
   auto it = m_active_regions.find(region);
 
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
+  UMAP_LOG(Debug,
+      "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
+      << ", region_size: " << it->second->size()
+      << ", number of regions: " << m_active_regions.size()
+  );
+
   m_uffd->unregister_region(it->second);
 
   delete it->second;
   m_active_regions.erase(it);
+
+  m_last_iter = m_active_regions.end();
 
   if ( m_active_regions.empty() ) {
     delete m_evict_manager; m_evict_manager = nullptr;
@@ -98,6 +102,8 @@ RegionManager::RegionManager()
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
   m_version.patch = UMAP_VERSION_PATCH;
+
+  m_last_iter = m_active_regions.end();
 
   m_system_page_size = sysconf(_SC_PAGESIZE);
 
@@ -245,15 +251,38 @@ RegionManager::containing_region( char* vaddr )
 {
   std::lock_guard<std::mutex> lock(m_mutex);
 
-  // TODO: change this to judy array once implementation works properly
-  for ( auto it : m_active_regions ) {
-    char* b = it.second->start();
-    char* e = it.second->end();
+  //
+  // Since the list of pages coming in are usually sorted, we have a special
+  // check here to see if the region found for the previous check will work.
+  // If this is the case, we can return early.
+  //
+  if ( m_last_iter != m_active_regions.end() ) {
+    char* b = m_last_iter->second->start();
+    char* e = m_last_iter->second->end();
+
     if ( vaddr >= b && vaddr < e )
-      return it.second;
+      return m_last_iter->second;
   }
 
-  UMAP_ERROR("Unable to find addr: " << (void*)vaddr << " in region map");
+  auto iter = m_active_regions.upper_bound(reinterpret_cast<void*>(vaddr));
+
+  if ( iter != m_active_regions.begin() ) {
+    // Back up the iterator
+    --iter;
+
+    char* b = iter->second->start();
+    char* e = iter->second->end();
+
+    if ( vaddr >= b && vaddr < e ) {
+      m_last_iter = iter;
+      return iter->second;
+    }
+  }
+
+  UMAP_LOG(Debug, "Unable to find addr: "
+      << (void*)vaddr
+      << " in region map. Ignoring"
+  );
 
   return nullptr;
 }

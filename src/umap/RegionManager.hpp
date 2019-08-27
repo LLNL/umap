@@ -9,7 +9,7 @@
 
 #include <cstdint>
 #include <mutex>
-#include <unordered_map>
+#include <map>
 
 #include "umap/Buffer.hpp"
 #include "umap/EvictManager.hpp"
@@ -89,7 +89,8 @@ class RegionManager {
     EvictManager* m_evict_manager;
     std::mutex m_mutex;
 
-    std::unordered_map<void*, RegionDescriptor*> m_active_regions;
+    std::map<void*, RegionDescriptor*> m_active_regions;
+    std::map<void*, RegionDescriptor*>::iterator m_last_iter;
 
     RegionManager( void );
 

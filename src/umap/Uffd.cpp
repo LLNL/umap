@@ -126,10 +126,9 @@ void
 Uffd::process_page( bool iswrite, char* addr )
 {
   auto rd = m_rm.containing_region(addr);
-  if ( rd == nullptr )
-    UMAP_ERROR("Invalid page: " << addr);
 
-  m_buffer->process_page_event(addr, iswrite, rd);
+  if ( rd != nullptr )
+    m_buffer->process_page_event(addr, iswrite, rd);
 }
 
 void
@@ -237,8 +236,12 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 #endif
   };
 
-  if (ioctl(m_uffd_fd, UFFDIO_COPY, &copy) == -1)
-    UMAP_ERROR("UFFDIO_COPY failed: " << strerror(errno));
+  if (ioctl(m_uffd_fd, UFFDIO_COPY, &copy) == -1) {
+    UMAP_ERROR("UFFDIO_COPY failed @ " 
+        << page_address << " : "
+        << strerror(errno) << std::endl
+    );
+  }
 }
 
 void
@@ -259,8 +262,11 @@ Uffd::register_region( RegionDescriptor* rd )
     << " - " << (void*)(uffdio_register.range.start +
                               (uffdio_register.range.len-1)));
 
-  if (ioctl(m_uffd_fd, UFFDIO_REGISTER, &uffdio_register) == -1)
-    UMAP_ERROR("ioctl(UFFDIO_REGISTER) failed: " << strerror(errno));
+  if (ioctl(m_uffd_fd, UFFDIO_REGISTER, &uffdio_register) == -1) {
+    UMAP_ERROR("ioctl(UFFDIO_REGISTER) failed: " << strerror(errno)
+        << "Number of regions is: " << m_rm.get_num_active_regions()
+    );
+  }
 
   if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS)
     UMAP_ERROR("unexpected userfaultfd ioctl set: " << uffdio_register.ioctls);
