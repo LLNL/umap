@@ -9,7 +9,7 @@ the following environment variables.
 
 .. code-block:: bash
 
-    UMAP_PAGE_SIZE=$((2*4096)) your_program_that_uses_umap
+    UMAP_PAGESIZE=$((2*4096)) your_program_that_uses_umap
 
 The following environment varialbles may be set:
 
