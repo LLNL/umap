@@ -132,7 +132,7 @@ main(int argc, char **argv)
 
   // Optional: Make umap's pages size double the default system page size
   //
-  // Use UMAP_PAGE_SIZE environment variable to set page size for umap
+  // Use UMAP_PAGESIZE environment variable to set page size for umap
   //
   uint64_t psize = umapcfg_get_umap_page_size();
 
