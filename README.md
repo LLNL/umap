@@ -33,6 +33,10 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 
 ## Documentation
 
+The design and implementation of UMap is described in the following paper:
+
+```Peng, Ivy B., Marty McFadden, Eric Green, Keita Iwabuchi, Kai Wu, Dong Li, Roger Pearce, and Maya Gokhale. "UMap: Enabling Application-driven Optimizations for Page Management". In Proceedings of the Workshop on Memory Centric High Performance Computing. ACM, 2018.```
+
 Both user and code documentation is available
 [here](http://llnl-umap.readthedocs.io/).
 
