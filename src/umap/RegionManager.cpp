@@ -90,6 +90,21 @@ RegionManager::removeRegion( char* region )
   }
 }
 
+int 
+RegionManager::flush_buffer(void *addr, size_t length, int flags){
+
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto it = m_active_regions.find((char*)addr);
+
+  if (it == m_active_regions.end()){
+    UMAP_ERROR("umap fault monitor not found for: " << addr);
+    return -1;
+  }
+  m_buffer->evict_region(it->second);
+
+  return 0;
+}
+
 void
 RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
 {

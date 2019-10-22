@@ -47,6 +47,19 @@ uunmap(void*  addr, uint64_t length)
   return 0;
 }
 
+
+int umap_msync(void *addr, size_t length, int flags){
+  
+  UMAP_LOG(Debug, 
+      "umap_msync addr: " << addr
+      << ", size: " << length
+      << ", flags: " << flags
+  );
+  return Umap::RegionManager::getInstance().flush_buffer(addr,length,flags);
+
+}
+
+
 void umap_prefetch( int npages, umap_prefetch_item* page_array )
 {
   Umap::RegionManager::getInstance().prefetch(npages, page_array);
