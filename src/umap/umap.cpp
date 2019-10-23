@@ -132,6 +132,11 @@ umap_ex(
       << ", umap_psize: " << umap_psize
   );
 
+#ifdef UMAP_RO_MODE
+  if( prot | PROT_WRITE )
+    UMAP_ERROR("prot PROT_WRITE is not supported in UMAP_RO_MODE compilation");    
+#endif
+    
   //
   // TODO: Allow for non-page-multiple size and zero-fill like mmap does
   //
