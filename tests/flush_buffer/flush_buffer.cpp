@@ -9,8 +9,8 @@
  * It is a simple example showing flush_cache ensures that 
  * modified pages in buffer is persisted into back stores.
  */
+#include <fstream>
 #include <iostream>
-#include <parallel/algorithm>
 #include <fcntl.h>
 #include <omp.h>
 #include <cassert>
@@ -22,23 +22,25 @@
 
 #define FLUSH_BUF 1
 
+using namespace std;
+
 int
 open_prealloc_file( const char* fname, uint64_t totalbytes)
 {
-  if ( unlink(fname) ) {
-    int eno = errno;
-    if ( eno != ENOENT ) {
-      std::cerr << "Failed to unlink " << fname << ": " 
-		<< strerror(eno) << " Errno=" << eno << std::endl;
-    }
-    return -1;
+  /*
+  int status = unlink(fname);
+  int eno = errno;
+  if ( status!=0 && eno != ENOENT ) {
+    std::cerr << "Failed to unlink " << fname << ": "<< strerror(eno) << " Errno=" << eno <<std::endl;
+    exit(1);
   }
+  */
 
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
     int eno = errno;
     std::cerr << "Failed to create " << fname << ": " << strerror(eno) << std::endl;
-    return -1;
+    exit(1);
   }
 
   // Pre-allocate disk space for the file.
@@ -47,15 +49,15 @@ open_prealloc_file( const char* fname, uint64_t totalbytes)
     if ( ( x = posix_fallocate(fd, 0, totalbytes) != 0 ) ) {
       int eno = errno;
       std::cerr << "Failed to pre-allocate " << fname << ": " << strerror(eno) << std::endl;
-      return -1;
+      exit(1);
     }
   } catch(const std::exception& e) {
     std::cerr << "posix_fallocate: " << e.what() << std::endl;
-    return -1;
+    exit(1);
   } catch(...) {
     int eno = errno;
     std::cerr << "Failed to pre-allocate " << fname << ": " << strerror(eno) << std::endl;
-    return -1;
+    exit(1);
   }
 
   return fd;
@@ -70,7 +72,7 @@ main(int argc, char **argv)
   uint64_t umap_pagesize = umapcfg_get_umap_page_size();
   std::cout << "umap_pagesize "  << umap_pagesize << "\n";
 
-  const uint64_t umap_region_length = 1024 * 1024 * 4;
+  const uint64_t umap_region_length = 2 * umap_pagesize;
   std::cout << "umap_region_length "  << umap_region_length << "\n";
 
   assert(umap_region_length % umap_pagesize == 0);
@@ -88,19 +90,36 @@ main(int argc, char **argv)
 
 
   /* Update to the in-core buffer*/
-  const char tmp[] = "Hello"; 
-  strcpy((char*)base_addr, tmp);
+  uint64_t *arr = (uint64_t *) base_addr;
+  size_t array_size = umap_region_length/sizeof(uint64_t);
+#pragma omp parallel for
+  for(size_t i=0; i < array_size; i++)
+    arr[i] = (uint64_t)(i);
+  std::cout << "Update Array of "<< array_size <<" uint64_t\n";
+
 
 #ifdef  FLUSH_BUF  
-  if (umap_msync(base_addr, 4096, MS_SYNC) < 0) {
+  if (umap_msync(base_addr, umap_region_length, MS_SYNC) < 0) {
     std::cerr << "Failed to flush cache to " << filename << std::endl;
     return -1;
   }
-  std::cout << "umap_msync \n";
+  std::cout << "umap_msync done\n";
 #endif
 
   close(fd);
   std::cout << "file closed before uunmap \n";
+
+  ifstream rf(filename, ios::in | ios::binary);
+  if(!rf) {
+    std::cout << "Cannot open file!" << std::endl;
+    exit(1);
+  }
+  uint64_t arr_in[array_size];
+  rf.read((char *) &arr_in[0], sizeof(uint64_t)*array_size);
+  rf.close();
+  for(int i=0; i < array_size; i++) {
+    std::cout << "Arr["<< i <<"]: " <<arr_in[i] << std::endl;
+  }
 
   /*
   if (uunmap(base_addr, umap_region_length) < 0) {
