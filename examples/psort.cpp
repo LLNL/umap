@@ -122,7 +122,7 @@ verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
     std::cerr << "uunamp failed\n";
     return;
   }
-  std::cout << "Data is verified. uunamp done.\n"; 
+  std::cout << "Data is verified. uunmap done.\n"; 
 
   close(fd);
 }
