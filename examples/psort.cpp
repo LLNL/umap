@@ -109,7 +109,7 @@ verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
   }
   uint64_t *arr = (uint64_t *) base_addr;
 
-  std::cout << "Verifying Data with\n";
+  std::cout << "Verifying Data\n";
 
 #pragma omp parallel for
   for(uint64_t i = 0; i < arraysize; ++i)
@@ -117,11 +117,13 @@ verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
       std::cerr << "Data miscompare\n";
       i = arraysize;
     }
-
+  
   if (uunmap(base_addr, totalbytes) < 0) {
     std::cerr << "uunamp failed\n";
     return;
   }
+  std::cout << "Data is verified. uunmap done.\n"; 
+
   close(fd);
 }
 
