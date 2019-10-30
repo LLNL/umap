@@ -120,6 +120,25 @@ PageDescriptor* Buffer::evict_oldest_page()
   return pd;
 }
 
+  void Buffer::flush_dirty_pages()
+  {
+    lock();
+
+    for (auto it = m_busy_pages.begin(); it != m_busy_pages.end(); it++) {
+      
+      if ( (*it)->dirty ) {
+	PageDescriptor* pd = *it;
+	UMAP_LOG(Debug, "schedule Dirty Page: " << pd);
+	wait_for_page_state(pd, PageDescriptor::State::PRESENT);
+	m_rm.get_evict_manager()->schedule_flush(pd);
+      }
+    }
+
+    m_rm.get_evict_manager()->WaitAll();
+    
+    unlock();
+  }
+  
 //
 // Called from uunmap by the unmapping thread of the application
 //

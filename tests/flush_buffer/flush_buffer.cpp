@@ -99,16 +99,15 @@ main(int argc, char **argv)
 
 
 #ifdef  FLUSH_BUF  
-  if (umap_msync(base_addr, umap_region_length, MS_SYNC) < 0) {
+  if (umap_flush() < 0) {
     std::cerr << "Failed to flush cache to " << filename << std::endl;
     return -1;
   }
-  std::cout << "umap_msync done\n";
+  std::cout << "umap_flush done\n";
 #endif
 
-  close(fd);
-  std::cout << "file closed before uunmap \n";
-
+  //close(fd);
+  std::cout << "open the file separately to read content before calling uunmap \n";
   ifstream rf(filename, ios::in | ios::binary);
   if(!rf) {
     std::cout << "Cannot open file!" << std::endl;
@@ -121,16 +120,22 @@ main(int argc, char **argv)
     std::cout << "Arr["<< i <<"]: " <<arr_in[i] << std::endl;
   }
 
-  /*
+
+  std::cout << "Access from UMap region \n";
+  size_t stride = umap_pagesize/sizeof(uint64_t);
+  for(size_t i=0; i < array_size; i=i+stride)
+    std::cout << "Read array["<< i <<"] = "<< arr[i] << std::endl;
+
+
+  std::cout << "Call uunmap \n";
   if (uunmap(base_addr, umap_region_length) < 0) {
     int eno = errno;
     std::cerr << "Failed to uumap " << filename << ": " << strerror(eno) << std::endl;
     return -1;
   }
-  std::cout << "uunmap base_addr at "<< base_addr <<"\n";
 
   close(fd);
   std::cout << "file closed "<< filename << "\n";;
-  */
+  
   return 0;
 }

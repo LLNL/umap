@@ -60,7 +60,7 @@ int uunmap(
   , size_t length
 );
 
-int umap_msync(void *addr, size_t length, int flags); 
+int umap_flush(); 
 
 struct umap_prefetch_item {
   void* page_base_addr;

@@ -48,14 +48,11 @@ uunmap(void*  addr, uint64_t length)
 }
 
 
-int umap_msync(void *addr, size_t length, int flags){
+int umap_flush(){
   
-  UMAP_LOG(Debug, 
-      "umap_msync addr: " << addr
-      << ", size: " << length
-      << ", flags: " << flags
-  );
-  return Umap::RegionManager::getInstance().flush_buffer(addr,length,flags);
+  UMAP_LOG(Debug,  "umap_flush " );
+  
+  return Umap::RegionManager::getInstance().flush_buffer();
 
 }
 
