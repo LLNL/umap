@@ -117,7 +117,8 @@ umapcfg_get_max_fault_events( void )
 }
 
 namespace Umap {
-
+  std::mutex m_mutex;
+  int num_thread = 0;
 void*
 umap_ex(
     void* region_addr
@@ -129,10 +130,12 @@ umap_ex(
   , Store* store
 )
 {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  num_thread ++;
   auto& rm = RegionManager::getInstance();
   auto umap_psize = rm.get_umap_page_size();
 
-  UMAP_LOG(Debug, 
+  UMAP_LOG(Info, 
       "region_addr: " << region_addr
       << ", region_size: " << region_size
       << ", prot: " << prot
@@ -140,6 +143,7 @@ umap_ex(
       << ", offset: " << offset
       << ", store: " << store
       << ", umap_psize: " << umap_psize
+      << ", num_thread: " << num_thread
   );
 
 #ifdef UMAP_RO_MODE
@@ -192,6 +196,7 @@ umap_ex(
 
   rm.addRegion(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
+  num_thread--;
   return umap_region;
 }
 } // namespace Umap
