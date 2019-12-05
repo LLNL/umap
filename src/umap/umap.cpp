@@ -117,8 +117,9 @@ umapcfg_get_max_fault_events( void )
 }
 
 namespace Umap {
-  std::mutex m_mutex;
-  int num_thread = 0;
+  // A global variable to ensure thread-safety
+  std::mutex g_mutex;
+
 void*
 umap_ex(
     void* region_addr
@@ -130,8 +131,7 @@ umap_ex(
   , Store* store
 )
 {
-  std::lock_guard<std::mutex> lock(m_mutex);
-  num_thread ++;
+  std::lock_guard<std::mutex> lock(g_mutex);
   auto& rm = RegionManager::getInstance();
   auto umap_psize = rm.get_umap_page_size();
 
@@ -143,7 +143,6 @@ umap_ex(
       << ", offset: " << offset
       << ", store: " << store
       << ", umap_psize: " << umap_psize
-      << ", num_thread: " << num_thread
   );
 
 #ifdef UMAP_RO_MODE
@@ -196,7 +195,6 @@ umap_ex(
 
   rm.addRegion(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
-  num_thread--;
   return umap_region;
 }
 } // namespace Umap
