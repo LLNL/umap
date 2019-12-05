@@ -9,6 +9,7 @@
 
 #ifdef __cplusplus
   #include <cstdint>
+  #include <mutex>
   #include "umap/store/Store.hpp"
 #else // __cplusplus
   #include <stdint.h>
@@ -25,6 +26,8 @@ namespace Umap {
  * \param prot Same as input argument of mmap(2)
  * \param flags Same as input argument of mmap(2)
  */
+extern std::mutex m_mutex;
+extern int num_thread;
 void* umap_ex(
     void*         addr
   , std::size_t   length
@@ -59,6 +62,8 @@ int uunmap(
     void*  addr
   , size_t length
 );
+
+int umap_flush(); 
 
 struct umap_prefetch_item {
   void* page_base_addr;

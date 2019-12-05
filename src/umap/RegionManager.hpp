@@ -53,6 +53,7 @@ class RegionManager {
         , uint64_t mmap_region_size
     );
 
+    int flush_buffer();
     void prefetch(int npages, umap_prefetch_item* page_array);
     void removeRegion( char* mmap_region );
     Version  get_umap_version( void ) { return m_version; }

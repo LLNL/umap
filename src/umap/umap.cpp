@@ -47,6 +47,16 @@ uunmap(void*  addr, uint64_t length)
   return 0;
 }
 
+
+int umap_flush(){
+  
+  UMAP_LOG(Debug,  "umap_flush " );
+  
+  return Umap::RegionManager::getInstance().flush_buffer();
+
+}
+
+
 void umap_prefetch( int npages, umap_prefetch_item* page_array )
 {
   Umap::RegionManager::getInstance().prefetch(npages, page_array);
@@ -107,6 +117,8 @@ umapcfg_get_max_fault_events( void )
 }
 
 namespace Umap {
+  // A global variable to ensure thread-safety
+  std::mutex g_mutex;
 
 void*
 umap_ex(
@@ -119,10 +131,11 @@ umap_ex(
   , Store* store
 )
 {
+  std::lock_guard<std::mutex> lock(g_mutex);
   auto& rm = RegionManager::getInstance();
   auto umap_psize = rm.get_umap_page_size();
 
-  UMAP_LOG(Debug, 
+  UMAP_LOG(Info, 
       "region_addr: " << region_addr
       << ", region_size: " << region_size
       << ", prot: " << prot

@@ -37,7 +37,13 @@ void EvictManager::EvictMgr( void ) {
     }
   }
 }
-
+void EvictManager::WaitAll( void )
+{
+  UMAP_LOG(Debug, "Entered");
+  m_evict_workers->wait_for_idle();
+  UMAP_LOG(Debug, "Done");
+}
+  
 void EvictManager::EvictAll( void )
 {
   UMAP_LOG(Debug, "Entered");
@@ -61,6 +67,13 @@ void EvictManager::EvictAll( void )
 void EvictManager::schedule_eviction(PageDescriptor* pd)
 {
   WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::EVICT };
+
+  m_evict_workers->send_work(work);
+}
+
+void EvictManager::schedule_flush(PageDescriptor* pd)
+{
+  WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::FLUSH };
 
   m_evict_workers->send_work(work);
 }

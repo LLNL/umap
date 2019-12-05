@@ -18,7 +18,7 @@
 
 namespace Umap {
   struct WorkItem {
-    enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FAST_EVICT };
+    enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FAST_EVICT, FLUSH };
     PageDescriptor* page_desc;
     WorkType type;
   };
@@ -34,6 +34,7 @@ namespace Umap {
       case Umap::WorkItem::WorkType::THRESHOLD: os << ", type: " << "THRESHOLD"; break;
       case Umap::WorkItem::WorkType::EVICT: os << ", type: " << "EVICT"; break;
       case Umap::WorkItem::WorkType::FAST_EVICT: os << ", type: " << "FAST_EVICT"; break;
+      case Umap::WorkItem::WorkType::FLUSH: os << ", type: " << "FLUSH"; break;
     }
 
     os << " }";

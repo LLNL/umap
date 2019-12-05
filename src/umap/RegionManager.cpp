@@ -90,6 +90,16 @@ RegionManager::removeRegion( char* region )
   }
 }
 
+int 
+RegionManager::flush_buffer(){
+
+  std::lock_guard<std::mutex> lock(m_mutex);
+
+  m_buffer->flush_dirty_pages();
+
+  return 0;
+}
+
 void
 RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
 {

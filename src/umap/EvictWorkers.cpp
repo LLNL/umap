@@ -39,8 +39,13 @@ void EvictWorkers::EvictWorker( void )
       if (store->write_to_store(pd->page, page_size, offset) == -1)
         UMAP_ERROR("write_to_store failed: "
             << errno << " (" << strerror(errno) << ")");
+
+      pd->dirty = false;
     }
 
+    if (w.type == Umap::WorkItem::WorkType::FLUSH)
+      continue;
+    
     if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
       if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
         UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
