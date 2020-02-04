@@ -20,7 +20,7 @@ fi
 
 echo "Applying licenses to files"
 
-files_no_license=$(grep -L 'This file is part of Umpire.' \
+files_no_license=$(grep -L 'This file is part of UMAP.' \
   benchmarks/**/*(^/) \
   cmake/**/*(^/) \
   docs/**/*~*rst(^/)\
@@ -29,8 +29,8 @@ files_no_license=$(grep -L 'This file is part of Umpire.' \
   scripts/**/*(^/) \
   src/**/*~*tpl*(^/) \
   tests/**/*(^/) \
-  CMakeLists.txt umpire-config.cmake.in)
+  CMakeLists.txt)
 
-echo $files_no_license | xargs $LIC_CMD -f scripts/umpire-license.txt 
+echo $files_no_license | xargs $LIC_CMD -f scripts/umap-license.txt 
 
 echo "${GREEN} [Ok] License text applied. ${NOCOLOR}"
