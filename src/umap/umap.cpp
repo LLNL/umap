@@ -146,8 +146,8 @@ umap_ex(
   );
 
 #ifdef UMAP_RO_MODE
-  if( prot | PROT_WRITE )
-    UMAP_ERROR("prot PROT_WRITE is not supported in UMAP_RO_MODE compilation");    
+  if( prot != PROT_READ )
+    UMAP_ERROR("only PROT_READ is supported in UMAP_RO_MODE compilation");    
 #endif
     
   //
