@@ -85,7 +85,7 @@ Uffd::uffd_handler( void )
 
     int msgs = readres / sizeof(struct uffd_msg);
 
-    assert("invalid message size" && msgs >= 1 && msgs < m_max_fault_events);
+    assert("invalid message size" && msgs >= 1 && msgs <= m_max_fault_events);
 
     //
     // Since uffd page events arrive on the system page boundary which could
