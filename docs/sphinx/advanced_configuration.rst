@@ -20,6 +20,7 @@ Here is a summary of the configuration options, their default value, and meaning
       ``ENABLE_LOGGING``           On       Enable Logging within umap
       ``ENABLE_DISPLAY_STATS``     Off      Enable Displaying umap stats at close
       ``ENABLE_TESTS``             On       Enable building and installation of tests
+      ``ENABLE_TESTS_LINK_STATIC_UMAP``  Off      Generate tests statically linked with Umap
       ``CMAKE_CXX_COMPILER``       not set  Specify C++ compiler to use
       ``DCMAKE_CC_COMPILER``       not set  Specify C compiler to use
       ===========================  ======== ==========================================
@@ -40,3 +41,6 @@ These arguments are explained in more detail below:
   This option enables the compilation of the programs under the tests directory
   of the umap source code.
 
+* ``ENABLE_TESTS_LINK_STATIC_UMAP``
+  This option enables the compilation of the programs under the tests directory
+  of the umap source code against static umap library.
