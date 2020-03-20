@@ -14,8 +14,15 @@ if(OPENMP_FOUND)
     "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
   add_executable(multi_thread multi_thread.cpp)
 
-  add_dependencies(multi_thread umap)
-  target_link_libraries(multi_thread umap)
+  
+  if(STATIC_UMAP_LINK)
+    set(umap-lib "umap-static")
+  else()
+    set(umap-lib "umap")
+  endif()
+
+  add_dependencies(multi_thread ${umap-lib})
+  target_link_libraries(multi_thread ${umap-lib})
 
   include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 

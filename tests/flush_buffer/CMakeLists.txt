@@ -14,10 +14,16 @@ if(OPENMP_FOUND)
     "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
   add_executable(flush_buffer flush_buffer.cpp)
 
-  add_dependencies(flush_buffer umap)
-  target_link_libraries(flush_buffer umap)
-
-  include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
+  if(STATIC_UMAP_LINK)
+     set(umap-lib "umap-static")
+  else()
+     set(umap-lib "umap")
+  endif()
+  
+  add_dependencies(flush_buffer ${umap-lib})
+  target_link_libraries(flush_buffer ${umap-lib}) 
+  
+include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
   install(TARGETS flush_buffer
     LIBRARY DESTINATION lib
