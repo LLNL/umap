@@ -147,19 +147,17 @@ PageDescriptor* Buffer::evict_oldest_page()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
-  PageDescriptor::State ret;
-  std::cout << m_stats << std::endl;
   if (m_rm.get_num_active_regions() > 1) {
     lock();
     while ( rd->count() ) {
       auto pd = rd->get_next_page_descriptor();
-      ret = wait_existence_page_state(pd);
-      if(ret == PageDescriptor::State::PRESENT){
-        pd->deferred = true;
-        pd->set_state_leaving();
-        m_rm.get_evict_manager()->schedule_eviction(pd);
-        wait_for_page_state(pd, PageDescriptor::State::FREE);
+      if(pd->state != PageDescriptor::State::LEAVING ){
+	pd->deferred = true;
+	wait_for_page_state(pd, PageDescriptor::State::PRESENT);
+	pd->set_state_leaving();
+	m_rm.get_evict_manager()->schedule_eviction(pd);
       }
+      wait_for_page_state(pd, PageDescriptor::State::FREE);
     }
     unlock();
   }
