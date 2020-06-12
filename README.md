@@ -31,6 +31,11 @@ would like to build an optimized (-O3) version, simply run
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 ```
 
+## Caliper Support
+* install https://github.com/LLNL/Caliper.git to <CALIPER_INSTALL_PATH>
+
+* Run cmake with -Dcaliper_DIR=<CALIPER_INSTALL_PATH>/share/cmake/caliper
+
 ## Documentation
 
 The design and implementation of UMap is described in the following paper:
