@@ -31,10 +31,26 @@ would like to build an optimized (-O3) version, simply run
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 ```
 
-## Caliper Support
+## Provide page fault events to Caliper
 * install https://github.com/LLNL/Caliper.git to <CALIPER_INSTALL_PATH>
 
 * Run cmake with -Dcaliper_DIR=<CALIPER_INSTALL_PATH>/share/cmake/caliper
+
+* Run with page fault tracing 
+```bash
+export CALI_SERVICES_ENABLE=alloc,event,trace,recorder
+export CALI_ALLOC_TRACK_ALLOCATIONS=true
+export CALI_ALLOC_RESOLVE_ADDRESSES=true
+./umap_progam
+```
+* This should produce a .cali output file with an automatically generated filename, e.g., "200611-155825_69978_QSZC2zryxwRh.cali". To simply print all records, use:
+```bash
+cali-query -t <filename> 
+```
+For advanced queries, e.g. count the number of page faults per memory region:
+```bash
+cali-query -q "select alloc.label#pagefault.address,count() group by alloc.label#pagefault.address where pagefault.address format table" <filename> 
+```
 
 ## Documentation
 
