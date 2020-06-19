@@ -26,8 +26,10 @@
 #include "umap/RegionManager.hpp"
 #include "umap/util/Macros.hpp"
 
+#ifdef CALIPER
 #include "caliper/cali.h"
 cali_id_t pagefault_address_attribute;
+#endif
 
 namespace Umap {
 
@@ -121,9 +123,11 @@ Uffd::uffd_handler( void )
       //
       process_page(iswrite, last_addr);
 
+      /* providing page fault information to Caliper Toolkit */
+#ifdef CALIPER
       cali_variant_t v_addr = cali_make_variant(CALI_TYPE_ADDR, &last_addr, sizeof(char*));
       cali_push_snapshot(CALI_SCOPE_PROCESS, 1, &pagefault_address_attribute, &v_addr);
-      
+#endif
     }
   }
   UMAP_LOG(Debug, "Good bye");
@@ -166,13 +170,14 @@ Uffd::Uffd( void )
 
   start_thread_pool();
 
-  //#ifdef CALIPER
+#ifdef CALIPER
   cali_id_t addr_class = cali_find_attribute("class.memoryaddress");
   cali_variant_t v_true = cali_make_variant_from_bool(true);
-  pagefault_address_attribute = cali_create_attribute_with_metadata("pagefault.address", CALI_TYPE_ADDR, 
-									      CALI_ATTR_ASVALUE | CALI_ATTR_SKIP_EVENTS,
-									      1, &addr_class, &v_true);
-  //#endif
+  pagefault_address_attribute = cali_create_attribute_with_metadata("pagefault.address",
+								    CALI_TYPE_ADDR, 
+								    CALI_ATTR_ASVALUE | CALI_ATTR_SKIP_EVENTS,
+								    1, &addr_class, &v_true);
+#endif
 
 }
 

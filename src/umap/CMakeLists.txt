@@ -54,6 +54,7 @@ if (caliper_DIR)
    target_include_directories(umap-static PUBLIC ${caliper_INCLUDE_DIR})
    target_link_libraries(umap caliper)
    target_link_libraries(umap-static caliper)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
 endif()
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
