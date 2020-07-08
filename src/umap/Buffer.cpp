@@ -169,7 +169,7 @@ bool Buffer::low_threshold_reached( void )
   return m_busy_pages.size() <= m_evict_low_water;
 }
 
-void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
+void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd)
 {
   WorkItem work;
   work.type = Umap::WorkItem::WorkType::NONE;
@@ -180,6 +180,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
   if ( pd != nullptr ) {  // Page is already present
     if (iswrite && pd->dirty == false) {
       work.page_desc = pd;
+      work.c_uffd = c_uffd;
       pd->dirty = true;
       pd->set_state_updating();
       UMAP_LOG(Debug, "PRE: " << pd << " From: " << this);
@@ -192,16 +193,18 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
         hiwat = pd->spurious_count;
         UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
       }
-
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
-      unlock();
-      return;
+      work.page_desc = pd;
+      work.c_uffd = c_uffd;
+//      unlock();
+//      return;
     }
   }
   else {                  // This page has not been brought in yet
     pd = get_page_descriptor(paddr, rd);
     pd->data_present = false;
     work.page_desc = pd;
+    work.c_uffd = c_uffd;
 
     rd->insert_page_descriptor(pd);
     m_present_pages[pd->page] = pd;

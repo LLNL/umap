@@ -17,8 +17,10 @@ set(umapheaders
       RegionDescriptor.hpp
       Uffd.hpp
       umap.h
+      socket.hpp
       WorkQueue.hpp
       WorkerPool.hpp
+      UmapServiceManager.hpp
       store/StoreFile.h
       store/Store.hpp
       util/Exception.hpp
@@ -34,6 +36,8 @@ set(umapsrc
     RegionManager.cpp
     Uffd.cpp
     umap.cpp
+    socket.cpp
+    UmapServiceManager.cpp
     store/Store.cpp
     store/StoreFile.cpp
     util/Exception.cpp

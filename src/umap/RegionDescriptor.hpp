@@ -25,7 +25,9 @@ namespace Umap {
                         , Store* store )
         : m_umap_region(umap_region), m_umap_region_size(umap_size)
         , m_mmap_region(mmap_region), m_mmap_region_size(mmap_size)
-        , m_store(store) {}
+        , m_store(store) {
+          ref_count=0;
+	}
 
       ~RegionDescriptor( void ) {}
 
@@ -34,11 +36,16 @@ namespace Umap {
         return (uint64_t)(addr - start());
       }
 
-      inline uint64_t size( void )     { return m_umap_region_size;         }
-      inline Store*   store( void )    { return m_store;                    }
-      inline char*    start( void )    { return m_umap_region;              }
-      inline char*    end( void )      { return start() + size();           }
-      inline uint64_t count( void )    { return m_active_pages.size();      }
+      inline uint64_t size( void )       { return m_umap_region_size;         }
+      inline Store*   store( void )      { return m_store;                    }
+      inline char*    start( void )      { return m_umap_region;              }
+      inline uint64_t get_mmap_size()    { return m_mmap_region_size;         }
+      inline char *   get_mmap_region()  { return m_mmap_region;              }
+      inline char*    end( void )        { return start() + size();           }
+      inline uint64_t count( void )      { return m_active_pages.size();      }
+      inline void     acc_ref( void )    { ++ref_count;                       }
+      inline void     rel_ref( void )    { --ref_count;                       }
+      inline bool     can_release( void ){ return !ref_count;                 }
 
       inline void insert_page_descriptor(PageDescriptor* pd) {
         m_active_pages.insert(pd);
@@ -67,6 +74,7 @@ namespace Umap {
       char*    m_mmap_region;
       uint64_t m_mmap_region_size;
       Store*   m_store;
+      uint64_t ref_count;
 
       std::unordered_set<PageDescriptor*> m_active_pages;
   };

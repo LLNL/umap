@@ -36,6 +36,19 @@ void* umap_ex(
   , int           fd
   , off_t         offset
   , Umap::Store*  store
+  , bool          server=false
+  , int           client_uffd=0
+  , void *        remote_base=NULL
+);
+bool uunmap_server(
+    void*  addr
+  , size_t length
+  , int client_fd
+  , int file_fd
+  , bool client_term=false
+);
+void terminate_handler(
+    int client_fd
 );
 } // namespace Umap
 #endif // __cplusplus
@@ -63,13 +76,32 @@ int uunmap(
   , size_t length
 );
 
+#define UMAP_SERVER_PATH "/tmp/umap-server"
+
+void init_umap_client(std::string sock_path);
+void close_umap_client();
+
+void* client_umap(
+    const char *filename
+  , int prot
+  , int flags
+);
+
+int client_uunmap(
+    const char *filename
+);
+
+void umap_server(
+std::string filename //presently unused
+);
+
 int umap_flush(); 
 
 struct umap_prefetch_item {
   void* page_base_addr;
 };
 
-void umap_prefetch( int npages, struct umap_prefetch_item* page_array );
+void umap_prefetch( int npages, struct umap_prefetch_item* page_array, int client_fd=0);
 uint64_t umapcfg_get_umap_page_size( void );
 uint64_t umapcfg_get_max_fault_events( void );
 uint64_t umapcfg_get_num_fillers( void );
