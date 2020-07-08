@@ -30,7 +30,7 @@ void EvictWorkers::EvictWorker( void )
 
     auto pd = w.page_desc;
 
-    if ( pd->dirty ) {
+    if ( m_uffd && pd->dirty ) {
       auto store = pd->region->store();
       auto offset = pd->region->store_offset(pd->page);
 
@@ -47,7 +47,7 @@ void EvictWorkers::EvictWorker( void )
       continue;
     
     if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
-      if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
+      if (madvise(pd->page, page_size, MADV_REMOVE) == -1)
         UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
     }
 

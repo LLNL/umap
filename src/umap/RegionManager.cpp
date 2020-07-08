@@ -34,60 +34,156 @@ RegionManager::getInstance( void )
   return region_manager_instance;
 }
 
+void *
+RegionManager::isFDRegionPresent(int filefd){
+  auto it = m_fd_rd_map.find(filefd);
+  if(it == m_fd_rd_map.end()){
+    return NULL;
+  }else{
+    return (void *)(it->second);
+  }
+}
+
 void
-RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size)
+RegionManager::setFDRegionMap(int file_fd, RegionDescriptor *rd){
+  m_fd_rd_map[file_fd] = rd;
+}
+
+char *
+RegionManager::associateRegion(int fd, void* existing_rd, bool server, int client_fd, void *remote_base){
+  Uffd *c_uffd;
+  auto rd = (RegionDescriptor *)existing_rd;
+  c_uffd = getActiveUffd(server, client_fd);
+  //registering the region has to use remote address
+  UMAP_LOG(Debug, "Associating region "<<remote_base);
+  c_uffd->register_region(rd, remote_base);
+  return rd->start();
+}
+
+Uffd*
+RegionManager::getActiveUffd(bool server, int client_fd){
+  auto it = m_client_uffds.find(client_fd);
+  Uffd* c_uffd;
+  if(it == m_client_uffds.end()){
+    UMAP_LOG(Debug, "New region, new uffd");
+    c_uffd = new Uffd(server, client_fd);
+    m_client_uffds[client_fd] = c_uffd; 
+  }else{
+    c_uffd = it->second;
+  }
+  return c_uffd;
+}
+
+void
+RegionManager::addRegion(int fd, Store* store, void* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size, bool server, int client_fd, void *remote_base)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
+  Uffd *c_uffd = NULL;
 
   if ( m_active_regions.empty() ) {
     UMAP_LOG(Debug, "No active regions, initializing engine");
     m_buffer = new Buffer();
-    m_uffd = new Uffd();
+    c_uffd = getActiveUffd(server, client_fd);
     m_fill_workers = new FillWorkers();
     m_evict_manager = new EvictManager();
   }
+  if(!c_uffd){
+    c_uffd = getActiveUffd(server, client_fd);
+  }
 
-  auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
+  //Lookup if the region already exists, i.e. the file has a map already
+  auto rd = new RegionDescriptor((char *)region, region_size, mmap_region, mmap_region_size, store);
   m_active_regions[(void*)region] = rd;
+  setFDRegionMap(fd, rd);
 
-  UMAP_LOG(Debug,
-      "region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
+  UMAP_LOG(Info,
+      "Adding region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
       << ", region_size: " << rd->size()
       << ", number of regions: " << m_active_regions.size() + 1
   );
 
-  m_uffd->register_region(rd);
+  //Registering the region needs to use the remote address
+  c_uffd->register_region(rd, remote_base);
   m_last_iter = m_active_regions.end();
 }
 
-void
-RegionManager::removeRegion( char* region )
+//Assumption here is that all the regions registered by the 
+//Server should have been removed by now before calling this function
+//The only time the Uffd can't be found is when all the regions got
+//removed 
+void 
+RegionManager::terminateUffdHandler(int client_fd)
+{
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto uit = m_client_uffds.find(client_fd);
+  if(uit == m_client_uffds.end()){
+    UMAP_LOG(Info, "Can't find uffd for client fd: " << client_fd);
+    return;
+  }
+
+  Uffd* c_uffd = uit->second;
+  m_client_uffds.erase(uit);
+  delete c_uffd; c_uffd = nullptr;
+  
+  if(m_client_uffds.empty()){
+    delete m_evict_manager; m_evict_manager = nullptr;
+    delete m_fill_workers; m_fill_workers = nullptr;
+    m_client_uffds.erase(uit);
+    delete c_uffd; c_uffd = nullptr;
+    delete m_buffer; m_buffer = nullptr;
+  }
+}
+
+bool
+RegionManager::removeRegion( char* region, int client_fd, int filefd, bool client_term) 
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto it = m_active_regions.find(region);
+  auto uit = m_client_uffds.find(client_fd);
+  bool ret = false;
+
+  if(uit == m_client_uffds.end()){
+    UMAP_ERROR("Can't find uffd for client fd: " << client_fd);
+  }
+
+  Uffd* c_uffd = uit->second;
 
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
-  UMAP_LOG(Debug,
+  UMAP_LOG(Info,
       "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
       << ", region_size: " << it->second->size()
       << ", number of regions: " << m_active_regions.size()
   );
+  
+  auto rd = it->second;
+  c_uffd->unregister_region(rd, client_term);
 
-  m_uffd->unregister_region(it->second);
-
-  delete it->second;
-  m_active_regions.erase(it);
-
+  if(rd->can_release()){
+    UMAP_LOG(Info, "1. releasing the region:  " << (void*)region);
+    c_uffd->release_buffer(rd);
+    delete rd;
+    m_active_regions.erase(it);
+    if(client_fd){
+      auto fit = m_fd_rd_map.find(filefd);
+      if(fit != m_fd_rd_map.end()){
+        m_fd_rd_map.erase(fit);
+      }
+    }
+    ret = true;
+  }
   m_last_iter = m_active_regions.end();
-
+  return ret;
+#if 0
   if ( m_active_regions.empty() ) {
     delete m_evict_manager; m_evict_manager = nullptr;
     delete m_fill_workers; m_fill_workers = nullptr;
-    delete m_uffd; m_uffd = nullptr;
+    m_client_uffds.erase(uit);
+    delete c_uffd; c_uffd = nullptr;
     delete m_buffer; m_buffer = nullptr;
   }
+#endif
 }
 
 int 
@@ -101,10 +197,17 @@ RegionManager::flush_buffer(){
 }
 
 void
-RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
+RegionManager::prefetch(int npages, umap_prefetch_item* page_array, int client_fd)
 {
+  Uffd *c_uffd;
+  auto it=m_client_uffds.find(client_fd);
+  if(it==m_client_uffds.end()){
+    c_uffd = it->second;
+  }else{
+    UMAP_ERROR("client UFFD not found for client_fd: " << client_fd); 
+  } 
   for (int i{0}; i < npages; ++i)
-    m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
+    c_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
 }
 
 RegionManager::RegionManager()

@@ -18,7 +18,7 @@ namespace Umap {
 
 static const char* env_name = "UMAP_LOG_LEVEL";
 static const char* env_name_no_timestamp = "UMAP_LOG_NO_TIMESTAMP_LEVEL";
-static message::Level defaultLevel = message::Info;
+static message::Level defaultLevel = message::Debug;
 std::mutex g_logging_mutex;
 Logger* Logger::s_Logger = nullptr;
 
