@@ -30,7 +30,7 @@ void EvictWorkers::EvictWorker( void )
 
     auto pd = w.page_desc;
 
-    if ( pd->dirty ) {
+    if ( m_uffd && pd->dirty ) {
       auto store = pd->region->store();
       auto offset = pd->region->store_offset(pd->page);
 

@@ -128,7 +128,7 @@ Uffd::process_page( bool iswrite, char* addr )
   auto rd = m_rm.containing_region(addr);
 
   if ( rd != nullptr )
-    m_buffer->process_page_event(addr, iswrite, rd);
+    m_buffer->process_page_event(addr, iswrite, rd, this);
 }
 
 void
@@ -270,6 +270,8 @@ Uffd::register_region( RegionDescriptor* rd )
 
   if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS)
     UMAP_ERROR("unexpected userfaultfd ioctl set: " << uffdio_register.ioctls);
+  
+  rd->acc_ref();
 }
 
 void
@@ -279,8 +281,6 @@ Uffd::unregister_region( RegionDescriptor* rd )
   // Make sure and evict any/all active pages from this region that are still
   // in the Buffer
   //
-  m_buffer->evict_region(rd);
-
   struct uffdio_register uffdio_register = {
       .range = { .start = (__u64)(rd->start()), .len = rd->size() }
     , .mode = 0
@@ -294,6 +294,12 @@ Uffd::unregister_region( RegionDescriptor* rd )
 
   if (ioctl(m_uffd_fd, UFFDIO_UNREGISTER, &uffdio_register.range))
     UMAP_ERROR("ioctl(UFFDIO_UNREGISTER) failed: " << strerror(errno));
+  rd->rel_ref();
+}
+
+void 
+Uffd::release_buffer(RegionDescriptor *rd){
+  m_buffer->evict_region(rd);
 }
 
 void

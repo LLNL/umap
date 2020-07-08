@@ -34,37 +34,89 @@ RegionManager::getInstance( void )
   return region_manager_instance;
 }
 
+void *
+RegionManager::isFDRegionPresent(int filefd){
+  auto it = m_fd_rd_map.find(filefd);
+  if(it == m_fd_rd_map.end()){
+    return NULL;
+  }else{
+    return (void *)(it->second);
+  }
+}
+
 void
-RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size)
+RegionManager::setFDRegionMap(int file_fd, RegionDescriptor *rd){
+  m_fd_rd_map[file_fd] = rd;
+}
+
+void
+RegionManager::associateRegion(int fd, void* region, int client_fd){
+  Uffd *c_uffd;
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto rd = m_active_regions[region];
+  getActiveUffd(client_fd);
+  c_uffd->register_region(rd);
+  m_last_iter = m_active_regions.end();
+}
+
+Uffd*
+RegionManager::getActiveUffd(int client_fd){
+  auto it = m_client_uffds.find(client_fd);
+  Uffd* c_uffd;
+  if(it == m_client_uffds.end()){
+    UMAP_LOG(Debug, "New region, new uffd");
+    c_uffd = new Uffd();
+    m_client_uffds[client_fd] = c_uffd; 
+  }else{
+    c_uffd = it->second;
+  }
+  return c_uffd;
+}
+
+void
+RegionManager::addRegion(int fd, Store* store, void* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size, int client_fd)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
+  Uffd *c_uffd = NULL;
 
   if ( m_active_regions.empty() ) {
     UMAP_LOG(Debug, "No active regions, initializing engine");
     m_buffer = new Buffer();
-    m_uffd = new Uffd();
+    c_uffd = getActiveUffd(client_fd);
     m_fill_workers = new FillWorkers();
     m_evict_manager = new EvictManager();
   }
+  if(!c_uffd){
+    c_uffd = getActiveUffd(client_fd);
+  }
 
-  auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
+  //Lookup if the region already exists, i.e. the file has a map already
+  auto rd = new RegionDescriptor((char *)region, region_size, mmap_region, mmap_region_size, store);
   m_active_regions[(void*)region] = rd;
+  setFDRegionMap(fd, rd);
 
-  UMAP_LOG(Debug,
+  UMAP_LOG(Info,
       "region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
       << ", region_size: " << rd->size()
       << ", number of regions: " << m_active_regions.size() + 1
   );
 
-  m_uffd->register_region(rd);
+  c_uffd->register_region(rd);
   m_last_iter = m_active_regions.end();
 }
 
 void
-RegionManager::removeRegion( char* region )
+RegionManager::removeRegion( char* region, int client_fd )
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto it = m_active_regions.find(region);
+  auto uit = m_client_uffds.find(client_fd);
+
+  if(uit == m_client_uffds.end()){
+    UMAP_ERROR("Can't find uffd for client fd: " << client_fd);
+  }
+
+  Uffd* c_uffd = uit->second;
 
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
@@ -74,18 +126,21 @@ RegionManager::removeRegion( char* region )
       << ", region_size: " << it->second->size()
       << ", number of regions: " << m_active_regions.size()
   );
+  
+  auto rd = it->second;
+  c_uffd->unregister_region(rd);
 
-  m_uffd->unregister_region(it->second);
-
-  delete it->second;
-  m_active_regions.erase(it);
-
+  if(rd->can_release()){
+    c_uffd->release_buffer(rd);
+    delete rd;
+    m_active_regions.erase(it);
+  }
   m_last_iter = m_active_regions.end();
 
   if ( m_active_regions.empty() ) {
     delete m_evict_manager; m_evict_manager = nullptr;
     delete m_fill_workers; m_fill_workers = nullptr;
-    delete m_uffd; m_uffd = nullptr;
+    delete c_uffd; c_uffd = nullptr;
     delete m_buffer; m_buffer = nullptr;
   }
 }
@@ -101,10 +156,17 @@ RegionManager::flush_buffer(){
 }
 
 void
-RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
+RegionManager::prefetch(int npages, umap_prefetch_item* page_array, int client_fd)
 {
+  Uffd *c_uffd;
+  auto it=m_client_uffds.find(client_fd);
+  if(it==m_client_uffds.end()){
+    c_uffd = it->second;
+  }else{
+    UMAP_ERROR("client UFFD not found for client_fd: " << client_fd); 
+  } 
   for (int i{0}; i < npages; ++i)
-    m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
+    c_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
 }
 
 RegionManager::RegionManager()

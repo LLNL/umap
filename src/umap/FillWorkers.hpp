@@ -21,7 +21,6 @@ namespace Umap {
       ~FillWorkers( void );
 
     private:
-      Uffd*    m_uffd;
       Buffer*  m_buffer;
       uint64_t m_read_ahead;
 

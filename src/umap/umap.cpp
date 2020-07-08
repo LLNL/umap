@@ -57,9 +57,9 @@ int umap_flush(){
 }
 
 
-void umap_prefetch( int npages, umap_prefetch_item* page_array )
-{
-  Umap::RegionManager::getInstance().prefetch(npages, page_array);
+void umap_prefetch( int npages, umap_prefetch_item* page_array, int client_fd/*default=0*/)
+{ 
+  Umap::RegionManager::getInstance().prefetch(npages, page_array, client_fd);
 }
 
 long
@@ -132,8 +132,15 @@ umap_ex(
 )
 {
   std::lock_guard<std::mutex> lock(g_mutex);
+  void* umap_region = NULL;
+  uint64_t umap_size = 0;
+  uint64_t mmap_size = 0;
+  void* mmap_region = 0;
+  void *reg_desc = NULL;
+ 
   auto& rm = RegionManager::getInstance();
   auto umap_psize = rm.get_umap_page_size();
+  //check if the file has already been mapped before
 
   UMAP_LOG(Info, 
       "region_addr: " << region_addr
@@ -163,7 +170,7 @@ umap_ex(
   }
 
   if ( ( (uint64_t)region_addr & (umap_psize - 1) ) ) {
-    UMAP_ERROR("region_addr must be page aligned: " << region_addr
+     UMAP_ERROR("region_addr must be page aligned: " << region_addr
       << ", page size is: " << rm.get_umap_page_size());
   }
 
@@ -171,32 +178,36 @@ umap_ex(
     UMAP_ERROR("Invalid flags: " << std::hex << flags);
   }
 
-  //
-  // When dealing with umap-page-sizes that could be multiples of the actual
-  // system-page-size, it is possible for mmap() to provide a region that is on
-  // a system-page-boundary, but not necessarily on a umap-page-size boundary.
-  //
-  // We always allocate an additional umap-page-size set of bytes so that we can
-  // make certain that the umap-region begins on a umap-page-size boundary.
-  //
-  uint64_t mmap_size = region_size + umap_psize;
+  reg_desc = rm.isFDRegionPresent(fd);
+  
+  if(reg_desc==NULL){
+    //
+    // When dealing with umap-page-sizes that could be multiples of the actual
+    // system-page-size, it is possible for mmap() to provide a region that is on
+    // a system-page-boundary, but not necessarily on a umap-page-size boundary.
+    //
+    // We always allocate an additional umap-page-size set of bytes so that we can
+    // make certain that the umap-region begins on a umap-page-size boundary.
+    //
+    mmap_size = region_size + umap_psize;
 
-  void* mmap_region = mmap(region_addr, mmap_size,
-                        prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
+    mmap_region = mmap(region_addr, mmap_size,
+                       prot, flags | (MAP_ANONYMOUS | MAP_NORESERVE), -1, 0);
 
-  if (mmap_region == MAP_FAILED) {
-    UMAP_ERROR("mmap failed: " << strerror(errno));
-    return UMAP_FAILED;
+    if (mmap_region == MAP_FAILED) {
+      UMAP_ERROR("mmap failed: " << strerror(errno));
+      return UMAP_FAILED;
+    }
+    umap_size = region_size;
+    umap_region = (void*)((uint64_t)mmap_region + umap_psize - 1);
+    umap_region = (void*)((uint64_t)umap_region & ~(umap_psize - 1));
+
+    if ( store == nullptr )
+      store = Store::make_store(umap_region, umap_size, umap_psize, fd);
+    rm.addRegion(fd, store, umap_region, umap_size, (char*)mmap_region, mmap_size);
+  }else{
+    rm.associateRegion(fd, reg_desc);
   }
-  uint64_t umap_size = region_size;
-  void* umap_region;
-  umap_region = (void*)((uint64_t)mmap_region + umap_psize - 1);
-  umap_region = (void*)((uint64_t)umap_region & ~(umap_psize - 1));
-
-  if ( store == nullptr )
-    store = Store::make_store(umap_region, umap_size, umap_psize, fd);
-
-  rm.addRegion(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
   return umap_region;
 }

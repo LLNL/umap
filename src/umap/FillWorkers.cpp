@@ -22,6 +22,7 @@
 namespace Umap {
   void FillWorkers::FillWorker( void ) {
     char* copyin_buf;
+    Uffd* c_uffd;
     uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
     uint64_t read_ahead = RegionManager::getInstance().get_read_ahead();
     std::size_t sz = 2 * page_size;
@@ -38,6 +39,7 @@ namespace Umap {
 
     while ( 1 ) {
       auto w = get_work();
+      c_uffd = (Uffd*)w.c_uffd;
 
       UMAP_LOG(Debug, ": " << w << " " << m_buffer);
 
@@ -45,7 +47,7 @@ namespace Umap {
         break;    // Time to leave
 
       if ( w.page_desc->dirty && w.page_desc->data_present ) {
-        m_uffd->disable_write_protect(w.page_desc->page);
+        c_uffd->disable_write_protect(w.page_desc->page);
       }
       else {
         uint64_t offset = w.page_desc->region->store_offset(w.page_desc->page);
@@ -54,10 +56,10 @@ namespace Umap {
           UMAP_ERROR("read_from_store failed");
 
         if ( ! w.page_desc->dirty ) {
-          m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
+          c_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
         }
         else {
-          m_uffd->copy_in_page(copyin_buf, w.page_desc->page);
+          c_uffd->copy_in_page(copyin_buf, w.page_desc->page);
         }
         w.page_desc->data_present = true;
       }
@@ -74,7 +76,6 @@ namespace Umap {
 
   FillWorkers::FillWorkers( void )
     :   WorkerPool("Fill Workers", RegionManager::getInstance().get_num_fillers())
-      , m_uffd(RegionManager::getInstance().get_uffd_h())
       , m_buffer(RegionManager::getInstance().get_buffer_h())
       , m_read_ahead(RegionManager::getInstance().get_read_ahead())
   {
