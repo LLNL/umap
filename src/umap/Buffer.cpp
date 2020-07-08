@@ -147,15 +147,19 @@ PageDescriptor* Buffer::evict_oldest_page()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
+  PageDescriptor::State ret;
+  std::cout << m_stats << std::endl;
   if (m_rm.get_num_active_regions() > 1) {
     lock();
     while ( rd->count() ) {
       auto pd = rd->get_next_page_descriptor();
-      pd->deferred = true;
-      wait_for_page_state(pd, PageDescriptor::State::PRESENT);
-      pd->set_state_leaving();
-      m_rm.get_evict_manager()->schedule_eviction(pd);
-      wait_for_page_state(pd, PageDescriptor::State::FREE);
+      ret = wait_existence_page_state(pd);
+      if(ret == PageDescriptor::State::PRESENT){
+        pd->deferred = true;
+        pd->set_state_leaving();
+        m_rm.get_evict_manager()->schedule_eviction(pd);
+        wait_for_page_state(pd, PageDescriptor::State::FREE);
+      }
     }
     unlock();
   }
@@ -169,39 +173,44 @@ bool Buffer::low_threshold_reached( void )
   return m_busy_pages.size() <= m_evict_low_water;
 }
 
-void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
+void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd)
 {
   WorkItem work;
+  PageDescriptor *pd = nullptr;
   work.type = Umap::WorkItem::WorkType::NONE;
 
   lock();
-  auto pd = page_already_present(paddr);
+  while(pd==nullptr){
+  pd = page_already_present(paddr);
 
   if ( pd != nullptr ) {  // Page is already present
     if (iswrite && pd->dirty == false) {
       work.page_desc = pd;
+      work.c_uffd = c_uffd;
       pd->dirty = true;
       pd->set_state_updating();
       UMAP_LOG(Debug, "PRE: " << pd << " From: " << this);
     }
     else {
       static int hiwat = 0;
-
       pd->spurious_count++;
       if (pd->spurious_count > hiwat) {
         hiwat = pd->spurious_count;
         UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
       }
-
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
       unlock();
-      return;
+      return pd->page;
     }
   }
   else {                  // This page has not been brought in yet
     pd = get_page_descriptor(paddr, rd);
+    if(pd==nullptr){
+      continue;
+    }
     pd->data_present = false;
     work.page_desc = pd;
+    work.c_uffd = c_uffd;
 
     rd->insert_page_descriptor(pd);
     m_present_pages[pd->page] = pd;
@@ -224,8 +233,9 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
     w.page_desc = nullptr;
     m_rm.get_evict_manager()->send_work(w);
   }
-
+  }
   unlock();
+  return NULL;
 }
 
 // Return nullptr if page not present, PageDescriptor * otherwise
@@ -268,8 +278,10 @@ PageDescriptor* Buffer::get_page_descriptor(char* vaddr, RegionDescriptor* rd)
     ++m_stats.waits;
     ++m_waits_for_state_change;
     pthread_cond_wait(&m_avail_pd_cond, &m_mutex);
-
     --m_waits_for_avail_pd;
+    if(page_already_present(vaddr)){
+      return nullptr;
+    }
   }
 
   PageDescriptor* rval;
@@ -324,6 +336,22 @@ void Buffer::lock()
 void Buffer::unlock()
 {
   pthread_mutex_unlock(&m_mutex);
+}
+
+PageDescriptor::State Buffer::wait_existence_page_state(PageDescriptor* pd){
+  PageDescriptor::State ret = pd->state;
+  while( ret!=PageDescriptor::State::PRESENT && ret!=PageDescriptor::State::FREE ){
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+    pthread_cond_wait(&m_state_change_cond, &m_mutex);
+
+    --m_waits_for_state_change;
+    ret = pd->state;
+  }
+  return ret;
 }
 
 void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)

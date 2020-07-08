@@ -21,6 +21,7 @@ namespace Umap {
     enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FAST_EVICT, FLUSH };
     PageDescriptor* page_desc;
     WorkType type;
+    void *c_uffd;
   };
 
   static std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
@@ -90,7 +91,7 @@ namespace Umap {
         UMAP_LOG(Debug, "Stopping " <<  m_pool_name << " Pool of "
             << m_num_threads << " threads");
 
-        WorkItem w = {.page_desc = nullptr, .type = Umap::WorkItem::WorkType::EXIT };
+        WorkItem w = {page_desc : nullptr, type : Umap::WorkItem::WorkType::EXIT};
 
         //
         // This will inform all of the threads it is time to go away
