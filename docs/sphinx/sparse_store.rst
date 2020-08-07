@@ -12,7 +12,7 @@ The default store object used by UMap is "StoreFile", which reads and writes to 
 
 UMap also provides a sparse multi-files store object called "SparseStore", which creates multiple backing files dynamically and only when needed. 
 
-* ``Below is an example of using UMap with a SparseStore object``:
+Below is an example of using UMap with a SparseStore object.
 
 .. code-block:: c
     #include <umap/umap.h>
