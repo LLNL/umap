@@ -5,13 +5,16 @@ Sparse Multi-files Backing Store Interface
 ==========================================
 
 UMap provides an extensible design that supports multiple types of backing stores (e.g., local SSDs, network-interconnected SSDs, and HDDs). 
+
 An application that uses UMap can extend the abstract "Store" class to implement its specific backing store interface.
+
 The default store object used by UMap is "StoreFile", which reads and writes to a single regular Linux file.
-UMap also provides a sparse multi-files store object called "SparseStore".
+
+UMap also provides a sparse multi-files store object called "SparseStore", which creates multiple backing files dynamically and only when needed. 
 
 * ``Below is an example of using UMap with a SparseStore object``:
 
-.. code-block:: c++
+.. code-block:: c
     #include <umap/umap.h>
     #include <umap/store/SparseStore.h>
     #include <string>
