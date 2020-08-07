@@ -22,6 +22,7 @@ set(umapheaders
       WorkerPool.hpp
       UmapServiceManager.hpp
       store/StoreFile.h
+      store/SparseStore.h
       store/Store.hpp
       util/Exception.hpp
       util/Logger.hpp
@@ -40,6 +41,7 @@ set(umapsrc
     UmapServiceManager.cpp
     store/Store.cpp
     store/StoreFile.cpp
+    store/SparseStore.cpp
     util/Exception.cpp
     util/Logger.cpp
     ${umapheaders})
@@ -60,3 +62,5 @@ install(TARGETS umap umap-static
 install(FILES umap.h DESTINATION include/umap)
 
 install(FILES store/Store.hpp DESTINATION include/umap/store )
+
+install(FILES store/SparseStore.h DESTINATION include/umap/store)
