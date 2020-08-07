@@ -32,7 +32,8 @@ Below is an example of using UMap with a SparseStore object.
      
      // Instantiating a SparseStore objct, the "file_size" parameter specifies the granularity of each file. 
      // An application that desires to create N files can calculate the file size using totalbytes / num_files
-     // Note that the file size is rounded to be a multiple of the page size, which results in a number of files that close but not exactly equal to N
+     // Note that the file size is rounded to be a multiple of the page size, 
+     // which results in a number of files that close but not exactly equal to N
      Umap::SparseStore* sparse_store;
      sparse_store = new Umap::SparseStore(numbytes,page_size,root_path,file_size);
 
