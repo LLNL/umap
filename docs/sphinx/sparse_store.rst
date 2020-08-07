@@ -15,6 +15,7 @@ UMap also provides a sparse multi-files store object called "SparseStore", which
 Below is an example of using UMap with a SparseStore object.
 
 .. code-block:: c
+
     #include <umap/umap.h>
     #include <umap/store/SparseStore.h>
     #include <string>
@@ -63,3 +64,4 @@ Below is an example of using UMap with a SparseStore object.
    } 
 
 
+The example is done
