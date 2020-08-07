@@ -1,0 +1,62 @@
+.. _sparse_store
+
+==========================================
+Sparse Multi-files Backing Store Interface
+=========================================
+
+UMap provides an extensible design that supports multiple types of backing stores (e.g., local SSDs, network-interconnected SSDs, HDDs, etc ...). 
+An application that uses UMap can extend the abstract "Store" class to implement its specific backing store interface.
+The default store object used by UMap is "StoreFile", which reads and writes to a single regular Linux file.
+UMap also provides a sparse multi-files store object called "SparseStore"
+
+*Below is an example of using UMap with a SparseStore object:
+
+.. code_block:: c++
+    #include <umap/umap.h>
+    #include <umap/store/SparseStore.h>
+    #include <string>
+    #include <iostream>
+
+    void* map_in_sparse_store(
+      std::string root_path,
+      uint64_t numbytes,
+      void* start_addr,
+      size_t page_size,
+      size_t file_size){
+
+     void * region = NULL;
+     
+    
+     Umap::SparseStore* sparse_store;
+     sparse_store = new Umap::SparseStore(numbytes,page_size,root_path,file_size);
+
+     // Check status to make sure that the store object was able to open the directory
+     if (store->get_directory_creation_status() != 0){
+       std::cerr << "Error: Failed to create directory at " << root_path << std::endl;
+       return NULL;
+     }
+
+     // set umap flags
+     int flags = UMAP_PRIVATE;
+     
+     if (start_addr != nullptr)
+      flags |= MAP_FIXED;
+
+     const int prot = PROT_READ|PROT_WRITE;
+
+     /* Map region using UMap, Here, the file descriptor passed to umap is -1, as we do not start with mapping a file
+        instead, file(s) will be created incrementally as needed using the "sparse_store" object. */
+
+     region = umap_ex(start_addr, numbytes, prot, flags, -1, 0, sparse_store);
+     if ( region == UMAP_FAILED ) {
+       std::ostringstream ss;
+       ss << "umap_mf of " << numbytes
+          << " bytes failed for " << root_path << ": ";
+       perror(ss.str().c_str());
+       return NULL;
+     }
+
+     return region;
+   } 
+
+
