@@ -18,6 +18,7 @@ namespace Umap {
     ssize_t read_from_store(char* buf, size_t nb, off_t off);
     ssize_t write_to_store(char* buf, size_t nb, off_t off);
     int get_directory_creation_status();
+    int close_files();
   private:
     int fd;
     int directory_creation_status;

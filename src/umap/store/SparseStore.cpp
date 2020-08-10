@@ -23,6 +23,7 @@
 
 #include <umap/umap.h>
 #include <umap/store/SparseStore.h>
+#include <umap/util/Macros.hpp>
 
 namespace Umap {
     SparseStore::SparseStore(size_t _rsize_, size_t _aligned_size_, std::string _root_path_, size_t _file_Size_)
@@ -43,7 +44,7 @@ namespace Umap {
         // Get stored file size
         std::ifstream metadata(metadata_file_path.c_str());
         if (!metadata.is_open()){
-          std::cout << "ERROR: Failed to open metadata file" << std::endl;
+          UMAP_ERROR("Failed to open metadata file" << " - " << strerror(errno));
         }
         else{
           metadata >> file_size;
@@ -53,27 +54,27 @@ namespace Umap {
         directory_creation_status = mkdir(root_path.c_str(),S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         std::ofstream metadata(metadata_file_path.c_str());
         if (!metadata.is_open()){
-          std::cout << "ERROR: Failed to open metadata file" << std::endl;
+          UMAP_ERROR("Failed to open metadata file" << " - " << strerror(errno));
         }
         else{
           metadata << file_size;
         }
       }
       if (directory_creation_status != 0){
-        std::cout << "ERROR: Failed to create directory" << std::endl;
+        UMAP_ERROR("ERROR: Failed to create directory" << " - " << strerror(errno));
       }
     }
 
     SparseStore::~SparseStore(){
-      std::cout << "SparseStore Total Reads: " << numreads << std::endl;
-      std::cout << "SparseStore Total Writes: " << numwrites << std::endl;
-      for (int i = 0 ; i < num_files ; i++){
+      UMAP_LOG(Info,"SparseStore Total Reads: " << numreads);
+      UMAP_LOG(Info,"SparseStore Total Writes: " << numwrites); 
+      /* for (int i = 0 ; i < num_files ; i++){
         if (file_descriptors[i].id != -1){
           if (close(file_descriptors[i].id) != 0){
-            perror("Failed to close file");
+            UMAP_ERROR("SparseStore: Failed to close file with id: " << i << " - " << strerror(errno));
           }
         }
-      }
+      } */
       delete [] file_descriptors;
     }
 
@@ -83,7 +84,7 @@ namespace Umap {
       int fd = get_fd(off, file_offset); 
       read = pread(fd,buf,nb,file_offset);
       if(read == -1){
-        std::cerr << "pread(fd=" << fd << ", buff=" << (void*)buf <<  ", nb=" << nb << ", off=" << off << ") Failed - " << strerror(errno) << std::endl;
+        UMAP_ERROR("pread(fd=" << fd << ", buff=" << (void*)buf <<  ", nb=" << nb << ", off=" << off << ") Failed - " << strerror(errno));
       }
       numreads++;
       return read;
@@ -95,7 +96,7 @@ namespace Umap {
       int fd = get_fd(off, file_offset);
       written = pwrite(fd,buf,nb,file_offset);
       if(written == -1){
-        std::cerr << "pwrite(fd=" << fd << ", buff=" << (void*)buf <<  ", nb=" << nb << ", off=" << off << ") Failed - " << strerror(errno) << std::endl;
+        UMAP_ERROR("pwrite(fd=" << fd << ", buff=" << (void*)buf <<  ", nb=" << nb << ", off=" << off << ") Failed - " << strerror(errno));
       }
       numwrites++;
       return written;
@@ -103,6 +104,20 @@ namespace Umap {
 
     int SparseStore::get_directory_creation_status(){
       return directory_creation_status;
+    }
+
+    int SparseStore::close_files(){
+      int return_status = 0;
+      for (int i = 0 ; i < num_files ; i++){
+        if (file_descriptors[i].id != -1){
+          int close_status = close(file_descriptors[i].id);
+          if (close_status != 0){
+            UMAP_LOG(Warning,"SparseStore: Failed to close file with id: " << i << " - " << strerror(errno));
+          }
+         return_status = return_status | close_status;
+	}
+      }
+      return return_status;
     }
 
     int SparseStore::get_fd(off_t offset, off_t &file_offset){
@@ -119,13 +134,11 @@ namespace Umap {
                   file_descriptors[fd_index].id = fd;
                 }
                 else{
-                  std::cout << "ERROR: fallocate() failed for file with id: " << fd_index << std::endl;
-                  perror("");
+                  UMAP_ERROR("SparseStore: fallocate() failed for file with id: " << fd_index << " - " << strerror(errno));
                 }
               }
               else{
-                std::cout << "ERROR: Failed to open file with id: " << fd_index << std::endl;
-                perror("");
+                UMAP_ERROR("ERROR: Failed to open file with id: " << fd_index << " - " << strerror(errno));
               }
             }
             creation_mutex.unlock(); // Release mutex

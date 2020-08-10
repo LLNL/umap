@@ -21,7 +21,7 @@ Below is an example of using UMap with a SparseStore object.
     #include <string>
     #include <iostream>
 
-    void* map_in_sparse_store(
+    void use_sparse_store(
       std::string root_path,
       uint64_t numbytes,
       void* start_addr,
@@ -60,10 +60,28 @@ Below is an example of using UMap with a SparseStore object.
        ss << "umap_mf of " << numbytes
           << " bytes failed for " << root_path << ": ";
        perror(ss.str().c_str());
-       return NULL;
+       exit(-1);
      }
 
-     return region;
+     /*
+      * some code that uses mapped region goes here. 
+      */
+
+    // Unmap region
+    if (uunmap(region, numbytes) < 0) {
+      std::ostringstream ss;
+      ss << "uunmap of failure: ";
+      perror(ss.str().c_str());
+      exit(-1);
+    }
+    // NOTE: the method "close_files" from SparseStore MUST be called explicitely before deleting the object
+    int sparse_store_close_files = store->close_files();
+    if (sparse_store_close_files != 0 ){
+      std::cerr << "Error closing SparseStore files" << std::endl;
+      delete store;
+      exit(-1);
+    }
+    delete store; 
    } 
 
 
