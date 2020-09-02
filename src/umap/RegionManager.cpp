@@ -101,6 +101,13 @@ RegionManager::flush_buffer(){
 }
 
 void
+RegionManager::fetch_and_pin( char* paddr, uint64_t size )
+{
+  m_buffer->fetch_and_pin(paddr, size);
+}
+
+
+void
 RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
 {
   for (int i{0}; i < npages; ++i)

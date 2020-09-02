@@ -55,6 +55,7 @@ class RegionManager {
 
     int flush_buffer();
     void prefetch(int npages, umap_prefetch_item* page_array);
+    void fetch_and_pin( char* paddr, uint64_t size );
     void removeRegion( char* mmap_region );
     Version  get_umap_version( void ) { return m_version; }
     long     get_system_page_size( void ) { return m_system_page_size; }

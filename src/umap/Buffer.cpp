@@ -171,6 +171,59 @@ bool Buffer::low_threshold_reached( void )
   return m_busy_pages.size() <= m_evict_low_water;
 }
 
+void Buffer::fetch_and_pin(char* paddr, uint64_t size)
+{
+  auto rd = m_rm.containing_region(paddr);
+  
+  if ( rd == nullptr )
+    UMAP_ERROR("the prefetched region is not found");
+
+  char* pend = paddr + size;  
+  if( pend > rd->end() )
+    UMAP_ERROR("the prefetched rergion is larger than the region (end)");
+
+  Uffd* m_uffd = m_rm.get_uffd_h();
+
+  /* get page alighed offset*/
+  uint64_t offset_st = rd->store_offset( paddr );
+  uint64_t offset_end = rd->store_offset( pend );
+  char*    region_st  = rd->start();
+  
+  uint64_t psize = m_rm.get_umap_page_size();
+  size_t num_pages = (offset_end - offset_st)/psize;
+
+  size_t num_free_page = m_free_pages.size();
+  //if( num_pages >= num_free_page)
+  //UMAP_ERROR("cannot prefetch more pages than free_pages");
+
+  size_t buf_ext = 0;//8589934592;
+  //if( size>8589934592 )
+  {
+    //m_free_pages.resize(num_free_page-(num_pages - buf_ext/psize));
+    //printf("Reduce free pages from %zu to %zu for prefetching %u pages\n", num_free_page, m_free_pages.size(),num_pages);
+    printf("%zu free pages\n", num_free_page);
+  }
+  
+  char* copyin_buf = (char*) malloc(psize);
+  if ( !copyin_buf )
+    UMAP_ERROR("Failed to allocate copyin_buf");
+
+  uint64_t offset = offset_st;
+  for(int i=0; i<num_pages; i++){
+    
+    if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
+      UMAP_ERROR("prefetch read_from_store failed");
+  
+    m_uffd->copy_in_page(copyin_buf, region_st + offset );
+    
+    offset += psize;
+  }
+  free(copyin_buf);
+  printf("prefetch [%p , %p] outside the buffer\n", (region_st+offset_st), (region_st+offset));
+
+}
+
+  
 void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
 {
   WorkItem work;
