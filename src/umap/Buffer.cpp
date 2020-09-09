@@ -360,8 +360,6 @@ void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
     ++m_stats.waits;
     ++m_waits_for_state_change;
 
-    ++m_stats.waits;
-    ++m_waits_for_state_change;
     pthread_cond_wait(&m_state_change_cond, &m_mutex);
 
     --m_waits_for_state_change;
