@@ -21,7 +21,7 @@ including a hello world program for userfaultfd based upon code from the
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX = <where you want the sofware> ..
+cmake -DCMAKE_INSTALL_PREFIX=<where you want the sofware> ..
 make install
 ```
 
