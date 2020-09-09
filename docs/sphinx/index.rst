@@ -1,5 +1,5 @@
 ***********
-UMAP v2.0.0
+UMAP v2.1.0
 ***********
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
