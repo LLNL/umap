@@ -22,6 +22,7 @@
 #include "umap/RegionManager.hpp"
 #include "umap/RegionDescriptor.hpp"
 #include "umap/store/Store.hpp"
+#include "umap/store/StoreNetwork.h"
 #include "umap/util/Macros.hpp"
 
 namespace Umap {
@@ -32,6 +33,16 @@ RegionManager::getInstance( void )
   static RegionManager region_manager_instance;
 
   return region_manager_instance;
+}
+
+void
+RegionManager::addServerRegion(Store* store, char* region, uint64_t region_size)
+{
+  std::lock_guard<std::mutex> lock(m_mutex);
+
+  auto rd = new RegionDescriptor(region, region_size, region, region_size, store);
+  m_active_regions[(void*)region] = rd;
+  m_last_iter = m_active_regions.end();
 }
 
 void
@@ -70,19 +81,26 @@ RegionManager::removeRegion( char* region )
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
   UMAP_LOG(Debug,
-      "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
-      << ", region_size: " << it->second->size()
-      << ", number of regions: " << m_active_regions.size()
-  );
-
-  m_uffd->unregister_region(it->second);
+	   "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
+	   << ", region_size: " << it->second->size()
+	   << ", number of regions: " << m_active_regions.size()
+	   );
+  
+  bool is_network_server = false;
+#ifdef MARGO_ROOT
+  StoreNetworkServer* ds = dynamic_cast<StoreNetworkServer*>(it->second->store());  
+  is_network_server = (ds!=NULL);
+#endif
+  
+  if(!is_network_server)
+    m_uffd->unregister_region(it->second);
 
   delete it->second;
   m_active_regions.erase(it);
 
   m_last_iter = m_active_regions.end();
 
-  if ( m_active_regions.empty() ) {
+  if ( !is_network_server && m_active_regions.empty() ) {
     delete m_evict_manager; m_evict_manager = nullptr;
     delete m_fill_workers; m_fill_workers = nullptr;
     delete m_uffd; m_uffd = nullptr;
@@ -96,6 +114,16 @@ RegionManager::flush_buffer(){
   std::lock_guard<std::mutex> lock(m_mutex);
 
   m_buffer->flush_dirty_pages();
+
+  return 0;
+}
+
+int 
+RegionManager::evict_buffer(){
+
+  std::lock_guard<std::mutex> lock(m_mutex);
+
+  m_buffer->evict_all_pages();
 
   return 0;
 }

@@ -12,48 +12,48 @@ matrix:
     env:
     - COMPILER=g++
     - IMG=gcc-5
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
     - DO_MEMCHECK=no
   - compiler: gcc6
     env:
     - COMPILER=g++
     - IMG=gcc-6
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
   - compiler: gcc7
     env:
     - COMPILER=g++
     - IMG=gcc-7
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
   - compiler: gcc8
     env:
     - COMPILER=g++
     - IMG=gcc-8
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
   - compiler: gcc8
     env:
     - COMPILER=g++
     - IMG=gcc-8
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=On"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=On"
   - compiler: clang4
     env:
     - COMPILER=clang++
     - IMG=clang-4
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
   - compiler: clang5
     env:
     - COMPILER=clang++
     - IMG=clang-5
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
   - compiler: clang6
     env:
     - COMPILER=clang++
     - IMG=clang-6
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=Off"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=Off"
   - compiler: clang6
     env:
     - COMPILER=clang++
     - IMG=clang-6
-    - CMAKE_EXTRA_FLAGS="-DENABLE_DEBUG_LOGGING=On"
+    - CMAKE_EXTRA_FLAGS="-DENABLE_LOGGING=On"
 
 script:
 - docker run --rm --user='root' -v ${TRAVIS_BUILD_DIR}:/home/axom axom/compilers:$IMG chown -R axom /home/axom

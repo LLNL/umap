@@ -27,7 +27,7 @@ namespace Umap {
         , m_mmap_region(mmap_region), m_mmap_region_size(mmap_size)
         , m_store(store) {}
 
-      ~RegionDescriptor( void ) {}
+      ~RegionDescriptor( void ) {delete m_store;}
 
       inline uint64_t store_offset( char* addr ) {
         assert("Invalid address for calculating offset" && addr >= start() && addr < end());

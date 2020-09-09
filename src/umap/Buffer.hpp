@@ -44,7 +44,7 @@ namespace Umap {
       void process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd);
       void evict_region(RegionDescriptor* rd);
       void flush_dirty_pages();
-    
+      void evict_all_pages();
       explicit Buffer( void );
       ~Buffer( void );
 

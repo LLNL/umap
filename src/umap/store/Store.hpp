@@ -12,10 +12,12 @@
 namespace Umap {
 class Store {
   public:
-    static Store* make_store(void* _region_, std::size_t _rsize_, std::size_t _alignsize_, int _fd_);
-
-    virtual ssize_t read_from_store(char* buf, std::size_t nb, off_t off) = 0;
-    virtual ssize_t  write_to_store(char* buf, std::size_t nb, off_t off) = 0;
+  static Store* make_store(void* _region_, std::size_t _rsize_, std::size_t _alignsize_, int _fd_);
+  virtual std::size_t get_size(){return 0;}
+  
+  virtual ~Store(){}
+  virtual ssize_t read_from_store(char* buf, std::size_t nb, off_t off) = 0;
+  virtual ssize_t write_to_store(char* buf, std::size_t nb, off_t off) = 0;
 };
 } // end of namespace Umap
 #endif

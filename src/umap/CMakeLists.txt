@@ -43,10 +43,39 @@ set(umapsrc
     ${umapheaders})
 
 find_package(Threads REQUIRED)
+
+if (MARGO_ROOT)
+    set(networkheaders
+	store/StoreNetwork.h
+	store/rpc/rpc_server.hpp
+	store/rpc/rpc_client.hpp
+	store/rpc/rpc_util.hpp
+	)
+    set(networksrcs
+	store/StoreNetwork.cpp
+	store/rpc/rpc_server.cpp
+	store/rpc/rpc_client.cpp
+    	)
+    list(APPEND umapheaders ${networkheaders})
+    list(APPEND umapsrc ${networkheaders} ${networksrcs})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMARGO_ROOT")
+    
+    find_package(MPI REQUIRED)
+    include_directories(${MPI_INCLUDE_PATH})
+    include_directories(${MARGO_ROOT}/include)
+    find_library(LIBMARGO NAMES margo PATHS ${MARGO_ROOT}/lib)
+    if (LIBMARGO)
+       link_libraries(${LIBMARGO})
+    else()
+       message(FATAL_ERROR "Cannot find MARGO library")
+    endif()
+endif()
+
+
 add_library(umap SHARED ${umapsrc} )
 add_library(umap-static STATIC ${umapsrc} )
 set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
-target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${MPI_LIBRARIES} ${MARGO_LIBRARIES})
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
@@ -60,3 +89,5 @@ install(FILES umap.h DESTINATION include/umap)
 install(FILES store/Store.hpp DESTINATION include/umap/store )
 
 install(FILES store/SparseStore.h DESTINATION include/umap/store)
+
+install(FILES store/StoreNetwork.h DESTINATION include/umap/store )

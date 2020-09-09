@@ -11,6 +11,7 @@
   #include <cstdint>
   #include <mutex>
   #include "umap/store/Store.hpp"
+  #include "umap/store/StoreNetwork.h"
 #else // __cplusplus
   #include <stdint.h>
 #endif // __cplusplus
@@ -58,13 +59,20 @@ void* umap(
   , off_t offset
 );
 
+void* umap_network(
+		   const char*  id
+                   , void* region_addr
+                   , size_t region_size
+);
+
 int uunmap(
     void*  addr
   , size_t length
 );
 
 int umap_flush(); 
-
+int umap_evict();
+  
 struct umap_prefetch_item {
   void* page_base_addr;
 };
