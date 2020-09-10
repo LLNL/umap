@@ -6,6 +6,7 @@
 //////////////////////////////////////////////////////////////////////////////
 
 #include <pthread.h>
+#include <fstream>        // for reading meminfo
 
 #include "umap/Buffer.hpp"
 #include "umap/config.h"
@@ -171,8 +172,43 @@ bool Buffer::low_threshold_reached( void )
   return m_busy_pages.size() <= m_evict_low_water;
 }
 
+typedef struct FetchFuncParams {
+  uint64_t psize;
+  RegionDescriptor* rd;
+  Uffd* m_uffd;
+  uint64_t offset_st;
+  uint64_t offset_end;
+} FetchFuncParams;
+
+void *FetchFunc(void *arg) 
+{ 
+  FetchFuncParams* params = (FetchFuncParams*) arg;
+  uint64_t psize = params->psize;
+  RegionDescriptor* rd = params->rd;
+  Uffd* m_uffd = params->m_uffd;
+  char* region_st = rd->start();
+  uint64_t offset_st = params->offset_st;
+  uint64_t offset_end= params->offset_end;
+
+  char* copyin_buf = (char*) malloc(psize);
+  if ( !copyin_buf )
+    UMAP_ERROR("Failed to allocate copyin_buf");
+  
+  for(uint64_t offset = offset_st; offset < offset_end; offset+=psize){
+    
+    if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
+      UMAP_ERROR("failed to read_from_store at offset="<<offset);
+  
+    m_uffd->copy_in_page(copyin_buf, region_st + offset );
+  }
+
+  free(copyin_buf);
+  return NULL;
+} 
+
 void Buffer::fetch_and_pin(char* paddr, uint64_t size)
 {
+  lock();
   auto rd = m_rm.containing_region(paddr);
   
   if ( rd == nullptr )
@@ -182,28 +218,82 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   if( pend > rd->end() )
     UMAP_ERROR("the prefetched rergion is larger than the region (end)");
 
-  Uffd* m_uffd = m_rm.get_uffd_h();
+  uint64_t mem_avail = 0;
+  std::string token;
+  std::ifstream file("/proc/meminfo");
+  while (file >> token) {
+    if (token == "MemAvailable:") {
+      unsigned long mem;
+      if (file >> mem) {
+        mem_avail = (mem>13000000) ?((mem-13000000)*1024) :0;
+      } else {
+        UMAP_ERROR("UMAP unable to determine system memory size\n");
+      }
+    }
+    // ignore rest of the line
+    file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
+
+  size_t num_free_pages = m_free_pages.size();
+  uint64_t psize = m_rm.get_umap_page_size();
+  uint64_t free_page_mem = psize * num_free_pages;
+  UMAP_LOG(Info, " MemAvailable: " << mem_avail << " fetch_and_pin = " << size 
+              << " num_free_pages = " << num_free_pages 
+              << " (" << free_page_mem << " + " << size << ") = " << ( free_page_mem + size));
+
+  if( ( free_page_mem + size) >= mem_avail ){
+
+    uint64_t reduce_mem = ( free_page_mem + size) - mem_avail;
+    if( reduce_mem < free_page_mem){
+      size_t new_num_free_pages = (free_page_mem - reduce_mem)/psize;
+      m_free_pages.resize(new_num_free_pages);
+      
+      m_size = m_busy_pages.size() + m_free_pages.size();
+      m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
+      m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
+          
+      UMAP_LOG(Info, "Reduced Buffer Size to " << m_size );
+
+    }else{
+      UMAP_ERROR("Currently, no support for pinning a region larger than free pages\n");
+    }
+  }
+
 
   /* get page alighed offset*/
+  Uffd* m_uffd = m_rm.get_uffd_h();
   uint64_t offset_st = rd->store_offset( paddr );
   uint64_t offset_end = rd->store_offset( pend );
-  char*    region_st  = rd->start();
-  
-  uint64_t psize = m_rm.get_umap_page_size();
   size_t num_pages = (offset_end - offset_st)/psize;
+  size_t num_fetch_threads = (psize<32768UL) ?8 :4;
+  size_t stride = num_pages/num_fetch_threads*psize;
 
-  size_t num_free_page = m_free_pages.size();
-  //if( num_pages >= num_free_page)
-  //UMAP_ERROR("cannot prefetch more pages than free_pages");
-
-  size_t buf_ext = 0;//8589934592;
-  //if( size>8589934592 )
-  {
-    //m_free_pages.resize(num_free_page-(num_pages - buf_ext/psize));
-    //printf("Reduce free pages from %zu to %zu for prefetching %u pages\n", num_free_page, m_free_pages.size(),num_pages);
-    printf("%zu free pages\n", num_free_page);
+  time_t start = time(NULL);
+  pthread_t fetchThreads[num_fetch_threads];
+  FetchFuncParams params[num_fetch_threads];
+  for(int i=0; i<num_fetch_threads; i++){
+    params[i].psize = psize;
+    params[i].rd = rd;
+    params[i].m_uffd = m_uffd;
+    params[i].offset_st = offset_st + stride*i;
+    params[i].offset_end = params[i].offset_st + stride;
+    if(i==(num_fetch_threads-1))
+      params[i].offset_end = offset_end;
+    UMAP_LOG(Info, "FetchThread "<<i<<" ["<<params[i].offset_st<<" , "<<params[i].offset_end<<"]");
+      
+    int ret = pthread_create(&fetchThreads[i], NULL, FetchFunc, &params[i]);
+    if (ret) {
+      UMAP_ERROR("Failed to launch fetchthread "<<i );
+    }
   }
-  
+
+  for(int i=0; i<num_fetch_threads; i++)
+    pthread_join(fetchThreads[i], NULL);
+
+  time_t end = time(NULL);
+  printf("Fetch_and_pin: %d seconds\n", (end-start));
+
+  /*
   char* copyin_buf = (char*) malloc(psize);
   if ( !copyin_buf )
     UMAP_ERROR("Failed to allocate copyin_buf");
@@ -212,15 +302,16 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   for(int i=0; i<num_pages; i++){
     
     if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
-      UMAP_ERROR("prefetch read_from_store failed");
+      UMAP_ERROR("failed to read_from_store at offset="<<offset);
   
     m_uffd->copy_in_page(copyin_buf, region_st + offset );
     
     offset += psize;
   }
   free(copyin_buf);
-  printf("prefetch [%p , %p] outside the buffer\n", (region_st+offset_st), (region_st+offset));
+  */
 
+  unlock();
 }
 
   
