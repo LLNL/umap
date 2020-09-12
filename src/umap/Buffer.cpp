@@ -225,7 +225,7 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
     if (token == "MemAvailable:") {
       unsigned long mem;
       if (file >> mem) {
-        mem_avail = (mem>13000000) ?((mem-13000000)*1024) :0;
+        mem_avail = (mem>15000000) ?((mem-15000000)*1024) :0;
       } else {
         UMAP_ERROR("UMAP unable to determine system memory size\n");
       }
