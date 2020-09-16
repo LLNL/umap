@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -18,7 +18,7 @@
 namespace Umap {
 void EvictWorkers::EvictWorker( void )
 {
-  uint64_t page_size = RegionManager::getInstance()->get_umap_page_size();
+  uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
 
   while ( 1 ) {
     auto w = get_work();
@@ -39,8 +39,13 @@ void EvictWorkers::EvictWorker( void )
       if (store->write_to_store(pd->page, page_size, offset) == -1)
         UMAP_ERROR("write_to_store failed: "
             << errno << " (" << strerror(errno) << ")");
+
+      pd->dirty = false;
     }
 
+    if (w.type == Umap::WorkItem::WorkType::FLUSH)
+      continue;
+    
     if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
       if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
         UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");

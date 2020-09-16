@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -69,7 +69,7 @@ class WorkQueue {
       pthread_mutex_lock(&m_mutex);
       ++m_idle_waiters;
 
-      while ( m_waiting_workers != m_max_waiting )
+      while ( ! ( m_queue.size() == 0 && m_waiting_workers == m_max_waiting ) )
         pthread_cond_wait(&m_idle_cond, &m_mutex);
 
       --m_idle_waiters;

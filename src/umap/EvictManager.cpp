@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -37,7 +37,13 @@ void EvictManager::EvictMgr( void ) {
     }
   }
 }
-
+void EvictManager::WaitAll( void )
+{
+  UMAP_LOG(Debug, "Entered");
+  m_evict_workers->wait_for_idle();
+  UMAP_LOG(Debug, "Done");
+}
+  
 void EvictManager::EvictAll( void )
 {
   UMAP_LOG(Debug, "Entered");
@@ -65,12 +71,19 @@ void EvictManager::schedule_eviction(PageDescriptor* pd)
   m_evict_workers->send_work(work);
 }
 
+void EvictManager::schedule_flush(PageDescriptor* pd)
+{
+  WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::FLUSH };
+
+  m_evict_workers->send_work(work);
+}
+
 EvictManager::EvictManager( void ) :
         WorkerPool("Evict Manager", 1)
-      , m_buffer(RegionManager::getInstance()->get_buffer_h())
+      , m_buffer(RegionManager::getInstance().get_buffer_h())
 {
-  m_evict_workers = new EvictWorkers(  RegionManager::getInstance()->get_num_evictors()
-                                     , m_buffer, RegionManager::getInstance()->get_uffd_h());
+  m_evict_workers = new EvictWorkers(  RegionManager::getInstance().get_num_evictors()
+                                     , m_buffer, RegionManager::getInstance().get_uffd_h());
   start_thread_pool();
 }
 

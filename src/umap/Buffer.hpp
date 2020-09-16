@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -43,12 +43,13 @@ namespace Umap {
       PageDescriptor* evict_oldest_page( void );
       void process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd);
       void evict_region(RegionDescriptor* rd);
-
+      void flush_dirty_pages();
+    
       explicit Buffer( void );
       ~Buffer( void );
 
     private:
-      RegionManager* m_rm;
+      RegionManager& m_rm;
       uint64_t m_size;          // Maximum pages this buffer may have
       PageDescriptor* m_array;
 

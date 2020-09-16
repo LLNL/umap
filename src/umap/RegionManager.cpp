@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -8,6 +8,7 @@
 
 #include <cstdint>        // uint64_t
 #include <fstream>        // for reading meminfo
+#include <mutex>
 #include <stdlib.h>       // getenv()
 #include <sstream>        // string to integer operations
 #include <string>         // string to integer operations
@@ -25,77 +26,78 @@
 
 namespace Umap {
 
-RegionManager* RegionManager::s_fault_monitor_manager_instance = nullptr;
-
-RegionManager*
+RegionManager&
 RegionManager::getInstance( void )
 {
-  if (!s_fault_monitor_manager_instance) {
-    s_fault_monitor_manager_instance = new RegionManager();
-  }
+  static RegionManager region_manager_instance;
 
-  return s_fault_monitor_manager_instance;
+  return region_manager_instance;
 }
 
 void
 RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size)
 {
-  UMAP_LOG(Debug,
-      "store: " << store
-      << ", region: " << (void*)region
-      << ", region_size: " << region_size
-      << ", mmap_region: " << (void*)mmap_region
-      << ", mmap_region_size: " << mmap_region_size);
+  std::lock_guard<std::mutex> lock(m_mutex);
 
   if ( m_active_regions.empty() ) {
     UMAP_LOG(Debug, "No active regions, initializing engine");
-    UMAP_LOG(Debug, "Creating Buffer");
     m_buffer = new Buffer();
-    UMAP_LOG(Debug, "Creating Uffd");
     m_uffd = new Uffd();
-    UMAP_LOG(Debug, "Creating FillWorkers");
     m_fill_workers = new FillWorkers();
-    UMAP_LOG(Debug, "Creating EvictManager");
     m_evict_manager = new EvictManager();
-  }
-  else {
-    UMAP_LOG(Debug, "Active regions present, adding new region");
   }
 
   auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
   m_active_regions[(void*)region] = rd;
+
+  UMAP_LOG(Debug,
+      "region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
+      << ", region_size: " << rd->size()
+      << ", number of regions: " << m_active_regions.size() + 1
+  );
+
   m_uffd->register_region(rd);
+  m_last_iter = m_active_regions.end();
 }
 
 void
 RegionManager::removeRegion( char* region )
 {
-  UMAP_LOG(Debug, "region: " << (void*)region);
-
+  std::lock_guard<std::mutex> lock(m_mutex);
   auto it = m_active_regions.find(region);
 
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
-  UMAP_LOG(Debug, "Calling unregister_region");
+  UMAP_LOG(Debug,
+      "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
+      << ", region_size: " << it->second->size()
+      << ", number of regions: " << m_active_regions.size()
+  );
+
   m_uffd->unregister_region(it->second);
 
-  UMAP_LOG(Debug, "Deleting region");
   delete it->second;
-  UMAP_LOG(Debug, "Erasing from list region");
   m_active_regions.erase(it);
 
+  m_last_iter = m_active_regions.end();
+
   if ( m_active_regions.empty() ) {
-    UMAP_LOG(Debug, "Deleting eviction manager");
     delete m_evict_manager; m_evict_manager = nullptr;
-    UMAP_LOG(Debug, "Deleting fill workers");
     delete m_fill_workers; m_fill_workers = nullptr;
-    UMAP_LOG(Debug, "Deleting m_uffd");
     delete m_uffd; m_uffd = nullptr;
-    UMAP_LOG(Debug, "Deleting m_buffer");
     delete m_buffer; m_buffer = nullptr;
   }
-  UMAP_LOG(Debug, "Done");
+}
+
+int 
+RegionManager::flush_buffer(){
+
+  std::lock_guard<std::mutex> lock(m_mutex);
+
+  m_buffer->flush_dirty_pages();
+
+  return 0;
 }
 
 void
@@ -110,6 +112,8 @@ RegionManager::RegionManager()
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
   m_version.patch = UMAP_VERSION_PATCH;
+
+  m_last_iter = m_active_regions.end();
 
   m_system_page_size = sysconf(_SC_PAGESIZE);
 
@@ -255,15 +259,40 @@ RegionManager::read_env_var( const char* env, uint64_t*  val )
 RegionDescriptor*
 RegionManager::containing_region( char* vaddr )
 {
-  // TODO: change this to judy array once implementation works properly
-  for ( auto it : m_active_regions ) {
-    char* b = it.second->start();
-    char* e = it.second->end();
+  std::lock_guard<std::mutex> lock(m_mutex);
+
+  //
+  // Since the list of pages coming in are usually sorted, we have a special
+  // check here to see if the region found for the previous check will work.
+  // If this is the case, we can return early.
+  //
+  if ( m_last_iter != m_active_regions.end() ) {
+    char* b = m_last_iter->second->start();
+    char* e = m_last_iter->second->end();
+
     if ( vaddr >= b && vaddr < e )
-      return it.second;
+      return m_last_iter->second;
   }
 
-  UMAP_ERROR("Unable to find addr: " << (void*)vaddr << " in region map");
+  auto iter = m_active_regions.upper_bound(reinterpret_cast<void*>(vaddr));
+
+  if ( iter != m_active_regions.begin() ) {
+    // Back up the iterator
+    --iter;
+
+    char* b = iter->second->start();
+    char* e = iter->second->end();
+
+    if ( vaddr >= b && vaddr < e ) {
+      m_last_iter = iter;
+      return iter->second;
+    }
+  }
+
+  UMAP_LOG(Debug, "Unable to find addr: "
+      << (void*)vaddr
+      << " in region map. Ignoring"
+  );
 
   return nullptr;
 }

@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -22,7 +22,9 @@ namespace Umap {
       EvictManager( void );
       ~EvictManager( void );
       void schedule_eviction(PageDescriptor* pd);
+      void schedule_flush(PageDescriptor* pd);
       void EvictAll( void );
+      void WaitAll( void );
 
     private:
       Buffer* m_buffer;

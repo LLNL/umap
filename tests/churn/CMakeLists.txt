@@ -1,5 +1,5 @@
 #############################################################################
-# Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+# Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 # UMAP Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: LGPL-2.1-only
@@ -17,9 +17,15 @@ if(OPENMP_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     add_executable(churn churn.cpp options.cpp)
+    
+    if(STATIC_UMAP_LINK)
+       set(umap-lib "umap-static")
+    else()
+       set(umap-lib "umap")
+    endif()
 
-    add_dependencies(churn umap)
-    target_link_libraries(churn umap)
+    add_dependencies(churn ${umap-lib})
+    target_link_libraries(churn ${umap-lib})
 
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 

@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -41,72 +41,84 @@ int
 uunmap(void*  addr, uint64_t length)
 {
   UMAP_LOG(Debug, "addr: " << addr << ", length: " << length);
-  auto rm = Umap::RegionManager::getInstance();
-  rm->removeRegion((char*)addr);
+  auto& rm = Umap::RegionManager::getInstance();
+  rm.removeRegion((char*)addr);
   UMAP_LOG(Debug, "Done");
   return 0;
 }
 
+
+int umap_flush(){
+  
+  UMAP_LOG(Debug,  "umap_flush " );
+  
+  return Umap::RegionManager::getInstance().flush_buffer();
+
+}
+
+
 void umap_prefetch( int npages, umap_prefetch_item* page_array )
 {
-  Umap::RegionManager::getInstance()->prefetch(npages, page_array);
+  Umap::RegionManager::getInstance().prefetch(npages, page_array);
 }
 
 long
 umapcfg_get_system_page_size( void )
 {
-  return Umap::RegionManager::getInstance()->get_system_page_size();
+  return Umap::RegionManager::getInstance().get_system_page_size();
 }
 
 uint64_t
 umapcfg_get_max_pages_in_buffer( void )
 {
-  return Umap::RegionManager::getInstance()->get_max_pages_in_buffer();
+  return Umap::RegionManager::getInstance().get_max_pages_in_buffer();
 }
 
 uint64_t
 umapcfg_get_read_ahead( void )
 {
-  return Umap::RegionManager::getInstance()->get_read_ahead();
+  return Umap::RegionManager::getInstance().get_read_ahead();
 }
 
 uint64_t
 umapcfg_get_umap_page_size( void )
 {
-  return Umap::RegionManager::getInstance()->get_umap_page_size();
+  return Umap::RegionManager::getInstance().get_umap_page_size();
 }
 
 uint64_t
 umapcfg_get_num_fillers( void )
 {
-  return Umap::RegionManager::getInstance()->get_num_fillers();
+  return Umap::RegionManager::getInstance().get_num_fillers();
 }
 
 uint64_t
 umapcfg_get_num_evictors( void )
 {
-  return Umap::RegionManager::getInstance()->get_num_evictors();
+  return Umap::RegionManager::getInstance().get_num_evictors();
 }
 
 int
 umapcfg_get_evict_low_water_threshold( void )
 {
-  return Umap::RegionManager::getInstance()->get_evict_low_water_threshold();
+  return Umap::RegionManager::getInstance().get_evict_low_water_threshold();
 }
 
 int
 umapcfg_get_evict_high_water_threshold( void )
 {
-  return Umap::RegionManager::getInstance()->get_evict_high_water_threshold();
+  return Umap::RegionManager::getInstance().get_evict_high_water_threshold();
 }
 
 uint64_t
 umapcfg_get_max_fault_events( void )
 {
-  return Umap::RegionManager::getInstance()->get_max_fault_events();
+  return Umap::RegionManager::getInstance().get_max_fault_events();
 }
 
 namespace Umap {
+  // A global variable to ensure thread-safety
+  std::mutex g_mutex;
 
 void*
 umap_ex(
@@ -119,10 +131,11 @@ umap_ex(
   , Store* store
 )
 {
-  auto rm = RegionManager::getInstance();
-  auto umap_psize = rm->get_umap_page_size();
+  std::lock_guard<std::mutex> lock(g_mutex);
+  auto& rm = RegionManager::getInstance();
+  auto umap_psize = rm.get_umap_page_size();
 
-  UMAP_LOG(Debug, 
+  UMAP_LOG(Info, 
       "region_addr: " << region_addr
       << ", region_size: " << region_size
       << ", prot: " << prot
@@ -132,18 +145,26 @@ umap_ex(
       << ", umap_psize: " << umap_psize
   );
 
+#ifdef UMAP_RO_MODE
+  if( prot != PROT_READ )
+    UMAP_ERROR("only PROT_READ is supported in UMAP_RO_MODE compilation");
+#else
+  if( prot & ~(PROT_READ|PROT_WRITE) )
+    UMAP_ERROR("only PROT_READ or PROT_WRITE is supported in UMap");
+#endif
+    
   //
   // TODO: Allow for non-page-multiple size and zero-fill like mmap does
   //
   if ( ( region_size % umap_psize ) ) {
     UMAP_ERROR("Region size " << region_size 
                 << " is not a multple of umapPageSize (" 
-                << rm->get_umap_page_size() << ")");
+                << rm.get_umap_page_size() << ")");
   }
 
   if ( ( (uint64_t)region_addr & (umap_psize - 1) ) ) {
     UMAP_ERROR("region_addr must be page aligned: " << region_addr
-      << ", page size is: " << rm->get_umap_page_size());
+      << ", page size is: " << rm.get_umap_page_size());
   }
 
   if (!(flags & UMAP_PRIVATE) || flags & ~(UMAP_PRIVATE|UMAP_FIXED)) {
@@ -175,7 +196,7 @@ umap_ex(
   if ( store == nullptr )
     store = Store::make_store(umap_region, umap_size, umap_psize, fd);
 
-  rm->addRegion(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
+  rm.addRegion(store, (char*)umap_region, umap_size, (char*)mmap_region, mmap_size);
 
   return umap_region;
 }

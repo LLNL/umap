@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -8,7 +8,8 @@
 #define _UMAP_RegionManager_HPP
 
 #include <cstdint>
-#include <unordered_map>
+#include <mutex>
+#include <map>
 
 #include "umap/Buffer.hpp"
 #include "umap/EvictManager.hpp"
@@ -36,7 +37,13 @@ struct Version {
 //
 class RegionManager {
   public:
-    static RegionManager* getInstance( void );
+    static RegionManager& getInstance( void );
+
+    // delete copy, move, and assign operators
+    RegionManager(RegionManager const&) = delete;             // Copy construct
+    RegionManager(RegionManager&&) = delete;                  // Move construct
+    RegionManager& operator=(RegionManager const&) = delete;  // Copy assign
+    RegionManager& operator=(RegionManager &&) = delete;      // Move assign
 
     void addRegion(
           Store*   store
@@ -46,6 +53,7 @@ class RegionManager {
         , uint64_t mmap_region_size
     );
 
+    int flush_buffer();
     void prefetch(int npages, umap_prefetch_item* page_array);
     void removeRegion( char* mmap_region );
     Version  get_umap_version( void ) { return m_version; }
@@ -80,10 +88,10 @@ class RegionManager {
     Uffd* m_uffd;
     FillWorkers* m_fill_workers;
     EvictManager* m_evict_manager;
+    std::mutex m_mutex;
 
-    std::unordered_map<void*, RegionDescriptor*> m_active_regions;
-
-    static RegionManager* s_fault_monitor_manager_instance;
+    std::map<void*, RegionDescriptor*> m_active_regions;
+    std::map<void*, RegionDescriptor*>::iterator m_last_iter;
 
     RegionManager( void );
 

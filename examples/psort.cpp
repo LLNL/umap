@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -109,7 +109,7 @@ verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
   }
   uint64_t *arr = (uint64_t *) base_addr;
 
-  std::cout << "Verifying Data with\n";
+  std::cout << "Verifying Data\n";
 
 #pragma omp parallel for
   for(uint64_t i = 0; i < arraysize; ++i)
@@ -117,11 +117,13 @@ verify_sortfile( const char* fname, uint64_t arraysize, uint64_t totalbytes )
       std::cerr << "Data miscompare\n";
       i = arraysize;
     }
-
+  
   if (uunmap(base_addr, totalbytes) < 0) {
     std::cerr << "uunamp failed\n";
     return;
   }
+  std::cout << "Data is verified. uunmap done.\n"; 
+
   close(fd);
 }
 
@@ -132,7 +134,7 @@ main(int argc, char **argv)
 
   // Optional: Make umap's pages size double the default system page size
   //
-  // Use UMAP_PAGE_SIZE environment variable to set page size for umap
+  // Use UMAP_PAGESIZE environment variable to set page size for umap
   //
   uint64_t psize = umapcfg_get_umap_page_size();
 

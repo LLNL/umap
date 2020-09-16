@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2019 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -9,6 +9,7 @@
 
 #ifdef __cplusplus
   #include <cstdint>
+  #include <mutex>
   #include "umap/store/Store.hpp"
 #else // __cplusplus
   #include <stdint.h>
@@ -25,6 +26,8 @@ namespace Umap {
  * \param prot Same as input argument of mmap(2)
  * \param flags Same as input argument of mmap(2)
  */
+extern std::mutex m_mutex;
+extern int num_thread;
 void* umap_ex(
     void*         addr
   , std::size_t   length
@@ -60,11 +63,13 @@ int uunmap(
   , size_t length
 );
 
+int umap_flush(); 
+
 struct umap_prefetch_item {
   void* page_base_addr;
 };
 
-void umap_prefetch( int npages, umap_prefetch_item* page_array );
+void umap_prefetch( int npages, struct umap_prefetch_item* page_array );
 uint64_t umapcfg_get_umap_page_size( void );
 uint64_t umapcfg_get_max_fault_events( void );
 uint64_t umapcfg_get_num_fillers( void );

@@ -1,5 +1,5 @@
 ***********
-UMAP v2.0.0
+UMAP v2.1.0
 ***********
 
 Umap is a library that provides an mmap()-like interface to a simple, user-
@@ -28,6 +28,8 @@ Any questions? File an issue on GitHub.
   :caption: Reference
 
   advanced_configuration
+  environment_variables
+  sparse_store
 
 .. toctree::
   :maxdepth: 2
