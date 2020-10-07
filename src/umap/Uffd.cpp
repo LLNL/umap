@@ -25,6 +25,7 @@
 #include "umap/RegionDescriptor.hpp"
 #include "umap/RegionManager.hpp"
 #include "umap/util/Macros.hpp"
+#include "umap/TimeStamp.hpp"
 
 namespace Umap {
 
@@ -40,6 +41,8 @@ struct less_than_key {
 void
 Uffd::uffd_handler( void )
 {
+  TimeStamp t;
+  double total_process_time = 0;
   struct pollfd pollfd[3] = {
       { .fd = m_uffd_fd, .events = POLLIN }
     , { .fd = m_pipe[0], .events = POLLIN }
@@ -117,7 +120,9 @@ Uffd::uffd_handler( void )
       // search to continue from where it last found something.
       //
       UMAP_LOG(Debug, "Received fault event "<<std::hex<<(void *)last_addr<<" local_addr "<<std::hex<<(void *)get_local_addr(last_addr));
+      t.start();
       process_page(iswrite, m_server?(char *)get_local_addr(last_addr):last_addr);
+      total_process_time += t.stop();
     }
   }
   UMAP_LOG(Debug, "Good bye");
