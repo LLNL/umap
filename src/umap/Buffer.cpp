@@ -169,7 +169,7 @@ bool Buffer::low_threshold_reached( void )
   return m_busy_pages.size() <= m_evict_low_water;
 }
 
-void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd)
+void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd)
 {
   WorkItem work;
   work.type = Umap::WorkItem::WorkType::NONE;
@@ -194,10 +194,8 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd,
         UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
       }
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
-      work.page_desc = pd;
-      work.c_uffd = c_uffd;
-//      unlock();
-//      return;
+      unlock();
+      return pd->page;
     }
   }
   else {                  // This page has not been brought in yet
@@ -229,6 +227,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd,
   }
 
   unlock();
+  return NULL;
 }
 
 // Return nullptr if page not present, PageDescriptor * otherwise

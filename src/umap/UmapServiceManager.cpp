@@ -195,7 +195,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex);
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
   if(!map_reg){
-    ffd = open(filename.c_str(),O_RDONLY);
+    ffd = open(filename.c_str(),O_LARGEFILE | O_DIRECT| O_RDONLY);
     if(ffd < 0){
       std::ostringstream errStream;
       errStream << "Error"<<__func__<<"("<<__FILE__<<":"<<__LINE__<<")"<<": Could not open file"<<filename;

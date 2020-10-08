@@ -128,8 +128,10 @@ Uffd::process_page( bool iswrite, char* addr )
 {
   auto rd = m_rm.containing_region(addr);
 
-  if ( rd != nullptr )
-    m_buffer->process_page_event(addr, iswrite, rd, this);
+  if ( rd != nullptr ){
+   void *ret = m_buffer->process_page_event(addr, iswrite, rd, this);
+   wake_up_range(ret);
+  }
 }
 
 void
@@ -258,14 +260,16 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 void
 Uffd::wake_up_range(void *page_address)
 {
-  struct uffdio_range wake = {.start = (uint64_t)(m_server?get_remote_addr(page_address):page_address) 
+  if(page_address){
+    struct uffdio_range wake = {.start = (uint64_t)(m_server?get_remote_addr(page_address):page_address) 
                              ,.len = m_page_size
                              };
-  if (ioctl(m_uffd_fd, UFFDIO_WAKE, &wake) == -1){
-    UMAP_ERROR("UFFDIO_WAKE failed @ " 
-      << page_address << " : "
-      << strerror(errno) << std::endl
-    );
+    if (ioctl(m_uffd_fd, UFFDIO_WAKE, &wake) == -1){
+      UMAP_ERROR("UFFDIO_WAKE failed @ " 
+        << page_address << " : "
+        << strerror(errno) << std::endl
+      );
+    }
   }
 }
 
