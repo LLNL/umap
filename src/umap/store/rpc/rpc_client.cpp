@@ -31,10 +31,9 @@ size_t client_get_resource_size(const char*id)
 void print_client_memory_pool()
 {
   for(auto it : resource_pool){
-    UMAP_LOG(Info, "Client "<< client_id
-	     <<" pool[ " << it.first << " ] :: "
-	     <<"size=" << (it.second).rsize
-	     << ", server_stride=" << (it.second).server_stride);
+    UMAP_LOG(Info, "Client "<< client_id <<" pool[ " << it.first << " ] :: "
+            <<"size=" << (it.second).rsize
+	          << ", server_stride=" << (it.second).server_stride);
 
     for(auto it2 : (it.second).meta_table )
       UMAP_LOG(Info, "Server "<< it2.server_id << " : "<< it2.offset << ", " <<it2.size) ;
@@ -106,7 +105,7 @@ void client_request_resource(const char* id, size_t requested_size){
       resource_pool[id].meta_table.emplace_back(offset, out.size, i);
       offset += out.size;
 
-      //UMAP_LOG(Info, "Server "<< i <<"/"<<num_servers<<" return size "<< out.size << " for " << id << " total_size="<<offset);
+      UMAP_LOG(Info, "Server "<< i <<"/"<<num_servers<<" return size "<< out.size << " for " << id << " total_size="<<offset);
 
     }else{
       // if this server cannot provide the resource, skip it
@@ -166,7 +165,7 @@ bool client_add_resource(const char*id,
     return false;  
   }
 
-  //print_client_memory_pool();
+  print_client_memory_pool();
 
   return true;
 }
@@ -322,7 +321,7 @@ static void setup_margo_client(){
     margo_finalize(mid);
     UMAP_ERROR("failed to convert client address to string");
   }
-  UMAP_LOG(Info, "Margo client adress: " << client_address_string);
+  //UMAP_LOG(Info, "Margo client adress: " << client_address_string);
   
 }
 
@@ -406,13 +405,13 @@ int client_read_from_server(const char* id, void *buf_ptr, size_t nbytes, off_t 
     std::vector<ServerMetadata>& metatable= obj.meta_table;
     
     for(auto it : metatable){
+      
       if(it.offset<=off && off<(it.offset+it.size) ){
-
-	//make sure no page is split over more than one server
-	assert( (off+nbytes)<=(it.offset+it.size)  );
-	server_id = it.server_id;
-	offset = off-it.offset;
-	break;
+	      //make sure no page is split over more than one server
+	      assert( (off+nbytes)<=(it.offset+it.size)  );
+	      server_id = it.server_id;
+	      offset = off-it.offset;
+	      break;
       }
     }
     assert( server_id>=0 );

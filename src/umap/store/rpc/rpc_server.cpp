@@ -150,8 +150,6 @@ void* get_resource(const char* id, size_t offset, size_t size)
  */
 static int umap_server_read_rpc(hg_handle_t handle)
 {
-  UMAP_LOG(Debug, "Entering");
-
   assert(mid != MARGO_INSTANCE_NULL);
   
   hg_return_t ret;

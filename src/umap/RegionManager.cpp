@@ -56,6 +56,20 @@ RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char*
     m_uffd = new Uffd();
     m_fill_workers = new FillWorkers();
     m_evict_manager = new EvictManager();
+
+
+    std::cout
+      << "Environment Variable Configuration:\n"
+      << "UMAP_PAGESIZE                   - currently: " << umapcfg_get_umap_page_size() << " bytes\n"
+      << "UMAP_PAGE_FILLERS               - currently: " << umapcfg_get_num_fillers() << " fillers\n"
+      << "UMAP_PAGE_EVICTORS              - currently: " << umapcfg_get_num_evictors() << " evictors\n"
+      << "UMAP_READ_AHEAD                 - currently: " << umapcfg_get_read_ahead() << " pages\n"
+      << "UMAP_BUFSIZE                    - currently: " << umapcfg_get_max_pages_in_buffer() << " pages\n"
+      << "UMAP_EVICT_LOW_WATER_THRESHOLD  - currently: " << umapcfg_get_evict_low_water_threshold() << " percent full\n"
+      << "UMAP_EVICT_HIGH_WATER_THRESHOLD - currently: " << umapcfg_get_evict_high_water_threshold()
+      << " percent full\n"
+      << std::endl;
+ 
   }
 
   auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
