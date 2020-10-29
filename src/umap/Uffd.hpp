@@ -59,6 +59,7 @@ namespace Umap {
       void copy_in_page(char* data, void* page_address);
       void copy_in_page_and_write_protect(char* data, void* page_address);
       void wake_up_range( void* );
+      void *get_remote_addr(void *);
 
     private:
       RegionManager&        			m_rm;
@@ -74,7 +75,6 @@ namespace Umap {
       void uffd_handler( void );
       void ThreadEntry( void );
       void check_uffd_compatibility( void );
-      void *get_remote_addr(void *);
       void *get_local_addr(void *);
   };
 } // end of namespace Umap

@@ -48,27 +48,46 @@ static uint64_t next_region_start_addr = 0x600000000000;
 Umap::ClientManager* ClientManager::instance = NULL;
 Umap::UmapServerManager* Umap::UmapServerManager::Instance=NULL;
 
+unsigned long get_aligned_size(unsigned long fsize){
+  unsigned long page_size = umapcfg_get_umap_page_size();
+  return (fsize & (~(page_size - 1))) + page_size;
+}
+
+unsigned long get_mmap_size(unsigned long fsize){
+  return get_aligned_size(fsize) + umapcfg_get_umap_page_size();
+}
+
+void *get_umap_aligned_base_addr(void *mmap_addr){
+  unsigned long page_size = umapcfg_get_umap_page_size(); 
+  std::cout<<"Client side page size"<<page_size<<std::endl;
+  return (void *)(((unsigned long)mmap_addr + page_size - 1) & (~(page_size - 1)));
+}
+
 int UmapServInfo::setup_remote_umap_handle(){
   int status = 0;
   ActionParam params;
   params.act = uffd_actions::umap;
   strcpy(params.name, filename.c_str());
   params.args = args;
+  void *umap_loc;
 
   ::write(umap_server_fd, &params, sizeof(params));
   // recieve memfd and region size
   sock_fd_read(umap_server_fd, &(loc), sizeof(region_loc), &(memfd));
-  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::endl;
-
-  loc.base_addr = mmap(0, loc.size, PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
+  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::dec<<std::endl;
+  umap_loc = (void *)get_umap_aligned_base_addr(loc.base_addr);
+  loc.len_diff = (uint64_t)umap_loc - (uint64_t)loc.base_addr;
+  loc.base_addr = mmap(0, get_mmap_size(loc.size), PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
   if ((int64_t)loc.base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
   }
 
-  std::cout<<"mmap:"<<std::hex<< loc.base_addr<<std::endl;
+  std::cout<<"mmap:"<<std::hex<< loc.base_addr<<std::dec<<std::endl;
   //Tell server that the mmap is complete
-  ::write(umap_server_fd, (void *)&loc.base_addr, sizeof(loc.base_addr));
+  umap_loc = loc.base_addr + loc.len_diff;
+  std::cout<<"Sending umap aligned address:"<<std::hex<<umap_loc<<std::dec<<std::endl;
+  ::write(umap_server_fd, (void *)&umap_loc, sizeof(umap_loc));
 
   //Wait for the server to register the region to uffd
   sock_recv(umap_server_fd, (char*)&status, 1);
@@ -156,7 +175,7 @@ void* ClientManager::map_req(std::string filename, int prot, int flags){
   std::lock_guard<std::mutex> guard(cm_mutex);
   auto info = cs_umap(filename, prot, flags);
   if(info){
-    return info->loc.base_addr;
+    return info->loc.base_addr + info->loc.len_diff;
   }else
     return NULL;
 }
@@ -187,10 +206,9 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   int memfd=-1;
   int ffd = -1;
   char status;
-  void *base_addr_local;
+  void *base_mmap_local;
   void *base_addr_remote;
-  unsigned long aligned_size;
-  unsigned long page_size = 4096;
+  unsigned long mmap_size;
 
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex);
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
@@ -206,13 +224,13 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
 
     fstat(ffd, &st);
     memfd = memfd_create("uffd", 0);
-    aligned_size = (st.st_size & ~(page_size - 1)) + page_size;
-    ftruncate(memfd, aligned_size);
+    mmap_size = get_mmap_size(st.st_size);
+    ftruncate(memfd, mmap_size);
     mapped_files.push_back(filename);
-    base_addr_local = mmap(0, aligned_size, PROT_READ|PROT_WRITE, MAP_SHARED,memfd, 0);
-    map_reg = new mappedRegionInfo(ffd, memfd, base_addr_local, aligned_size);
+    base_mmap_local = mmap(0, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,memfd, 0);
+    map_reg = new mappedRegionInfo(ffd, memfd, base_mmap_local, get_mmap_size(st.st_size));
     mgr->add_mapped_region(filename, map_reg);
-    UMAP_LOG(Debug,"filename:"<<filename<<" size "<<st.st_size<<" mmap local: 0x"<< std::hex << base_addr_local <<std::endl);
+    UMAP_LOG(Debug,"filename:"<<filename<<" size "<<st.st_size<<" mmap local: 0x"<< std::hex << base_mmap_local <<std::dec<<std::endl);
           //Todo: add error handling code
     //next_region_start_addr += aligned_size;
   }
@@ -221,7 +239,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   //Wait for the memfd to get mapped by the client
   sock_recv(csfd, (char*)&base_addr_remote, sizeof(base_addr_remote));
   //uffd is already present with the UmapServiceThread
-  std::cout<<"s: addr: "<<map_reg->reg.base_addr<<" uffd: "<<uffd<<" map_len="<<map_reg->reg.size<<std::endl;
+  std::cout<<"s: addr: "<<map_reg->reg.base_addr<<" uffd: "<<uffd<<" map_len="<<get_mmap_size(map_reg->reg.size)<<std::endl;
   return Umap::umap_ex(map_reg->reg.base_addr, map_reg->reg.size, PROT_READ|PROT_WRITE, flags, map_reg->filefd, 0, NULL, true, uffd, base_addr_remote); //prot and flags need to be set 
 }
 

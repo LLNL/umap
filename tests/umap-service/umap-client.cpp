@@ -17,20 +17,20 @@ int main(int argc, char *argv[]){
   {
     mapped_addr = client_umap(argv[1], PROT_READ, MAP_SHARED);
     mapped_addr2 = client_umap(argv[2], PROT_READ, MAP_SHARED);
-    for(i=0, read_addr=(char *)mapped_addr, read_addr2=(char *)mapped_addr2;i<10000 ;i++,read_addr+16384, read_addr2+4096){
+    for(i=0, read_addr=(char *)mapped_addr, read_addr2=(char *)mapped_addr2;i<10000 ;i++,read_addr+=16384, read_addr2+=4096){
       char val = *read_addr;
-      cout<<"Jumped to next page"<<val<<endl;
+      cout<<"Jumped to next page"<<reinterpret_cast<void *>(read_addr)<<endl;
       val = *read_addr2;
-      cout<<"Jumped to second file page"<<val<<endl;
+      cout<<"Jumped to second file page"<<reinterpret_cast<void *>(read_addr2)<<endl;
     }
-    client_uunmap(argv[1]); 
-    client_uunmap(argv[2]); 
+//    client_uunmap(argv[1]); 
+//    client_uunmap(argv[2]); 
   }
 
-  mapped_addr = client_umap(argv[1], PROT_READ, MAP_SHARED);
-  for(i=0, read_addr=(char *)mapped_addr ;i<100 ;i++,read_addr+16384){
+//  mapped_addr = client_umap(argv[1], PROT_READ, MAP_SHARED);
+  for(i=0, read_addr=(char *)mapped_addr ;i<100 ;i++,read_addr+=16384){
     char val = *read_addr;
-    cout<<"Jumped to next page"<<val<<endl;
+    cout<<"Jumped to next page"<<reinterpret_cast<void *>(read_addr)<<endl;
   }
   client_uunmap(argv[1]); 
 

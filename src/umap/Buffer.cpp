@@ -147,15 +147,18 @@ PageDescriptor* Buffer::evict_oldest_page()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
+  PageDescriptor::State ret;
   if (m_rm.get_num_active_regions() > 1) {
     lock();
     while ( rd->count() ) {
       auto pd = rd->get_next_page_descriptor();
-      pd->deferred = true;
-      wait_for_page_state(pd, PageDescriptor::State::PRESENT);
-      pd->set_state_leaving();
-      m_rm.get_evict_manager()->schedule_eviction(pd);
-      wait_for_page_state(pd, PageDescriptor::State::FREE);
+      ret = wait_existence_page_state(pd);
+      if(ret == PageDescriptor::State::PRESENT){
+        pd->deferred = true;
+        pd->set_state_leaving();
+        m_rm.get_evict_manager()->schedule_eviction(pd);
+        wait_for_page_state(pd, PageDescriptor::State::FREE);
+      }
     }
     unlock();
   }
@@ -326,6 +329,22 @@ void Buffer::lock()
 void Buffer::unlock()
 {
   pthread_mutex_unlock(&m_mutex);
+}
+
+PageDescriptor::State Buffer::wait_existence_page_state(PageDescriptor* pd){
+  PageDescriptor::State ret = pd->state;
+  while( ret!=PageDescriptor::State::PRESENT && ret!=PageDescriptor::State::FREE ){
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+    pthread_cond_wait(&m_state_change_cond, &m_mutex);
+
+    --m_waits_for_state_change;
+    ret = pd->state;
+  }
+  return ret;
 }
 
 void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)

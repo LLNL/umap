@@ -26,6 +26,7 @@ namespace Umap{
   typedef struct{
     uint64_t size;
     void *base_addr;
+    uint64_t len_diff;
   }region_loc;
  
   typedef struct {

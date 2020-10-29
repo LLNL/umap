@@ -94,8 +94,10 @@ Uffd::uffd_handler( void )
     // events are then sorted in page base address / operation type order and
     // are processed only once while duplicates are skipped.
     //
-    for (int i = 0; i < msgs; ++i)
+    for (int i = 0; i < msgs; ++i){
+      m_events[i].arg.pagefault.address = m_server?(__u64)get_local_addr((void *)(m_events[i].arg.pagefault.address)):(__u64)m_events[i].arg.pagefault.address;
       m_events[i].arg.pagefault.address &= ~(m_page_size-1);
+    }
 
     std::sort(&m_events[0], &m_events[msgs], less_than_key());
 
@@ -116,8 +118,8 @@ Uffd::uffd_handler( void )
       // TODO: Since the addresses are sorted, we could optimize the
       // search to continue from where it last found something.
       //
-      UMAP_LOG(Debug, "Received fault event "<<std::hex<<(void *)last_addr<<" local_addr "<<std::hex<<(void *)get_local_addr(last_addr));
-      process_page(iswrite, m_server?(char *)get_local_addr(last_addr):last_addr);
+      //UMAP_LOG(Info, "Received fault event with local addr"<<std::hex<<(void *)last_addr<<" for remote_addr "<<std::hex<<(void *)get_remote_addr(last_addr)<<std::dec);
+      process_page(iswrite, last_addr);
     }
   }
   UMAP_LOG(Debug, "Good bye");
@@ -234,6 +236,7 @@ Uffd::copy_in_page(char* data, void* page_address)
 void
 Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 {
+    int trial_count=10;
 //  if(m_server){
 //    UMAP_ERROR("WP not supported by umap-server");
 //  }
@@ -249,12 +252,29 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 #endif
   };
 
-  if (ioctl(m_uffd_fd, UFFDIO_COPY, &copy) == -1) {
-    UMAP_ERROR("UFFDIO_COPY failed @ " 
-        << page_address << " : "
-        << strerror(errno) << std::endl
-    );
+  while(--trial_count){
+    if(ioctl(m_uffd_fd, UFFDIO_COPY, &copy) == -1) {
+      if(errno != EAGAIN){
+        UMAP_ERROR("UFFDIO_COPY failed @ " 
+          << std::hex << copy.dst << " : " << std::dec << strerror(errno) << "with trial count" << trial_count << std::endl
+        );
+      }else{
+        UMAP_LOG(Info, "EAGAIN: "<< std::hex << copy.dst << std::dec <<" copy.copy= "<< copy.copy<<"copy.len= "<< copy.len <<std::endl);
+        if(copy.copy < copy.len){
+          copy.dst += copy.copy;
+          copy.src += copy.copy;
+          copy.len -= copy.copy;
+        }
+      }
+    }else{
+//      UMAP_LOG(Info, "uffdio_copy succeeded for page addr"<<std::hex<<page_address<<std::dec<<std::endl);
+      return;
+    }
   }
+  UMAP_ERROR("Several UFFDIO_COPY attempts failed @ " 
+          << page_address << " : "
+          << strerror(errno) << std::endl);
+
 }
 
 void
@@ -329,7 +349,7 @@ Uffd::get_local_addr(void *remote_addr){
   std::map<void *, RegionDescriptor *>::iterator it;
   for(it=m_rtol_map.begin(); it!=m_rtol_map.end(); it++){
     RegionDescriptor* rd = it->second;
-    UMAP_LOG(Debug, "remote_addr: "<<std::hex<<remote_addr<<"registered region addr"<<std::hex<<it->first<<std::endl);
+    UMAP_LOG(Debug, "remote_addr: "<<std::hex<<remote_addr<<"registered region addr"<<it->first<<std::dec<<std::endl);
     if((remote_addr >= (char *)it->first) && 
         (remote_addr < ((char *)it->first + rd->size()))){
       return rd->start() + ((char *)remote_addr - (char *)it->first);

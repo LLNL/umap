@@ -79,6 +79,7 @@ namespace Umap {
 
       void lock();
       void unlock();
+      PageDescriptor::State wait_existence_page_state(PageDescriptor* pd);
       void wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st);
   };
 
