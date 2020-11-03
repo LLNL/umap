@@ -214,18 +214,27 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   if ( rd == nullptr )
     UMAP_ERROR("the prefetched region is not found");
 
+  /* cap the prefetched region */
   char* pend = paddr + size;  
-  if( pend > rd->end() )
-    UMAP_ERROR("the prefetched rergion is larger than the region (end)");
+  if( pend > rd->end() ){
+    pend = (char*) rd->end();
+    UMAP_LOG(Info, "the prefetched rergion is larger than the region (end at "<<pend<<")");
+  }
 
-  uint64_t mem_avail = 0;
+  /* get aligned fetch size */
+  uint64_t offset_st = rd->store_offset( paddr );
+  uint64_t offset_end = rd->store_offset( pend );
+  size = pend - paddr;
+  
+  /* Check free memory */
+  uint64_t mem_avail_kb = 0;
+  unsigned long mem;
   std::string token;
   std::ifstream file("/proc/meminfo");
   while (file >> token) {
     if (token == "MemAvailable:") {
-      unsigned long mem;
       if (file >> mem) {
-        mem_avail = (mem>16000000) ?((mem-16000000)*1024) :0;
+	mem_avail_kb = mem;
       } else {
         UMAP_ERROR("UMAP unable to determine system memory size\n");
       }
@@ -234,18 +243,26 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
     file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
   }
 
-  size_t num_free_pages = m_free_pages.size();
-  uint64_t psize = m_rm.get_umap_page_size();
-  uint64_t free_page_mem = psize * num_free_pages;
-  UMAP_LOG(Info, " MemAvailable: " << mem_avail << " fetch_and_pin = " << size 
-              << " num_free_pages = " << num_free_pages 
-              << " (" << free_page_mem << " + " << size << ") = " << ( free_page_mem + size));
+  const uint64_t mem_margin_kb = 16777216;
+  mem_avail_kb = (mem_avail_kb > mem_margin_kb) ?(mem_avail_kb-mem_margin_kb) : 0;
+  
 
+  uint64_t psize = m_rm.get_umap_page_size();
+  size_t num_free_pages = m_free_pages.size();
+  uint64_t free_page_mem = psize * num_free_pages;
+  uint64_t mem_avail = (mem_avail_kb*1024/psize) * psize;
+
+  UMAP_LOG(Info, " MemAvailable = " << mem
+	   << " Mem Usable = " << mem_avail
+	   << " fetch_and_pin = " << size
+	   << " free_page_mem = " << free_page_mem << " (" << num_free_pages <<" x " << psize <<" )");
+
+  /* Reduce the number of free pages if avail mem is insufficient */
   if( ( free_page_mem + size) >= mem_avail ){
 
-    uint64_t reduce_mem = ( free_page_mem + size) - mem_avail;
-    if( reduce_mem < free_page_mem){
-      size_t new_num_free_pages = (free_page_mem - reduce_mem)/psize;
+    uint64_t reduced_mem = ( free_page_mem + size) - mem_avail;
+    if( reduced_mem < free_page_mem){
+      size_t new_num_free_pages = (free_page_mem - reduced_mem)/psize;
       m_free_pages.resize(new_num_free_pages);
       
       m_size = m_busy_pages.size() + m_free_pages.size();
@@ -255,6 +272,7 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
       UMAP_LOG(Info, "Reduced Buffer Size to " << m_size );
 
     }else{
+      /* TODO: evict current pages? */
       UMAP_ERROR("Currently, no support for pinning a region larger than free pages\n");
     }
   }
@@ -262,10 +280,8 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
 
   /* get page alighed offset*/
   Uffd* m_uffd = m_rm.get_uffd_h();
-  uint64_t offset_st = rd->store_offset( paddr );
-  uint64_t offset_end = rd->store_offset( pend );
   size_t num_pages = (offset_end - offset_st)/psize;
-  size_t num_fetch_threads = (psize<32768UL) ?8 :4;
+  size_t num_fetch_threads = (num_pages>1024) ?8 : 1;
   size_t stride = num_pages/num_fetch_threads*psize;
 
   time_t start = time(NULL);
@@ -291,25 +307,7 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
     pthread_join(fetchThreads[i], NULL);
 
   time_t end = time(NULL);
-  printf("Fetch_and_pin: %d seconds\n", (end-start));
-
-  /*
-  char* copyin_buf = (char*) malloc(psize);
-  if ( !copyin_buf )
-    UMAP_ERROR("Failed to allocate copyin_buf");
-
-  uint64_t offset = offset_st;
-  for(int i=0; i<num_pages; i++){
-    
-    if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
-      UMAP_ERROR("failed to read_from_store at offset="<<offset);
-  
-    m_uffd->copy_in_page(copyin_buf, region_st + offset );
-    
-    offset += psize;
-  }
-  free(copyin_buf);
-  */
+  UMAP_LOG(Info,"Fetch_and_pin: "<< (end-start) << " seconds");
 
   unlock();
 }
