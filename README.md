@@ -1,4 +1,4 @@
-# UMAP v2.0.0
+# UMAP v2.1.0
 
 [![Travis Build Status](https://travis-ci.com/LLNL/umap.svg?branch=develop)](https://travis-ci.com/LLNL/umap)
 [![Documentation Status](https://readthedocs.org/projects/llnl-umap/badge/?version=develop)](https://llnl-umap.readthedocs.io/en/develop/?badge=develop)
@@ -75,3 +75,4 @@ If you have build problems, we have comprehensive
 - Marty McFadden  (mcfadden8@llnl.gov)
 - Maya Gokhale (gokhale2@llnl.gov)
 - Eric Green (green77@llnl.gov)
+- Abhik Sarkar (sarkar6@llnl.gov)
