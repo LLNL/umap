@@ -63,7 +63,7 @@ namespace Umap {
           UMAP_ERROR("read_from_store failed");
 
         if ( ! w.page_desc->dirty ) {
-          c_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
+          c_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page, (void *)w.page_desc);
         }
         else {
           c_uffd->copy_in_page(copyin_buf, w.page_desc->page);

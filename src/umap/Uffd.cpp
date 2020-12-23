@@ -234,7 +234,7 @@ Uffd::copy_in_page(char* data, void* page_address)
 }
 
 void
-Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
+Uffd::copy_in_page_and_write_protect(char* data, void* page_address, void *desc)
 {
     int trial_count=10;
 //  if(m_server){
@@ -256,7 +256,7 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
     if(ioctl(m_uffd_fd, UFFDIO_COPY, &copy) == -1) {
       if(errno != EAGAIN){
         UMAP_ERROR("UFFDIO_COPY failed @ " 
-          << std::hex << copy.dst << " : " << std::dec << strerror(errno) << "with trial count" << trial_count << std::endl
+          << std::hex << copy.dst << "with desc" << desc << " : " << std::dec << strerror(errno) << "with trial count" << trial_count << std::endl
         );
       }else{
         UMAP_LOG(Info, "EAGAIN: "<< std::hex << copy.dst << std::dec <<" copy.copy= "<< copy.copy<<"copy.len= "<< copy.len <<std::endl);
@@ -267,7 +267,7 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
         }
       }
     }else{
-//      UMAP_LOG(Info, "uffdio_copy succeeded for page addr"<<std::hex<<page_address<<std::dec<<std::endl);
+//      UMAP_LOG(Info, "uffdio_copy succeeded for page addr"<<std::hex<<page_address<<"with desc ="<<desc<<std::dec<<std::endl);
       return;
     }
   }

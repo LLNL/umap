@@ -47,8 +47,13 @@ void EvictWorkers::EvictWorker( void )
       continue;
     
     if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
-      if (madvise(pd->page, page_size, MADV_REMOVE) == -1)
-        UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+      for(int i=0;i<1;i++){	
+      	if (madvise(pd->page + i*page_size/1, page_size/1, MADV_REMOVE) == -1){
+          UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
+        }else{
+//        std::cout<<"Removed pages starting "<<std::hex<<(void *)pd->page <<" and ending"<<(void *)pd->page + page_size<<std::dec<<std::endl;
+        }
+      }
     }
     m_buffer->mark_page_as_free(w.page_desc);
   }

@@ -57,7 +57,7 @@ namespace Umap {
       void  enable_write_protect( void* );
       void disable_write_protect( void* );
       void copy_in_page(char* data, void* page_address);
-      void copy_in_page_and_write_protect(char* data, void* page_address);
+      void copy_in_page_and_write_protect(char* data, void* page_address, void *desc);
       void wake_up_range( void* );
       void *get_remote_addr(void *);
 

@@ -175,10 +175,12 @@ bool Buffer::low_threshold_reached( void )
 void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd)
 {
   WorkItem work;
+  PageDescriptor *pd = nullptr;
   work.type = Umap::WorkItem::WorkType::NONE;
 
   lock();
-  auto pd = page_already_present(paddr);
+  while(pd==nullptr){
+  pd = page_already_present(paddr);
 
   if ( pd != nullptr ) {  // Page is already present
     if (iswrite && pd->dirty == false) {
@@ -190,7 +192,6 @@ void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd
     }
     else {
       static int hiwat = 0;
-
       pd->spurious_count++;
       if (pd->spurious_count > hiwat) {
         hiwat = pd->spurious_count;
@@ -203,6 +204,9 @@ void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd
   }
   else {                  // This page has not been brought in yet
     pd = get_page_descriptor(paddr, rd);
+    if(pd==nullptr){
+      continue;
+    }
     pd->data_present = false;
     work.page_desc = pd;
     work.c_uffd = c_uffd;
@@ -228,7 +232,7 @@ void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd
     w.page_desc = nullptr;
     m_rm.get_evict_manager()->send_work(w);
   }
-
+  }
   unlock();
   return NULL;
 }
@@ -273,8 +277,10 @@ PageDescriptor* Buffer::get_page_descriptor(char* vaddr, RegionDescriptor* rd)
     ++m_stats.waits;
     ++m_waits_for_state_change;
     pthread_cond_wait(&m_avail_pd_cond, &m_mutex);
-
     --m_waits_for_avail_pd;
+    if(page_already_present(vaddr)){
+      return nullptr;
+    }
   }
 
   PageDescriptor* rval;

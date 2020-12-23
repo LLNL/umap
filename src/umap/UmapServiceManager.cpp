@@ -77,7 +77,7 @@ int UmapServInfo::setup_remote_umap_handle(){
   std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::dec<<std::endl;
   umap_loc = (void *)get_umap_aligned_base_addr(loc.base_addr);
   loc.len_diff = (uint64_t)umap_loc - (uint64_t)loc.base_addr;
-  loc.base_addr = mmap(0, get_mmap_size(loc.size), PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
+  loc.base_addr = mmap(umap_loc, get_mmap_size(loc.size), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, memfd, 0);
   if ((int64_t)loc.base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
@@ -227,12 +227,12 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
     mmap_size = get_mmap_size(st.st_size);
     ftruncate(memfd, mmap_size);
     mapped_files.push_back(filename);
-    base_mmap_local = mmap(0, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,memfd, 0);
+    base_mmap_local = mmap((void *)next_region_start_addr, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED,memfd, 0);
     map_reg = new mappedRegionInfo(ffd, memfd, base_mmap_local, get_mmap_size(st.st_size));
     mgr->add_mapped_region(filename, map_reg);
     UMAP_LOG(Debug,"filename:"<<filename<<" size "<<st.st_size<<" mmap local: 0x"<< std::hex << base_mmap_local <<std::dec<<std::endl);
           //Todo: add error handling code
-    //next_region_start_addr += aligned_size;
+    //next_region_start_add += alignee_size;
   }
   //Sending the memfd
   sock_fd_write(csfd, (char*)&(map_reg->reg), sizeof(region_loc), map_reg->memfd);
