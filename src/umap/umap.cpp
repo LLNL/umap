@@ -75,12 +75,6 @@ umapcfg_get_max_pages_in_buffer( void )
 }
 
 uint64_t
-umapcfg_get_read_ahead( void )
-{
-  return Umap::RegionManager::getInstance().get_read_ahead();
-}
-
-uint64_t
 umapcfg_get_umap_page_size( void )
 {
   return Umap::RegionManager::getInstance().get_umap_page_size();
