@@ -23,8 +23,7 @@ namespace Umap {
   void FillWorkers::FillWorker( void ) {
     char* copyin_buf;
     uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
-    uint64_t read_ahead = RegionManager::getInstance().get_read_ahead();
-    std::size_t sz = 2 * page_size;
+    std::size_t sz = page_size;
 
     if (posix_memalign((void**)&copyin_buf, page_size, sz)) {
       UMAP_ERROR("posix_memalign failed to allocated "
@@ -76,7 +75,6 @@ namespace Umap {
     :   WorkerPool("Fill Workers", RegionManager::getInstance().get_num_fillers())
       , m_uffd(RegionManager::getInstance().get_uffd_h())
       , m_buffer(RegionManager::getInstance().get_buffer_h())
-      , m_read_ahead(RegionManager::getInstance().get_read_ahead())
   {
     start_thread_pool();
   }

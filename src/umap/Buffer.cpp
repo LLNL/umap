@@ -127,10 +127,10 @@ PageDescriptor* Buffer::evict_oldest_page()
     for (auto it = m_busy_pages.begin(); it != m_busy_pages.end(); it++) {
       
       if ( (*it)->dirty ) {
-	PageDescriptor* pd = *it;
-	UMAP_LOG(Debug, "schedule Dirty Page: " << pd);
-	wait_for_page_state(pd, PageDescriptor::State::PRESENT);
-	m_rm.get_evict_manager()->schedule_flush(pd);
+        PageDescriptor* pd = *it;
+        UMAP_LOG(Debug, "schedule Dirty Page: " << pd);
+        wait_for_page_state(pd, PageDescriptor::State::PRESENT);
+        m_rm.get_evict_manager()->schedule_flush(pd);
       }
     }
 
@@ -152,10 +152,10 @@ void Buffer::evict_region(RegionDescriptor* rd)
     while ( rd->count() ) {
       auto pd = rd->get_next_page_descriptor();
       if(pd->state != PageDescriptor::State::LEAVING ){
-	pd->deferred = true;
-	wait_for_page_state(pd, PageDescriptor::State::PRESENT);
-	pd->set_state_leaving();
-	m_rm.get_evict_manager()->schedule_eviction(pd);
+        pd->deferred = true;
+        wait_for_page_state(pd, PageDescriptor::State::PRESENT);
+        pd->set_state_leaving();
+        m_rm.get_evict_manager()->schedule_eviction(pd);
       }
       wait_for_page_state(pd, PageDescriptor::State::FREE);
     }
@@ -227,6 +227,7 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
     m_rm.get_evict_manager()->send_work(w);
   }
 
+  m_stats.events_processed ++;
   unlock();
 }
 
@@ -342,6 +343,25 @@ void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
   }
 }
 
+void Buffer::monitor(void)
+{
+  const int monitor_interval = m_rm.get_monitor_freq();
+  UMAP_LOG(Info, "every " << monitor_interval << " seconds");
+
+  /* start the monitoring loop */
+  while( is_monitor_on ){
+
+    UMAP_LOG(Info, "m_size = " << m_size
+	     << ", num_busy_pages = " << m_busy_pages.size()
+	     << ", num_free_pages = " << m_free_pages.size()
+	     << ", events_processed = " << m_stats.events_processed );
+
+    sleep(monitor_interval);
+
+  }//End of loop
+
+}
+
 Buffer::Buffer( void )
   :     m_rm(RegionManager::getInstance())
       , m_size(m_rm.get_max_pages_in_buffer())
@@ -362,6 +382,18 @@ Buffer::Buffer( void )
 
   m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
   m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
+
+  /* monitor page stats periodically */
+  if( m_rm.get_monitor_freq()>0 ){
+    is_monitor_on = true;
+    int ret = pthread_create( &monitorThread, NULL, MonitorThreadEntryFunc, this);
+    if (ret) {
+      UMAP_ERROR("Failed to launch the monitor thread");
+    }
+  }else{
+    is_monitor_on = false;
+  }
+
 }
 
 Buffer::~Buffer( void ) {
@@ -369,6 +401,11 @@ Buffer::~Buffer( void ) {
   std::cout << m_stats << std::endl;
 #endif
 
+  if( is_monitor_on ){
+    is_monitor_on = false;
+    pthread_join( monitorThread , NULL );
+  }
+  
   assert("Pages are still present" && m_present_pages.size() == 0);
   pthread_cond_destroy(&m_avail_pd_cond);
   pthread_cond_destroy(&m_state_change_cond);

@@ -157,10 +157,11 @@ RegionManager::RegionManager()
   else
     set_max_pages_in_buffer( get_max_pages_in_memory() );
 
-  if ( (read_env_var("UMAP_READ_AHEAD", &env_value)) != nullptr )
-    set_read_ahead(env_value);
+  if ( (read_env_var("UMAP_MONITOR_FREQ", &env_value)) != nullptr )
+    m_monitor_freq = env_value;
   else
-    set_read_ahead(0);
+    m_monitor_freq = 0;
+
 }
 
 uint64_t
@@ -209,12 +210,6 @@ RegionManager::set_max_pages_in_buffer( uint64_t max_pages )
     "Maximum pages in page buffer changed from "
     << old_max_pages_in_buffer
     << " to " << get_max_pages_in_buffer() << " pages");
-}
-
-void
-RegionManager::set_read_ahead(uint64_t num_pages)
-{
-  m_read_ahead = num_pages;
 }
 
 void
