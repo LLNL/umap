@@ -120,6 +120,45 @@ PageDescriptor* Buffer::evict_oldest_page()
   return pd;
 }
 
+//
+// Called from Evict Manager to begin eviction process on at most N (=32)
+// oldest present (non-deferred) pages without waiting for status change
+//
+std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
+{
+  std::vector<PageDescriptor*> evicted_pages;
+  std::vector<PageDescriptor*> pending_pages;
+  const int max_num_evicted_pages = 32;
+  int num_evicted_pages = 0;
+
+  lock();
+  size_t num_busy_pages = m_busy_pages.size();
+  if( num_busy_pages>0 ){
+    size_t i = num_busy_pages - 1;
+    for(; (i>=0 && num_evicted_pages<max_num_evicted_pages); i--){
+        PageDescriptor* pd = m_busy_pages[i];
+        if( !pd->deferred && pd->state == PageDescriptor::State::PRESENT ){
+          m_stats.pages_deleted++;
+          num_evicted_pages ++;
+
+          pd->state = PageDescriptor::State::LEAVING;
+          evicted_pages.push_back(pd);
+        }else{
+          pending_pages.push_back(pd);
+        }
+        m_busy_pages.pop_back();
+    }
+
+    size_t num_pending_pages = pending_pages.size();
+    for(size_t k=0; k<num_pending_pages; k++){
+      m_busy_pages.push_back(pending_pages[k]);
+    }
+  }
+  unlock();
+
+  return evicted_pages;
+}
+
   void Buffer::flush_dirty_pages()
   {
     lock();
