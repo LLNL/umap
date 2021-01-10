@@ -152,11 +152,16 @@ RegionManager::RegionManager()
   else
     set_umap_page_size(m_system_page_size);
 
-  if ( (read_env_var("UMAP_BUFSIZE", &env_value)) != nullptr )
+  if ( (read_env_var("UMAP_BUFSIZE", &env_value)) != nullptr ) {
     set_max_pages_in_buffer(env_value);
-  else
+    m_adaptive_buffer_freq = 0; //disable adaptive buffer if user specified bufsize
+  }else{
     set_max_pages_in_buffer( get_max_pages_in_memory() );
-
+    m_adaptive_buffer_freq = 3; //default adapt freq every 3s
+    if ( (read_env_var("UMAP_BUFADAPT_FREQ", &env_value)) != nullptr )
+      m_adaptive_buffer_freq = env_value;
+  }
+  
   if ( (read_env_var("UMAP_MONITOR_FREQ", &env_value)) != nullptr )
     m_monitor_freq = env_value;
   else
