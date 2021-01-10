@@ -83,6 +83,13 @@ namespace Umap {
         return NULL;
       }
 
+      bool is_adaptor_on;
+      pthread_t adaptThread;
+      void adapt_free_pages(void);
+      static void* AdaptThreadEntryFunc(void * obj){
+	      ((Buffer *) obj)->adapt_free_pages();
+      }
+
       void release_page_descriptor( PageDescriptor* pd );
 
       PageDescriptor* page_already_present( char* page_addr );

@@ -75,6 +75,7 @@ class RegionManager {
     long     get_system_page_size( void ) { return m_system_page_size; }
     uint64_t get_max_pages_in_buffer( void ) { return m_max_pages_in_buffer; }
     int      get_monitor_freq( void ) { return m_monitor_freq; }
+    int      get_adaptive_buffer_freq( void ) { return m_adaptive_buffer_freq; }
     uint64_t get_umap_page_size( void ) { return m_umap_page_size; }
     uint64_t get_num_fillers( void ) { return m_num_fillers; }
     uint64_t get_num_evictors( void ) { return m_num_evictors; }
@@ -91,6 +92,7 @@ class RegionManager {
     Version  m_version;
     uint64_t m_max_pages_in_buffer;
     int      m_monitor_freq;
+    int      m_adaptive_buffer_freq;
     long     m_umap_page_size;
     uint64_t m_system_page_size;
     uint64_t m_num_fillers;
