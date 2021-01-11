@@ -102,6 +102,7 @@ struct umap_prefetch_item {
 };
 
 void umap_prefetch( int npages, struct umap_prefetch_item* page_array, int client_fd=0);
+void umap_fetch_and_pin( char* paddr, uint64_t size );  
 uint64_t umapcfg_get_umap_page_size( void );
 uint64_t umapcfg_get_max_fault_events( void );
 uint64_t umapcfg_get_num_fillers( void );

@@ -6,6 +6,7 @@
 //////////////////////////////////////////////////////////////////////////////
 
 #include <pthread.h>
+#include <fstream>        // for reading meminfo
 
 #include "umap/Buffer.hpp"
 #include "umap/config.h"
@@ -120,6 +121,45 @@ PageDescriptor* Buffer::evict_oldest_page()
   return pd;
 }
 
+//
+// Called from Evict Manager to begin eviction process on at most N (=32)
+// oldest present (non-deferred) pages without waiting for status change
+//
+std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
+{
+  std::vector<PageDescriptor*> evicted_pages;
+  std::vector<PageDescriptor*> pending_pages;
+  const int max_num_evicted_pages = 32;
+  int num_evicted_pages = 0;
+
+  lock();
+  size_t num_busy_pages = m_busy_pages.size();
+  if( num_busy_pages>0 ){
+    size_t i = num_busy_pages - 1;
+    for(; (i>=0 && num_evicted_pages<max_num_evicted_pages); i--){
+        PageDescriptor* pd = m_busy_pages[i];
+        if( !pd->deferred && pd->state == PageDescriptor::State::PRESENT ){
+          m_stats.pages_deleted++;
+          num_evicted_pages ++;
+
+          pd->state = PageDescriptor::State::LEAVING;
+          evicted_pages.push_back(pd);
+        }else{
+          pending_pages.push_back(pd);
+        }
+        m_busy_pages.pop_back();
+    }
+
+    size_t num_pending_pages = pending_pages.size();
+    for(size_t k=0; k<num_pending_pages; k++){
+      m_busy_pages.push_back(pending_pages[k]);
+    }
+  }
+  unlock();
+
+  return evicted_pages;
+}
+
   void Buffer::flush_dirty_pages()
   {
     lock();
@@ -171,6 +211,163 @@ bool Buffer::low_threshold_reached( void )
   return m_busy_pages.size() <= m_evict_low_water;
 }
 
+PageDescriptor::State Buffer::wait_existence_page_state(PageDescriptor* pd){
+  PageDescriptor::State ret = pd->state;
+  while( ret!=PageDescriptor::State::PRESENT && ret!=PageDescriptor::State::FREE ){
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+
+    ++m_stats.waits;
+    ++m_waits_for_state_change;
+    pthread_cond_wait(&m_state_change_cond, &m_mutex);
+
+    --m_waits_for_state_change;
+    ret = pd->state;
+  }
+  return ret;
+}
+
+typedef struct FetchFuncParams {
+  uint64_t psize;
+  RegionDescriptor* rd;
+  Uffd* m_uffd;
+  uint64_t offset_st;
+  uint64_t offset_end;
+} FetchFuncParams;
+
+void *FetchFunc(void *arg) 
+{ 
+  FetchFuncParams* params = (FetchFuncParams*) arg;
+  uint64_t psize = params->psize;
+  RegionDescriptor* rd = params->rd;
+  Uffd* m_uffd = params->m_uffd;
+  char* region_st = rd->start();
+  uint64_t offset_st = params->offset_st;
+  uint64_t offset_end= params->offset_end;
+
+  char* copyin_buf = (char*) malloc(psize);
+  if ( !copyin_buf )
+    UMAP_ERROR("Failed to allocate copyin_buf");
+  
+  for(uint64_t offset = offset_st; offset < offset_end; offset+=psize){
+    
+    if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
+      UMAP_ERROR("failed to read_from_store at offset="<<offset);
+  
+    m_uffd->copy_in_page(copyin_buf, region_st + offset );
+  }
+
+  free(copyin_buf);
+  return NULL;
+} 
+
+void Buffer::fetch_and_pin(char* paddr, uint64_t size)
+{
+  lock();
+  auto rd = m_rm.containing_region(paddr);
+  
+  if ( rd == nullptr )
+    UMAP_ERROR("the prefetched region is not found");
+
+  /* cap the prefetched region */
+  char* pend = paddr + size;  
+  if( pend > rd->end() ){
+    pend = (char*) rd->end();
+    UMAP_LOG(Info, "the prefetched rergion is larger than the region (end at "<<pend<<")");
+  }
+
+  /* get aligned fetch size */
+  uint64_t offset_st = rd->store_offset( paddr );
+  uint64_t offset_end = rd->store_offset( pend );
+  size = pend - paddr;
+  
+  /* Check free memory */
+  uint64_t mem_avail_kb = 0;
+  unsigned long mem;
+  std::string token;
+  std::ifstream file("/proc/meminfo");
+  while (file >> token) {
+    if (token == "MemAvailable:") {
+      if (file >> mem) {
+	mem_avail_kb = mem;
+      } else {
+        UMAP_ERROR("UMAP unable to determine system memory size\n");
+      }
+    }
+    // ignore rest of the line
+    file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+  }
+
+  const uint64_t mem_margin_kb = 16777216;
+  mem_avail_kb = (mem_avail_kb > mem_margin_kb) ?(mem_avail_kb-mem_margin_kb) : 0;
+  
+
+  uint64_t psize = m_rm.get_umap_page_size();
+  size_t num_free_pages = m_free_pages.size();
+  uint64_t free_page_mem = psize * num_free_pages;
+  uint64_t mem_avail = (mem_avail_kb*1024/psize) * psize;
+
+  UMAP_LOG(Info, " MemAvailable = " << mem
+	   << " Mem Usable = " << mem_avail
+	   << " fetch_and_pin = " << size
+	   << " free_page_mem = " << free_page_mem << " (" << num_free_pages <<" x " << psize <<" )");
+
+  /* Reduce the number of free pages if avail mem is insufficient */
+  if( ( free_page_mem + size) >= mem_avail ){
+
+    uint64_t reduced_mem = ( free_page_mem + size) - mem_avail;
+    if( reduced_mem < free_page_mem){
+      size_t new_num_free_pages = (free_page_mem - reduced_mem)/psize;
+      m_free_pages.resize(new_num_free_pages);
+      
+      m_size = m_busy_pages.size() + m_free_pages.size();
+      m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
+      m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
+          
+      UMAP_LOG(Info, "Reduced Buffer Size to " << m_size );
+
+    }else{
+      /* TODO: evict current pages? */
+      UMAP_ERROR("Currently, no support for pinning a region larger than free pages\n");
+    }
+  }
+
+
+  /* get page alighed offset*/
+  Uffd* m_uffd = m_rm.get_uffd_h();
+  size_t num_pages = (offset_end - offset_st)/psize;
+  size_t num_fetch_threads = (num_pages>1024) ?8 : 1;
+  size_t stride = num_pages/num_fetch_threads*psize;
+
+  time_t start = time(NULL);
+  pthread_t fetchThreads[num_fetch_threads];
+  FetchFuncParams params[num_fetch_threads];
+  for(int i=0; i<num_fetch_threads; i++){
+    params[i].psize = psize;
+    params[i].rd = rd;
+    params[i].m_uffd = m_uffd;
+    params[i].offset_st = offset_st + stride*i;
+    params[i].offset_end = params[i].offset_st + stride;
+    if(i==(num_fetch_threads-1))
+      params[i].offset_end = offset_end;
+    UMAP_LOG(Info, "FetchThread "<<i<<" ["<<params[i].offset_st<<" , "<<params[i].offset_end<<"]");
+      
+    int ret = pthread_create(&fetchThreads[i], NULL, FetchFunc, &params[i]);
+    if (ret) {
+      UMAP_ERROR("Failed to launch fetchthread "<<i );
+    }
+  }
+
+  for(int i=0; i<num_fetch_threads; i++)
+    pthread_join(fetchThreads[i], NULL);
+
+  time_t end = time(NULL);
+  UMAP_LOG(Info,"Fetch_and_pin: "<< (end-start) << " seconds");
+
+  unlock();
+}
+
+  
 void *Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd)
 {
   WorkItem work;
@@ -336,22 +533,6 @@ void Buffer::unlock()
   pthread_mutex_unlock(&m_mutex);
 }
 
-PageDescriptor::State Buffer::wait_existence_page_state(PageDescriptor* pd){
-  PageDescriptor::State ret = pd->state;
-  while( ret!=PageDescriptor::State::PRESENT && ret!=PageDescriptor::State::FREE ){
-    ++m_stats.waits;
-    ++m_waits_for_state_change;
-
-    ++m_stats.waits;
-    ++m_waits_for_state_change;
-    pthread_cond_wait(&m_state_change_cond, &m_mutex);
-
-    --m_waits_for_state_change;
-    ret = pd->state;
-  }
-  return ret;
-}
-
 void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
 {
   UMAP_LOG(Debug, "Waiting for state: " << st << ", " << pd);
@@ -365,6 +546,23 @@ void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
     --m_waits_for_state_change;
   }
 }
+
+void Buffer::monitor(void)
+{
+  const int monitor_interval = m_rm.get_monitor_freq();
+  UMAP_LOG(Info, "every " << monitor_interval << " seconds");
+
+  /* start the monitoring loop */
+  while( is_monitor_on ){
+
+    UMAP_LOG(Info, "m_size = " << m_size
+	     << ", num_busy_pages = " << m_busy_pages.size()
+	     << ", num_free_pages = " << m_free_pages.size()
+	     << ", events_processed = " << m_stats.events_processed );
+
+    sleep(monitor_interval);
+
+  }//End of loop
 
 Buffer::Buffer( void )
   :     m_rm(RegionManager::getInstance())
@@ -386,6 +584,18 @@ Buffer::Buffer( void )
 
   m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
   m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
+
+  /* monitor page stats periodically */
+  if( m_rm.get_monitor_freq()>0 ){
+    is_monitor_on = true;
+    int ret = pthread_create( &monitorThread, NULL, MonitorThreadEntryFunc, this);
+    if (ret) {
+      UMAP_ERROR("Failed to launch the monitor thread");
+    }
+  }else{
+    is_monitor_on = false;
+  }
+
 }
 
 Buffer::~Buffer( void ) {
@@ -393,6 +603,11 @@ Buffer::~Buffer( void ) {
   std::cout << m_stats << std::endl;
 #endif
 
+  if( is_monitor_on ){
+    is_monitor_on = false;
+    pthread_join( monitorThread , NULL );
+  }
+  
   assert("Pages are still present" && m_present_pages.size() == 0);
   pthread_cond_destroy(&m_avail_pd_cond);
   pthread_cond_destroy(&m_state_change_cond);

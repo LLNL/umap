@@ -63,6 +63,13 @@ void umap_prefetch( int npages, umap_prefetch_item* page_array, int client_fd/*d
   Umap::RegionManager::getInstance().prefetch(npages, page_array, client_fd);
 }
 
+
+void umap_fetch_and_pin( char* paddr, uint64_t size )
+{
+  Umap::RegionManager::getInstance().fetch_and_pin(paddr, size);
+}
+
+
 long
 umapcfg_get_system_page_size( void )
 {

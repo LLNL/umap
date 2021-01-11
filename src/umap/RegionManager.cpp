@@ -197,6 +197,13 @@ RegionManager::flush_buffer(){
 }
 
 void
+RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
+{
+  m_buffer->fetch_and_pin(paddr, size);
+}
+
+
+void
 RegionManager::prefetch(int npages, umap_prefetch_item* page_array, int client_fd)
 {
   Uffd *c_uffd;
@@ -260,10 +267,10 @@ RegionManager::RegionManager()
   else
     set_max_pages_in_buffer( get_max_pages_in_memory() );
 
-  if ( (read_env_var("UMAP_READ_AHEAD", &env_value)) != nullptr )
-    set_read_ahead(env_value);
+  if ( (read_env_var("UMAP_MONITOR_FREQ", &env_value)) != nullptr )
+    m_monitor_freq = env_value;
   else
-    set_read_ahead(0);
+    m_monitor_freq = 0;
 }
 
 uint64_t
