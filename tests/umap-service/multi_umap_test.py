@@ -144,7 +144,8 @@ def main():
     experiments = {
         'bfs': {
             #'scale': [1,2,4,8,16],
-            'scale': [32],
+            'scale': [1,2,4,8,16,32],
+            #'scale': [32],
             'env_vars': [
                 "UMAP_PAGESIZE=524288",
                 "OMP_NUM_THREADS=48",
@@ -154,7 +155,7 @@ def main():
                 "UMAP_PAGE_EVICTORS=24"],
             'binary': '/home/sarkar6/dst-pmemio/umap-apps/install/bin/run_bfs',
             'cmd_params': {
-                'options': '-n 1073741823 -m 34359738368 -g /mnt/ssd/bfs_scale_30/csr_graph_file_30',
+                'options': '-s -n 1073741823 -m 34359738368 -g /mnt/ssd/bfs_scale_30/csr_graph_file_30',
                 'scale_params': {"o": ['2', '4', '8', '16', '32', '64', '128', '256', '512', '1024', '2048', '4096', '8192', '16384', '32768','65536','131072','262144','524288','1048576','2097152','4194304','8388608','16777216','33554432','67108864','134217728','268435456','536870912','1073741824','2147483648','4294967296']}
             }
         }
@@ -165,6 +166,9 @@ def main():
         clients = []
         for scl in exp['scale']:
             threads.clear()
+            ret = os.system('sudo sh -c "sync; echo 1 > /proc/sys/vm/drop_caches"')
+            if ret == 0:
+                print("Successfully dropped page caches")
             #t_serv = Thread(target=Umap_Server.start, args=(serv,))
             #t_serv.start()
             #threads.append(t_serv)
@@ -183,7 +187,7 @@ def main():
                             umap_bfs_cmd.append(new_str)
                     umap_bfs_cmd.append(params)
                     print(umap_bfs_cmd)
-                    current_client = Umap_bfs("BFS" + str(idx), None, umap_bfs_cmd, 7000)
+                    current_client = Umap_bfs("BFS" + str(idx), None, umap_bfs_cmd, 9000)
                     th_client = Thread(
                         target=Umap_bfs.start, args=(
                             current_client,))
