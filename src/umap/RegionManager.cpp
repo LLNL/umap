@@ -114,6 +114,14 @@ RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
     m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
 }
 
+RegionManager::~RegionManager()
+{
+  for(auto &r : m_active_regions ){
+    UMAP_LOG(Info, "removing" << r.first);
+    removeRegion((char*)r.first);
+  }
+}
+
 RegionManager::RegionManager()
 {
   m_version.major = UMAP_VERSION_MAJOR;

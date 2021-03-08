@@ -45,6 +45,8 @@ class RegionManager {
     RegionManager& operator=(RegionManager const&) = delete;  // Copy assign
     RegionManager& operator=(RegionManager &&) = delete;      // Move assign
 
+  ~RegionManager();
+  
     void addRegion(
           Store*   store
         , char*    region
