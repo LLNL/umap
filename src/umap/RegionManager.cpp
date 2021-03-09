@@ -117,7 +117,7 @@ RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
 RegionManager::~RegionManager()
 {
   for(auto &r : m_active_regions ){
-    UMAP_LOG(Info, "removing" << r.first);
+    UMAP_LOG(Info, "removing region " << r.first);
     removeRegion((char*)r.first);
   }
 }
