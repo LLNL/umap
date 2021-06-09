@@ -199,6 +199,7 @@ void Buffer::evict_region(RegionDescriptor* rd)
       }
       wait_for_page_state(pd, PageDescriptor::State::FREE);
     }
+    m_stats.events_processed ++;
     unlock();
   }
   else {
@@ -563,6 +564,7 @@ void Buffer::monitor(void)
     sleep(monitor_interval);
 
   }//End of loop
+}
 
 Buffer::Buffer( void )
   :     m_rm(RegionManager::getInstance())

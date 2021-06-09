@@ -197,7 +197,7 @@ RegionManager::flush_buffer(){
 }
 
 void
-RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
+RegionManager::fetch_and_pin( char* paddr, uint64_t size )
 {
   m_buffer->fetch_and_pin(paddr, size);
 }
@@ -319,12 +319,6 @@ RegionManager::set_max_pages_in_buffer( uint64_t max_pages )
     "Maximum pages in page buffer changed from "
     << old_max_pages_in_buffer
     << " to " << get_max_pages_in_buffer() << " pages");
-}
-
-void
-RegionManager::set_read_ahead(uint64_t num_pages)
-{
-  m_read_ahead = num_pages;
 }
 
 void

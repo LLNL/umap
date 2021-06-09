@@ -24,6 +24,7 @@ void EvictManager::EvictMgr( void ) {
       break;    // Time to leave
 
     while ( ! m_buffer->low_threshold_reached() ) {
+#if 0
       WorkItem work;
       work.type = Umap::WorkItem::WorkType::EVICT;
       work.page_desc = m_buffer->evict_oldest_page(); // Could block
@@ -34,6 +35,16 @@ void EvictManager::EvictMgr( void ) {
       UMAP_LOG(Debug, m_buffer << ", " << work.page_desc);
 
       m_evict_workers->send_work(work);
+#else
+      std::vector<PageDescriptor*> evicted_pages = m_buffer->evict_oldest_pages();
+      for(auto pd : evicted_pages){
+        WorkItem work;
+        work.type = Umap::WorkItem::WorkType::EVICT;
+        work.page_desc = pd;
+        assert( work.page_desc != nullptr );
+        m_evict_workers->send_work(work);
+      }
+#endif
     }
   }
 }

@@ -21,6 +21,7 @@ namespace Umap {
   struct BufferStats {
     BufferStats() :   lock_collision(0), lock(0), pages_inserted(0)
                     , pages_deleted(0), not_avail(0), waits(0)
+		    , events_processed(0)
     {};
 
     uint64_t lock_collision;
@@ -29,6 +30,7 @@ namespace Umap {
     uint64_t pages_deleted;
     uint64_t not_avail;
     uint64_t waits;
+    uint64_t events_processed;
   };
 
   class Buffer {
@@ -43,6 +45,7 @@ namespace Umap {
       void fetch_and_pin(char* paddr, uint64_t size);
 
       PageDescriptor* evict_oldest_page( void );
+      std::vector<PageDescriptor*> evict_oldest_pages( void );
       void *process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd, void *c_uffd);
       void evict_region(RegionDescriptor* rd);
       void flush_dirty_pages();
@@ -72,6 +75,13 @@ namespace Umap {
       pthread_cond_t m_state_change_cond;
 
       BufferStats m_stats;
+      bool is_monitor_on;
+      pthread_t monitorThread;
+      void monitor(void);
+      static void* MonitorThreadEntryFunc(void * obj){
+             ((Buffer *) obj)->monitor();
+        return NULL;
+      }
 
       void release_page_descriptor( PageDescriptor* pd );
 
