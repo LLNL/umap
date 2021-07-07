@@ -112,7 +112,7 @@ def main():
     server_cmd = [
         "UMAP_PAGESIZE=524288",
         "OMP_NUM_THREADS=48",
-        "UMAP_BUFSIZE=524288",
+        "UMAP_BUFSIZE=270336",
         "OMP_SCHEDULE=static",
         "UMAP_PAGE_FILLERS=96",
         "UMAP_PAGE_EVICTORS=48",
@@ -138,18 +138,19 @@ def main():
     threads = []
     experiments = {
         'bfs': {
-            'scale': [8],
+            'scale': [1,2,4,8],
             #'scale': [1],
             'env_vars': [
                 "UMAP_PAGESIZE=524288",
                 "OMP_NUM_THREADS=48",
-                "UMAP_BUFSIZE=524288",
+                "UMAP_BUFSIZE=270336",
                 "OMP_SCHEDULE=static",
                 "UMAP_PAGE_FILLERS=96",
                 "UMAP_PAGE_EVICTORS=48"],
             'binary': '/home/sarkar6/dst-pmemio/umap-apps/install/bin/run_bfs',
             'cmd_params': {
-                'options': '-n 2147483648 -m 68719476736 -g /mnt/ssd/bfs500GB/csr_graph_file',
+                'options': '-n 1073741823 -m 34359738368 -g /mnt/ssd/bfs_scale_30/csr_graph_file_30',
+                #'options': '-n 2147483648 -m 68719476736 -g /mnt/ssd/bfs500GB/csr_graph_file',
                 'scale_params': {"o": ['2', '4', '8', '16', '32', '64', '128', '256', '512', '1024', '2048', '4096', '8192', '16384', '32768','65536','131072','262144','524288','1048576','2097152','4194304','8388608','16777216','33554432','67108864','134217728','268435456','536870912','1073741824','2147483648','4294967296']}
             }
         }

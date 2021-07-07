@@ -129,7 +129,7 @@ std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 {
   std::vector<PageDescriptor*> evicted_pages;
   std::vector<PageDescriptor*> pending_pages;
-  const int max_num_evicted_pages = 32;
+  const int max_num_evicted_pages = 1;
   int num_evicted_pages = 0;
 
   lock();
