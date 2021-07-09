@@ -36,16 +36,18 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 ## Build Requirements
 Building Umap requires a C++ compiler, CMake >= 3.5.1, as well as the Linux kernel headers.
 
-## Runtime Requirements
+Additionally, Umap will automatically enable read/write mode *at library compile time* if it detects that the installed kernel supports it by looking at the defined symbols in the kernel headers. Some Linux distributions, such as Ubuntu 20.04.2, provide a 5.8 kernel that supports read/write mode but don't ship with headers that define these symbols. 
+
 Read-only mode: Linux kernel >= 4.3
 
 Read/write mode: Linux kernel >= 5.7 (>= 5.10 preferred)
 
-Umap will automatically enable read/write mode *at library compile time* if it detects that the installed kernel supports it by looking at the defined symbols in the kernel headers. Some Linux distributions, such as Ubuntu 20.04.2, provide a 5.8 kernel that supports read/write mode but don't ship with headers that define these symbols. 
+Note: Some early mainline releases of Linux that included support for read/write mode (between 5.7 and 5.9) contain a known bug that causes an application to hang indefinitely when performing a write. It's recommended to update to a 5.10 kernel if this bug is encountered.
+
+## Runtime Requirements
+At runtime, Umap requires a kernel that supports the same features as it was built against. For example, running a version of Umap compiled against kernel 5.10 on a system with kernel 4.18 will result in runtime errors caused by write functionality not being present in the 4.18 kernel.
 
 On Linux >= 5.4, the `sysctl` variable `vm.unprivileged_userfaultfd` needs to be set to `1` in order to use Umap in both read-only and read/write modes as a non-root user. The value of this variable may be determined by running `sysctl vm.unprivileged_userfaultfd` or `cat /proc/sys/vm/unprivileged_userfaultfd`.
-
-Note: Some early mainline releases of Linux that included support for read/write mode (between 5.7 and 5.9) contain a known bug that causes an application to hang indefinitely when performing a write. It's recommended to update to a 5.10 kernel if this bug is encountered.
 
 ## Applications
 
