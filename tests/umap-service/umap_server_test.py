@@ -116,6 +116,7 @@ def main():
         "OMP_SCHEDULE=static",
         "UMAP_PAGE_FILLERS=96",
         "UMAP_PAGE_EVICTORS=48",
+	"UMAP_MONITOR_FREQ=10",
         umap_path +
         "install/bin/umap-server"]
     serv = Umap_Server("Umap-Server", server_cmd, 10000)
@@ -138,7 +139,7 @@ def main():
     threads = []
     experiments = {
         'bfs': {
-            'scale': [1,2,4,8],
+            'scale': [4,8],
             #'scale': [1],
             'env_vars': [
                 "UMAP_PAGESIZE=524288",
