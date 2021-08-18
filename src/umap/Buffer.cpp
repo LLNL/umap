@@ -555,11 +555,11 @@ void Buffer::monitor(void)
   /* start the monitoring loop */
   while( is_monitor_on ){
 
-    UMAP_LOG(Info, "m_size = " << m_size
+/*    UMAP_LOG(Info, "m_size = " << m_size
 	     << ", num_busy_pages = " << m_busy_pages.size()
 	     << ", num_free_pages = " << m_free_pages.size()
 	     << ", events_processed = " << m_stats.events_processed );
-
+*/
     sleep(monitor_interval);
 
   }//End of loop
@@ -608,14 +608,14 @@ void Buffer::adapt_free_pages(void)
     avg_filled_pages_per_epoch = (num_busy_pages>num_busy_pages_old) ?(num_busy_pages - num_busy_pages_old) : 0;
     num_busy_pages_old = num_busy_pages;
 
-    UMAP_LOG(Info, "m_size = " << m_size
+/*    UMAP_LOG(Info, "m_size = " << m_size
 	     << ", num_busy_pages = " << num_busy_pages
 	     << ", num_free_pages = " << num_free_pages
 	     << ", num_pending_pages = " << num_pending_pages
 	     << ", max_num_free_pages = " << max_num_free_pages
 	     << ", avg_filled_pages_per_epoch = " << avg_filled_pages_per_epoch
 	     << ", events_processed= " << m_stats.events_processed );
-
+*/
     if( num_pending_pages < max_num_free_pages){
 
       //Enlarge the buffer if it is nearly exhausted and there is free memory
@@ -638,10 +638,11 @@ void Buffer::adapt_free_pages(void)
           m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
           m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
           unlock();
-
+/*
           UMAP_LOG(Info, "Increase to free_pages=" << m_free_pages.size()
                       << ", m_busy_pages=" << m_busy_pages.size() 
                       << ", m_size=" << m_size );
+*/
         }
 
       }//End of enlarging the buffer
@@ -690,7 +691,7 @@ void Buffer::adapt_free_pages(void)
 
   }//End of loop
 
-  UMAP_LOG(Info, "adapt_free_pages ends");
+  //UMAP_LOG(Info, "adapt_free_pages ends");
 }
 
 
