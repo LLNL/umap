@@ -21,6 +21,8 @@ set(umapheaders
       WorkQueue.hpp
       WorkerPool.hpp
       UmapServiceManager.hpp
+      UmapClientManager.hpp
+      UmapServiceCommon.hpp
       store/StoreFile.h
       store/SparseStore.h
       store/Store.hpp
@@ -39,6 +41,8 @@ set(umapsrc
     umap.cpp
     socket.cpp
     UmapServiceManager.cpp
+    UmapClientManager.cpp
+    UmapServiceCommon.cpp
     store/Store.cpp
     store/StoreFile.cpp
     store/SparseStore.cpp
