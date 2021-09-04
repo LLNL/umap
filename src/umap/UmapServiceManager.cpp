@@ -21,6 +21,8 @@
 #define SYS_memfd_create 319
 #endif
 
+static uint64_t next_region_start_addr = 0x600000000000;
+
 int memfd_create(const char *name, unsigned int flags) {
   return syscall(SYS_memfd_create, name, flags);
 }
@@ -42,26 +44,20 @@ long init_client_uffd() {
   return uffd;
 }
 
-
-namespace Umap{
-static uint64_t next_region_start_addr = 0x600000000000;
-Umap::ClientManager* ClientManager::instance = NULL;
-Umap::UmapServerManager* Umap::UmapServerManager::Instance=NULL;
-
-unsigned long get_aligned_size(unsigned long fsize){
-  unsigned long page_size = umapcfg_get_umap_page_size();
+unsigned long get_aligned_size(unsigned long fsize, unsigned long page_size){
   return (fsize & (~(page_size - 1))) + page_size;
 }
 
-unsigned long get_mmap_size(unsigned long fsize){
-  return get_aligned_size(fsize) + umapcfg_get_umap_page_size();
+unsigned long get_mmap_size(unsigned long fsize, unsigned long page_size){
+  return get_aligned_size(fsize, page_size) + page_size;
 }
 
-void *get_umap_aligned_base_addr(void *mmap_addr){
-  unsigned long page_size = umapcfg_get_umap_page_size(); 
+void *get_umap_aligned_base_addr(void *mmap_addr, uint64_t page_size){
   std::cout<<"Client side page size"<<page_size<<std::endl;
   return (void *)(((unsigned long)mmap_addr + page_size - 1) & (~(page_size - 1)));
 }
+
+ClientManager* ClientManager::instance = NULL;
 
 int UmapServInfo::setup_remote_umap_handle(){
   int status = 0;
@@ -74,10 +70,10 @@ int UmapServInfo::setup_remote_umap_handle(){
   ::write(umap_server_fd, &params, sizeof(params));
   // recieve memfd and region size
   sock_fd_read(umap_server_fd, &(loc), sizeof(region_loc), &(memfd));
-  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::dec<<std::endl;
-  umap_loc = (void *)get_umap_aligned_base_addr(loc.base_addr);
+  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::dec<<loc.page_size<<std::endl;
+  umap_loc = (void *)get_umap_aligned_base_addr(loc.base_addr, loc.page_size);
   loc.len_diff = (uint64_t)umap_loc - (uint64_t)loc.base_addr;
-  loc.base_addr = mmap(umap_loc, get_mmap_size(loc.size), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, memfd, 0);
+  loc.base_addr = mmap(umap_loc, get_mmap_size(loc.size, loc.page_size), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, memfd, 0);
   if ((int64_t)loc.base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
@@ -127,22 +123,29 @@ void ClientManager::closeUmapConnection(){
   ::close(umap_server_fd);
 }
 
-void *submit_umap_req(const char *filename, int prot, int flags){
+//Umap client interface functions --- start
+void init_umap_client(std::string sock_path){
+  ClientManager *cm = ClientManager::getInstance(sock_path);
+  cm->setupUmapConnection();
+}
+
+void *client_umap(const char *filename, int prot, int flags){
   ClientManager *cm = ClientManager::getInstance();
   return cm->map_req(std::string(filename), prot, flags);   
 }
 
-int submit_uunmap_req(const char *filename){
+int client_uunmap(const char *filename){
   ClientManager *cm = ClientManager::getInstance();
   cm->unmap_req(std::string(filename));
   return 0;
 }
 
-void terminateUmapClient(){
+void close_umap_client(){
   ClientManager *cm = ClientManager::getInstance();
   cm->closeUmapConnection();
   ClientManager::deleteInstance();
 }
+//End of Umap Client interface functions -- end
 
 UmapServInfo* ClientManager::cs_umap(std::string filename, int prot, int flags){
   umap_file_params args = {.prot = prot, .flags = flags};
@@ -192,6 +195,10 @@ int ClientManager::unmap_req(std::string filename){
   }
 }
 
+namespace Umap{
+Umap::UmapServerManager* Umap::UmapServerManager::Instance=NULL;
+
+
 int UmapServiceThread::start_thread(){
   if (pthread_create(&t, NULL, ThreadEntryFunc, this) != 0){
     UMAP_ERROR("Failed to launch thread");
@@ -209,6 +216,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   void *base_mmap_local;
   void *base_addr_remote;
   unsigned long mmap_size;
+  unsigned long umap_page_size = umapcfg_get_umap_page_size();
 
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex);
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
@@ -224,11 +232,11 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
 
     fstat(ffd, &st);
     memfd = memfd_create("uffd", 0);
-    mmap_size = get_mmap_size(st.st_size);
+    mmap_size = get_mmap_size(st.st_size, umap_page_size);
     ftruncate(memfd, mmap_size);
     mapped_files.push_back(filename);
     base_mmap_local = mmap((void *)next_region_start_addr, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED,memfd, 0);
-    map_reg = new mappedRegionInfo(ffd, memfd, base_mmap_local, get_mmap_size(st.st_size));
+    map_reg = new mappedRegionInfo(ffd, memfd, base_mmap_local, get_mmap_size(st.st_size, umap_page_size));
     mgr->add_mapped_region(filename, map_reg);
     UMAP_LOG(Debug,"filename:"<<filename<<" size "<<st.st_size<<" mmap local: 0x"<< std::hex << base_mmap_local <<std::dec<<std::endl);
           //Todo: add error handling code
@@ -239,7 +247,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   //Wait for the memfd to get mapped by the client
   sock_recv(csfd, (char*)&base_addr_remote, sizeof(base_addr_remote));
   //uffd is already present with the UmapServiceThread
-  std::cout<<"s: addr: "<<map_reg->reg.base_addr<<" uffd: "<<uffd<<" map_len="<<get_mmap_size(map_reg->reg.size)<<std::endl;
+  std::cout<<"s: addr: "<<map_reg->reg.base_addr<<" uffd: "<<uffd<<" map_len="<<get_mmap_size(map_reg->reg.size, umap_page_size)<<std::endl;
   return Umap::umap_ex(map_reg->reg.base_addr, map_reg->reg.size, PROT_READ|PROT_WRITE, flags, map_reg->filefd, 0, NULL, true, uffd, base_addr_remote); //prot and flags need to be set 
 }
 
@@ -351,28 +359,7 @@ void start_umap_service(int csfd){
   usm->start_service_thread(csfd, uffd);
 }
 
-void connectUmap(std::string sock_path){
-  ClientManager *cm = ClientManager::getInstance(sock_path);
-  cm->setupUmapConnection();
-}
-
 } //End of Umap namespace
-
-void init_umap_client(std::string sock_path){
-  Umap::connectUmap(sock_path);
-}
-
-void* client_umap(const char *filename, int prot, int flags){
-  return Umap::submit_umap_req(filename, prot, flags);
-}
-
-int client_uunmap(const char *filename){
-  return Umap::submit_uunmap_req(filename);
-}
-
-void close_umap_client(){
-  Umap::terminateUmapClient();
-}
 
 void umap_server(std::string sock_path){
   int sfd = socket(AF_UNIX, SOCK_STREAM, 0);
