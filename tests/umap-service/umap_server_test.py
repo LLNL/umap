@@ -148,7 +148,7 @@ def main():
                 "OMP_SCHEDULE=static",
                 "UMAP_PAGE_FILLERS=96",
                 "UMAP_PAGE_EVICTORS=48"],
-            'binary': '/home/sarkar6/dst-pmemio/umap-apps/install/bin/run_bfs',
+            'binary': '/home/sarkar6/dst-pmemio/pre-release/umap-apps/install/bin/run_bfs',
             'cmd_params': {
                 'options': '-n 1073741823 -m 34359738368 -g /mnt/ssd/bfs_scale_30/csr_graph_file_30',
                 #'options': '-n 2147483648 -m 68719476736 -g /mnt/ssd/bfs500GB/csr_graph_file',
