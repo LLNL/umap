@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include "UmapServiceCommon.hpp"
+#include "umap-client.h"
 
 class UmapServInfo{
   friend class ClientManager;

@@ -78,18 +78,6 @@ int uunmap(
 
 #define UMAP_SERVER_PATH "/tmp/umap-server"
 
-void init_umap_client(std::string sock_path);
-void close_umap_client();
-
-void* client_umap(
-    const char *filename
-  , int prot
-  , int flags
-);
-
-int client_uunmap(
-    const char *filename
-);
 
 void umap_server(
 std::string filename //presently unused

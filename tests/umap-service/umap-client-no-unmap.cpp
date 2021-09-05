@@ -1,5 +1,5 @@
 #include <iostream>
-#include "umap/umap.h"
+#include "umap/umap-client.h"
 #include <sys/mman.h>
 using namespace std;
 

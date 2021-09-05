@@ -21,7 +21,6 @@ set(umapheaders
       WorkQueue.hpp
       WorkerPool.hpp
       UmapServiceManager.hpp
-      UmapClientManager.hpp
       UmapServiceCommon.hpp
       store/StoreFile.h
       store/SparseStore.h
@@ -41,7 +40,6 @@ set(umapsrc
     umap.cpp
     socket.cpp
     UmapServiceManager.cpp
-    UmapClientManager.cpp
     UmapServiceCommon.cpp
     store/Store.cpp
     store/StoreFile.cpp
@@ -50,21 +48,38 @@ set(umapsrc
     util/Logger.cpp
     ${umapheaders})
 
+set(umapclientheaders
+    umap-client.h
+    UmapClientManager.hpp
+    UmapServiceCommon.hpp
+    socket.hpp)
+set(umapclientsrc
+    UmapClientManager.cpp
+    UmapServiceCommon.cpp
+    socket.cpp
+    ${umapclientheaders})
+
 find_package(Threads REQUIRED)
 add_library(umap SHARED ${umapsrc} )
+add_library(umapclient SHARED ${umapclientsrc} )
 add_library(umap-static STATIC ${umapsrc} )
+add_library(umapclient-static STATIC ${umapclientsrc} )
 set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
+set_target_properties(umapclient-static PROPERTIES OUTPUT_NAME umapclient)
 target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries (umapclient ${CMAKE_THREAD_LIBS_INIT})
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
-install(TARGETS umap umap-static
+install(TARGETS umap umap-static umapclient umapclient-static
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin )
 
-install(FILES umap.h DESTINATION include/umap)
+install(FILES umap.h DESTINATION include/umap )
+
+install(FILES umap-client.h DESTINATION include/umap ) 
 
 install(FILES store/Store.hpp DESTINATION include/umap/store )
 
-install(FILES store/SparseStore.h DESTINATION include/umap/store)
+install(FILES store/SparseStore.h DESTINATION include/umap/store )
