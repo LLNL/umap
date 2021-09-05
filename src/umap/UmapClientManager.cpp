@@ -28,10 +28,10 @@ int UmapServInfo::setup_remote_umap_handle(){
   ::write(umap_server_fd, &params, sizeof(params));
   // recieve memfd and region size
   sock_fd_read(umap_server_fd, &(loc), sizeof(region_loc), &(memfd));
-  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::dec<<loc.page_size<<std::endl;
+  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<"server page size = "<<std::dec<<loc.page_size<<std::endl;
   umap_loc = (void *)get_umap_aligned_base_addr(loc.base_addr, loc.page_size);
   loc.len_diff = (uint64_t)umap_loc - (uint64_t)loc.base_addr;
-  loc.base_addr = mmap(umap_loc, get_mmap_size(loc.size, loc.page_size), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, memfd, 0);
+  loc.base_addr = mmap(0, get_mmap_size(loc.size, loc.page_size), PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
   if ((int64_t)loc.base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);

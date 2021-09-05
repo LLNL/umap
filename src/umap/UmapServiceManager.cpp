@@ -42,7 +42,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
     mmap_size = get_mmap_size(st.st_size, umap_page_size);
     ftruncate(memfd, mmap_size);
     mapped_files.push_back(filename);
-    base_mmap_local = mmap((void *)next_region_start_addr, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED,memfd, 0);
+    base_mmap_local = mmap((void *)0, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,memfd, 0);
     map_reg = new mappedRegionInfo(ffd, memfd, base_mmap_local, get_mmap_size(st.st_size, umap_page_size));
     mgr->add_mapped_region(filename, map_reg);
     UMAP_LOG(Debug,"filename:"<<filename<<" size "<<st.st_size<<" mmap local: 0x"<< std::hex << base_mmap_local <<std::dec<<std::endl);
