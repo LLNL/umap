@@ -31,7 +31,15 @@ int UmapServInfo::setup_remote_umap_handle(){
   std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<"server page size = "<<std::dec<<loc.page_size<<std::endl;
   umap_loc = (void *)get_umap_aligned_base_addr(loc.base_addr, loc.page_size);
   loc.len_diff = (uint64_t)umap_loc - (uint64_t)loc.base_addr;
-  loc.base_addr = mmap(0, get_mmap_size(loc.size, loc.page_size), PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
+  if(params.args.fixed_base_addr == NULL){
+    loc.base_addr = mmap(0, get_mmap_size(loc.size, loc.page_size), PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
+  }else{
+    (uint64_t)params.args.fixed_base_addr - loc.len_diff;
+    loc.base_addr = mmap(params.args.fixed_base_addr - loc.len_diff, get_mmap_size(loc.size, loc.page_size), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, memfd, 0);
+    if(loc.base_addr != params.args.fixed_base_addr){
+      std::cout<<"Fixed base address  "<<std::endl; 
+    }
+  }
   if ((int64_t)loc.base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
@@ -84,8 +92,8 @@ void ClientManager::closeUmapConnection(){
 }
 
 
-UmapServInfo* ClientManager::cs_umap(std::string filename, int prot, int flags){
-  umap_file_params args = {.prot = prot, .flags = flags};
+UmapServInfo* ClientManager::cs_umap(std::string filename, int prot, int flags, void *fixed_map_addr){
+  umap_file_params args = {.prot = prot, .flags = flags, .fixed_base_addr = fixed_map_addr};
   int dummy=0;
   int uffd=0;
   
@@ -113,9 +121,9 @@ void ClientManager::cs_uunmap(std::string filename){
   }
 }
 
-void* ClientManager::map_req(std::string filename, int prot, int flags){
+void* ClientManager::map_req(std::string filename, int prot, int flags, void *addr){
   std::lock_guard<std::mutex> guard(cm_mutex);
-  auto info = cs_umap(filename, prot, flags);
+  auto info = cs_umap(filename, prot, flags, addr);
   if(info){
     return info->loc.base_addr + info->loc.len_diff;
   }else
@@ -142,9 +150,9 @@ void init_umap_client(std::string sock_path){
   cm->setupUmapConnection();
 }
 
-void *client_umap(const char *filename, int prot, int flags){
+void *client_umap(const char *filename, int prot, int flags, void *addr){
   ClientManager *cm = ClientManager::getInstance();
-  return cm->map_req(std::string(filename), prot, flags);   
+  return cm->map_req(std::string(filename), prot, flags, addr);   
 }
 
 int client_uunmap(const char *filename){

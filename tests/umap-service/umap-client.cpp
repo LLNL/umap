@@ -15,7 +15,7 @@ int main(int argc, char *argv[]){
 
   unsigned long accumulate;
   init_umap_client(std::string(UMAP_SERVER_PATH));
-  mapped_addr = client_umap(argv[1], PROT_READ, MAP_SHARED);
+  mapped_addr = client_umap(argv[1], PROT_READ, MAP_SHARED, NULL);
 //    mapped_addr2 = client_umap(argv[2], PROT_READ, MAP_SHARED);
   //int numthreads = omp_get_num_threads();  
   //printf("Number of threads = %d\n",numthreads);

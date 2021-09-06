@@ -36,6 +36,7 @@ typedef struct{
 typedef struct {
   int prot;
   int flags;
+  void* fixed_base_addr;
 }umap_file_params;
 
 typedef struct{

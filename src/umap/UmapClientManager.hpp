@@ -42,7 +42,7 @@ class ClientManager{
     }
 
     ~ClientManager(){}
-    UmapServInfo *cs_umap(std::string filename, int, int);
+    UmapServInfo *cs_umap(std::string filename, int, int, void *);
     void cs_uunmap(std::string filename);
 
   public:
@@ -69,7 +69,7 @@ class ClientManager{
     //Start Interface that need to lock: synchronizes requests from multiple threads
     void setupUmapConnection();
     void closeUmapConnection();
-    void *map_req(std::string filename, int prot, int flags);
+    void *map_req(std::string filename, int prot, int flags, void *fixed_addr);
     int unmap_req(std::string filename);
     //End of interfaces that lock
 };
