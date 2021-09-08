@@ -31,7 +31,6 @@ add_subdirectory(src)
 
 if (ENABLE_TESTS)
   set(STATIC_UMAP_LINK ${ENABLE_TESTS_LINK_STATIC_UMAP} CACHE BOOL "Linking option for Umap binaries" FORCE)
-  add_subdirectory(examples)
+#  add_subdirectory(examples)
   add_subdirectory(tests)
 endif()
-

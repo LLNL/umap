@@ -17,11 +17,11 @@ if(OPENMP_FOUND)
   add_executable(umap-client-no-unmap umap-client-no-unmap.cpp)
 
   if(STATIC_UMAP_LINK)
-     set(umap-lib "umap-static")
-     set(umapclient-lib "umapclient-static")
+     set(umap-lib "mpumapd-static")
+     set(umapclient-lib "mpumapclient-static")
   else()
-     set(umap-lib "umap")
-     set(umapclient-lib "umapclient")
+     set(umap-lib "mpumapd")
+     set(umapclient-lib "mpumapclient")
   endif()
  
   add_dependencies(umap-server ${umap-lib})
@@ -30,8 +30,6 @@ if(OPENMP_FOUND)
   target_link_libraries(umap-client ${umapclient-lib}) 
   add_dependencies(umap-client-no-unmap ${umapclient-lib})
   target_link_libraries(umap-client-no-unmap ${umapclient-lib}) 
-  
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
   install(TARGETS umap-server umap-client umap-client-no-unmap
     LIBRARY DESTINATION lib

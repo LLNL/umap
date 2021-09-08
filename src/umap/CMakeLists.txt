@@ -60,25 +60,25 @@ set(umapclientsrc
     ${umapclientheaders})
 
 find_package(Threads REQUIRED)
-add_library(umap SHARED ${umapsrc} )
-add_library(umapclient SHARED ${umapclientsrc} )
-add_library(umap-static STATIC ${umapsrc} )
-add_library(umapclient-static STATIC ${umapclientsrc} )
-set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
-set_target_properties(umapclient-static PROPERTIES OUTPUT_NAME umapclient)
-target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
-target_link_libraries (umapclient ${CMAKE_THREAD_LIBS_INIT})
+add_library(mpumapd SHARED ${umapsrc} )
+add_library(mpumapclient SHARED ${umapclientsrc} )
+add_library(mpumapd-static STATIC ${umapsrc} )
+add_library(mpumapclient-static STATIC ${umapclientsrc} )
+set_target_properties(mpumapd-static PROPERTIES OUTPUT_NAME mpumapd)
+set_target_properties(mpumapclient-static PROPERTIES OUTPUT_NAME mpumapclient)
+target_link_libraries (mpumapd ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries (mpumapclient ${CMAKE_THREAD_LIBS_INIT})
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
-install(TARGETS umap umap-static umapclient umapclient-static
+install(TARGETS mpumapd mpumapd-static mpumapclient mpumapclient-static
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin )
 
-install(FILES umap.h DESTINATION include/umap )
+install(FILES umap.h RENAME mpumapd.h DESTINATION include/umap )
 
-install(FILES umap-client.h DESTINATION include/umap ) 
+install(FILES umap-client.h RENAME mpumap-client.h DESTINATION include/umap ) 
 
 install(FILES store/Store.hpp DESTINATION include/umap/store )
 
