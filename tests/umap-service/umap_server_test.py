@@ -139,7 +139,7 @@ def main():
     threads = []
     experiments = {
         'bfs': {
-            'scale': [16],
+            'scale': [8],
             #'scale': [1],
             'env_vars': [
                 "UMAP_PAGESIZE=524288",

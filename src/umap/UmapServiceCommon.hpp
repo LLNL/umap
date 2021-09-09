@@ -45,6 +45,16 @@ typedef struct{
   umap_file_params args;
 }ActionParam;
 
+struct umap_cfg_data{
+    uint64_t umap_page_size;
+    uint64_t max_fault_events;
+    uint64_t num_fillers;
+    uint64_t num_evictors; 
+    uint64_t max_pages_in_buffer;
+    int      low_water_threshold;
+    int      high_water_threshold; 
+};
+
 int memfd_create(const char *name, unsigned int flags);
 unsigned long get_aligned_size(unsigned long fsize, unsigned long page_size);
 unsigned long get_mmap_size(unsigned long fsize, unsigned long page_size);

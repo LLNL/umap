@@ -80,8 +80,14 @@ void ClientManager::setupUmapConnection(){
       return;
     }
     uffd = init_client_uffd();
+    std::cout<<"Client sending dummy"<<std::endl;
     sock_fd_write(umap_server_fd, &dummy, sizeof(int), uffd);
     ::close(uffd);
+    std::cout<<"Client Receiving cfgd"<<std::endl;
+    ::read(umap_server_fd, &cfgd, sizeof(umap_cfg_data));
+    std::cout<<"Client sending dummy"<<std::endl;
+    ::write(umap_server_fd, &dummy, sizeof(dummy)); 
+    std::cout<<"Client dummy sent"<<std::endl;
   }
 }
 
@@ -141,6 +147,35 @@ int ClientManager::unmap_req(std::string filename){
     cs_uunmap(filename);
   }
 }
+
+uint64_t ClientManager::get_max_pages_in_buffer(){
+  return cfgd.max_pages_in_buffer; 
+}
+
+uint64_t ClientManager::get_umap_page_size(){
+  return cfgd.umap_page_size;
+}
+
+uint64_t ClientManager::get_num_fillers(){
+  return cfgd.num_fillers;
+}
+
+uint64_t ClientManager::get_num_evictors(){
+  return cfgd.num_evictors;
+}
+
+int ClientManager::get_evict_low_water_threshold(){
+  return cfgd.low_water_threshold;
+}
+
+int ClientManager::get_evict_high_water_threshold(){
+  return cfgd.high_water_threshold; 
+}
+
+uint64_t ClientManager::get_max_fault_events(){
+  return cfgd.max_fault_events;
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -166,6 +201,55 @@ void close_umap_client(){
   cm->closeUmapConnection();
   ClientManager::deleteInstance();
 }
+
+long
+umapcfg_get_system_page_size( void )
+{
+  return sysconf(_SC_PAGESIZE);
+}
+
+uint64_t
+umapcfg_get_max_pages_in_buffer( void )
+{
+  return ClientManager::getInstance()->get_max_pages_in_buffer();
+}
+
+uint64_t
+umapcfg_get_umap_page_size( void )
+{
+  return ClientManager::getInstance()->get_umap_page_size();
+}
+
+uint64_t
+umapcfg_get_num_fillers( void )
+{
+  return ClientManager::getInstance()->get_num_fillers();
+}
+
+uint64_t
+umapcfg_get_num_evictors( void )
+{
+  return ClientManager::getInstance()->get_num_evictors();
+}
+
+int
+umapcfg_get_evict_low_water_threshold( void )
+{
+  return ClientManager::getInstance()->get_evict_low_water_threshold();
+}
+
+int
+umapcfg_get_evict_high_water_threshold( void )
+{
+  return ClientManager::getInstance()->get_evict_high_water_threshold();
+}
+
+uint64_t
+umapcfg_get_max_fault_events( void )
+{
+  return ClientManager::getInstance()->get_max_fault_events();
+}
+
 #ifdef __cplusplus
 }
 #endif

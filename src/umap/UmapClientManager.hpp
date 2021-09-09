@@ -33,6 +33,7 @@ class ClientManager{
     std::mutex cm_mutex;
     std::string umap_server_path;
     int umap_server_fd;
+    struct umap_cfg_data cfgd;
     static ClientManager *instance;
     std::map<std::string, UmapServInfo*> file_conn_map; 
       
@@ -51,7 +52,7 @@ class ClientManager{
         if(!server_path.empty())
           instance = new ClientManager(server_path);
         else{
-          std::cout<<"Umap-Client Error: Server Path can't be empty during init"<<std::endl;
+          std::cout<<"Umap-Client Error: No Server connected"<<std::endl;
           exit(-1);
 	}
       }
@@ -71,5 +72,14 @@ class ClientManager{
     void closeUmapConnection();
     void *map_req(std::string filename, int prot, int flags, void *fixed_addr);
     int unmap_req(std::string filename);
+    
+    uint64_t get_max_pages_in_buffer();
+    uint64_t get_umap_page_size();
+    uint64_t get_num_fillers();
+    uint64_t get_num_evictors();
+    int get_evict_low_water_threshold();
+    int get_evict_high_water_threshold();
+    uint64_t get_max_fault_events();
+
     //End of interfaces that lock
 };

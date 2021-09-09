@@ -161,8 +161,24 @@ void UmapServerManager::add_mapped_region(std::string filename, mappedRegionInfo
 void start_umap_service(int csfd){
   int dummy;
   int uffd;
+  struct umap_cfg_data init_pkt;
+ 
+  init_pkt.umap_page_size = umapcfg_get_umap_page_size();
+  init_pkt.max_fault_events = umapcfg_get_max_fault_events();
+  init_pkt.num_fillers = umapcfg_get_num_fillers();
+  init_pkt.num_evictors = umapcfg_get_num_evictors();
+  init_pkt.max_pages_in_buffer = umapcfg_get_max_pages_in_buffer();
+  init_pkt.low_water_threshold = umapcfg_get_evict_low_water_threshold();
+  init_pkt.high_water_threshold = umapcfg_get_evict_high_water_threshold();
+
   UmapServerManager *usm = UmapServerManager::getInstance();
+  std::cout<<"Receiving dummy"<<std::endl;
   sock_fd_read(csfd, &dummy, sizeof(int), &uffd);
+  std::cout<<"Dummy received"<<std::endl;
+  ::write(csfd, &init_pkt, sizeof(struct umap_cfg_data));
+  std::cout<<"Sending init packet with num_fillers = "<<init_pkt.num_fillers<<std::endl;
+  ::read(csfd, &dummy, sizeof(dummy));
+  std::cout<<"Received ack!"<<std::endl;
   usm->start_service_thread(csfd, uffd);
 }
 
