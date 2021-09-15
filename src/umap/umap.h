@@ -77,10 +77,8 @@ int uunmap(
 );
 
 #define UMAP_SERVER_PATH "/tmp/umap-server"
-
-
 void umap_server(
-std::string filename //presently unused
+std::string filename
 );
 
 int umap_flush(); 

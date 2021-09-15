@@ -145,6 +145,7 @@ int ClientManager::unmap_req(std::string filename){
   }else{
     //TODO: Has to submit the unmap request to the server
     cs_uunmap(filename);
+    return 0;
   }
 }
 
@@ -196,8 +197,7 @@ void *client_umap(const char *filename, int prot, int flags, void *addr){
 
 int client_uunmap(const char *filename){
   ClientManager *cm = ClientManager::getInstance();
-  cm->unmap_req(std::string(filename));
-  return 0;
+  return cm->unmap_req(std::string(filename));
 }
 
 void close_umap_client(){

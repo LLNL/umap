@@ -21,9 +21,8 @@ access to UMAP buffer. The following lines should get you up and running:
 .. code-block:: bash
 
   $ git clone https://github.com/LLNL/umap.git
-  $ git checkout mp_umap_pre_release
   $ cd umap
-  $ git checkout mp_umap
+  $ git checkout mp_umap_pre_release
   $ cmake3 -DCMAKE_BUILD_PREFIX=. -DENABLE_TESTS_LINK_STATIC_UMAP=ON -DCMAKE_INSTALL_PREFIX=../install ..; 
   $ cmake3 --build . --target install
 
@@ -43,12 +42,21 @@ Basic Usage
 MP-Umap library provides seperate interfaces for service and client processes.
 
 Service communicate with the client processes through a Unix Domain socket.
-This can be accomplished by including P-umap provides default option for UMAP_SERVER_PATH unless the user chooses
-to provide a different location for the Unix socket to the following service interface.
+This can be accomplished by calling the following mpumapd API with UNIX domain
+socket path as an argument. When this argument is specified NULL, default option
+of UMAP_SERVER_PATH, which is set to '/tmp/umap-server'   
+
+.. literalinclude:: ../../src/umap/umap.h
+                    :lines: 80-82
+
+A simple use of umap-server is provided below: 
 
 .. literalinclude:: ../../tests/umap-service/umap-server.cpp
                     :lines: 8-23
 
-The following code is a simple example of how one may use umap:
+In order for a process to interact with the umap-service client applications
+interact with target service through the following client API calls defined
+in mpumapclient.h
 
-.. literalinclude:: ../../examples/psort.cpp
+.. literalinclude:: ../../src/umap-client.h
+                    :lines: 7-72
