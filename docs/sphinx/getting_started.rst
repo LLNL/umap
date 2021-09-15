@@ -4,7 +4,7 @@
 Getting Started
 ===============
 
-This page provides information on how to quickly get up and running with umap.
+This page provides information on how to quickly get up and running with mp-umap.
 
 ^^^^^^^^^^^^^
 Dependencies
@@ -14,11 +14,16 @@ At a minimum, cmake 3.5.1 or greater is required for building umap.
 ---------------------------
 UMAP Build and Installation
 ---------------------------
-The following lines should get you up and running:
+MP-Umap provides service and client libraries. The former enables developers to launch mp-umap service that transparently manages 
+the shared UMAP buffer and the  client API allows multi-processes to bind/interact with the service thereby enabling shared 
+access to UMAP buffer. The following lines should get you up and running:
 
 .. code-block:: bash
 
   $ git clone https://github.com/LLNL/umap.git
+  $ cd umap
+  $ git checkout mp_umap
+  $ cmake3 -DCMAKE_BUILD_PREFIX=. -DENABLE_TESTS_LINK_STATIC_UMAP=ON -DCMAKE_INSTALL_PREFIX=../install ..; cmake3 --build . --target install
   $ mkdir build && cd build
   $ cmake -DCMAKE_INSTALL_PREFIX="<Place to install umap>" ../umap
   $ make

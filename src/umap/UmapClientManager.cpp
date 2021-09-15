@@ -180,12 +180,16 @@ uint64_t ClientManager::get_max_fault_events(){
 extern "C" {
 #endif
 //Umap client interface functions --- start
-void init_umap_client(std::string sock_path){
-  ClientManager *cm = ClientManager::getInstance(sock_path);
+void init_umap_client(const char*sock_path){
+  ClientManager *cm = ClientManager::getInstance(std::string(sock_path));
   cm->setupUmapConnection();
 }
 
 void *client_umap(const char *filename, int prot, int flags, void *addr){
+  if((prot ^ PROT_READ)|| (flags ^ MAP_SHARED)){
+    std::cout<<"Umap Client Error: unsupported prot and flags values"<<std::endl;
+    return NULL;
+  }
   ClientManager *cm = ClientManager::getInstance();
   return cm->map_req(std::string(filename), prot, flags, addr);   
 }

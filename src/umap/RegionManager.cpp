@@ -321,7 +321,7 @@ RegionManager::set_max_pages_in_buffer( uint64_t max_pages )
 
   m_max_pages_in_buffer = max_pages;
 
-  UMAP_LOG(Debug,
+  UMAP_LOG(Info,
     "Maximum pages in page buffer changed from "
     << old_max_pages_in_buffer
     << " to " << get_max_pages_in_buffer() << " pages");

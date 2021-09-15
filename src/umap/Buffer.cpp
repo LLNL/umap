@@ -702,6 +702,7 @@ Buffer::Buffer( void )
       , m_waits_for_state_change(0)
 {
   m_array = (PageDescriptor *)calloc(m_size, sizeof(PageDescriptor));
+  std::cout<<"Size of buffer"<<m_size<<std::endl;
   if ( m_array == nullptr )
     UMAP_ERROR("Failed to allocate " << m_size*sizeof(PageDescriptor)
         << " bytes for buffer page descriptors");
@@ -738,6 +739,10 @@ Buffer::Buffer( void )
     is_adaptor_on = false;
   }
   
+}
+
+void Buffer::print_stats( void ) {
+  std::cout << m_stats << std::endl;
 }
 
 Buffer::~Buffer( void ) {

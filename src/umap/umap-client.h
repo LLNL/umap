@@ -1,8 +1,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include <stdint.h>
 #define UMAP_SERVER_PATH "/tmp/umap-server"
-void init_umap_client(std::string sock_path);
+void init_umap_client(const char *sock_path);
 void close_umap_client();
 
 void* client_umap(

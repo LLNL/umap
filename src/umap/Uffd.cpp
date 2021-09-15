@@ -388,6 +388,7 @@ Uffd::unregister_region( RegionDescriptor* rd, bool client_term )
 
 void 
 Uffd::release_buffer(RegionDescriptor *rd){
+  m_buffer->print_stats();
   m_buffer->evict_region(rd);
 }
 

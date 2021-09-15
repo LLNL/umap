@@ -51,7 +51,7 @@ void EvictWorkers::EvictWorker( void )
       	if (madvise(pd->page + i*page_size/1, page_size/1, MADV_REMOVE) == -1){
           UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
         }else{
-//        std::cout<<"Removed pages starting "<<std::hex<<(void *)pd->page <<" and ending"<<(void *)pd->page + page_size<<std::dec<<std::endl;
+          //std::cout<<"Removed pages starting "<<std::hex<<(void *)pd->page <<" and ending"<<(void *)pd->page + page_size<<std::dec<<std::endl;
         }
       }
     }
