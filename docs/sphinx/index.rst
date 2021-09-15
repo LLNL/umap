@@ -1,11 +1,15 @@
 ***********
-UMAP v2.1.0
+MP-UMAP v1.0.0
 ***********
 
-Umap is a library that provides an mmap()-like interface to a simple, user-
-space page fault handler based on the userfaultfd Linux feature (starting with
-4.3 linux kernel). The use case is to have an application specific buffer of
-pages cached from a large file, i.e. out-of-core execution using memory map.
+MP-Umap is a collection of libraries that allows multiple processes to 
+share a single file-backed Umap buffer. Just like Umap, It uses user-space 
+page fault handler based on the userfaultfd Linux feature (starting with
+4.3 linux kernel). This feature requires a Umap Service to be started and
+the client applications bind/interact with this service through MP-Umap client
+API. Presently, this enables sharing of buffer in read-only capacity. 
+The use case is to have a multi-process application accessing a large file
+through cached pages, i.e. out-of-core execution using memory map.
 
 - Take a look at our Getting Started guide for all you need to get up and
   running with umap.
