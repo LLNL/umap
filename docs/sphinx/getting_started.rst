@@ -58,5 +58,5 @@ In order for a process to interact with the umap-service client applications
 interact with target service through the following client API calls defined
 in mpumapclient.h
 
-.. literalinclude:: ../../src/umap-client.h
+.. literalinclude:: ../../src/umap/umap-client.h
                     :lines: 7-72
