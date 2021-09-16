@@ -33,7 +33,6 @@ Any questions? File an issue on GitHub.
 
   advanced_configuration
   environment_variables
-  sparse_store
 
 .. toctree::
   :maxdepth: 2
