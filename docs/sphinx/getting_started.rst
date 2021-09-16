@@ -49,7 +49,7 @@ of UMAP_SERVER_PATH, which is set to '/tmp/umap-server'
 .. literalinclude:: ../../src/umap/umap.h
                     :lines: 80-82
 
-A simple use of umap-server is provided below: 
+A simple mpumap Service looks like the following: 
 
 .. literalinclude:: ../../tests/umap-service/umap-server.cpp
                     :lines: 8-23
@@ -60,3 +60,11 @@ in mpumapclient.h
 
 .. literalinclude:: ../../src/umap/umap-client.h
                     :lines: 7-72
+
+Here is a simple mpumap Client application that shows the use of API defined 
+in mpumapclient.h 
+
+.. literalinclude:: ../../tests/umap-service/diff_mpumap_app.c
+                    :lines: 8-73
+
+Note: use -lmpumapd and -lmpumapclient to build service and client apps, respectively. 

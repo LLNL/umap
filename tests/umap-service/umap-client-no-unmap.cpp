@@ -42,7 +42,6 @@ int main(int argc, char *argv[]){
     val = *read_addr2;
     cout<<"Jumped to second file page"<<val<<endl;
   }
-  client_uunmap(filename1.c_str()); 
-  client_uunmap(filename2.c_str()); 
+  std::cout<<"Files differ at offset"<<(unsigned long)(read_addr - mapped_addr)<<std::endl; 
   return 0;
 }
