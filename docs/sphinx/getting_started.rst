@@ -12,7 +12,7 @@ Dependencies
 At a minimum, cmake 3.5.1 or greater is required for building mp-umap. 
 
 ---------------------------
-UMAP Build and Installation
+MP-UMAP Build and Installation
 ---------------------------
 MP-Umap provides service and client libraries. The former enables developers to launch mp-umap service that transparently manages 
 the shared UMAP buffer and the  client API allows multi-processes to bind/interact with the service thereby enabling shared 
@@ -32,7 +32,7 @@ By default, mpumap builds with will build a Release type build and will use the 
 defined directories for installation.  To specify different build types or
 specify alternate installation paths, see the :doc:`advanced_configuration`.
 
-Umap install files to the ``lib``, ``include`` and ``bin`` directories of the
+MP-Umap install files to the ``lib``, ``include`` and ``bin`` directories of the
 ``CMAKE_INSTALL_PREFIX``.
 
 -----------
