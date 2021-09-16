@@ -3,7 +3,7 @@ MP-UMAP v1.0.0
 ***********
 
 MP-Umap is a collection of libraries that allows multiple processes to 
-share a single file-backed Umap buffer. Just like Umap, It uses user-space 
+share a single file-backed Umap buffer. Just like Umap, it uses user-space 
 page fault handler based on the userfaultfd Linux feature (starting with
 4.3 linux kernel). This feature requires a Umap Service to be started and
 the client applications bind/interact with this service through MP-Umap client

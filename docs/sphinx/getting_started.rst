@@ -9,7 +9,7 @@ This page provides information on how to quickly get up and running with mp-umap
 ^^^^^^^^^^^^^
 Dependencies
 ^^^^^^^^^^^^^
-At a minimum, cmake 3.5.1 or greater is required for building umap.
+At a minimum, cmake 3.5.1 or greater is required for building mp-umap. 
 
 ---------------------------
 UMAP Build and Installation
@@ -67,4 +67,4 @@ in mpumapclient.h
 .. literalinclude:: ../../tests/umap-service/diff_mpumap_app.cpp
                     :lines: 8-73
 
-Note: use -lmpumapd and -lmpumapclient to build service and client apps, respectively. 
+Note: use -lmpumapd and -lmpumapclient to link service and client apps, respectively. 
