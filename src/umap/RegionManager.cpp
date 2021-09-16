@@ -264,8 +264,7 @@ RegionManager::RegionManager()
 
   if ( (read_env_var("UMAP_BUFSIZE", &env_value)) != nullptr ) {
     set_max_pages_in_buffer(env_value);
-    m_adaptive_buffer_freq = 3; //default adapt freq every 3s
-    //m_adaptive_buffer_freq = 0; //disable adaptive buffer if user specified bufsize
+    m_adaptive_buffer_freq = 0; //disable adaptive buffer if user specified bufsize
   }else{
     set_max_pages_in_buffer( get_max_pages_in_memory() );
     m_adaptive_buffer_freq = 3; //default adapt freq every 3s

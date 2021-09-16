@@ -42,6 +42,6 @@ int main(int argc, char *argv[]){
     val = *read_addr2;
     cout<<"Jumped to second file page"<<val<<endl;
   }
-  std::cout<<"Files differ at offset"<<(unsigned long)(read_addr - mapped_addr)<<std::endl; 
+  std::cout<<"Files differ at offset"<<(unsigned long)read_addr - (unsigned long)mapped_addr<<std::endl; 
   return 0;
 }
