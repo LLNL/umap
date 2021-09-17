@@ -15,6 +15,7 @@ if(OPENMP_FOUND)
   add_executable(umap-server umap-server.cpp)
   add_executable(umap-client umap-client.cpp)
   add_executable(umap-client-no-unmap umap-client-no-unmap.cpp)
+  add_executable(diff_mpumap_app diff_mpumap_app.cpp)
 
   if(STATIC_UMAP_LINK)
      set(umap-lib "mpumapd-static")
@@ -30,8 +31,10 @@ if(OPENMP_FOUND)
   target_link_libraries(umap-client ${umapclient-lib}) 
   add_dependencies(umap-client-no-unmap ${umapclient-lib})
   target_link_libraries(umap-client-no-unmap ${umapclient-lib}) 
+  add_dependencies(diff_mpumap_app ${umapclient-lib})
+  target_link_libraries(diff_mpumap_app ${umapclient-lib}) 
 
-  install(TARGETS umap-server umap-client umap-client-no-unmap
+  install(TARGETS umap-server umap-client umap-client-no-unmap diff_mpumap_app 
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib/static
     RUNTIME DESTINATION bin )

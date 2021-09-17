@@ -123,12 +123,13 @@ int main(int argc, char *argv[]){
   } 
   init_umap_client(sock_path.c_str());
   disp_umap_env_variables(); 
-  mapped_addr = client_umap(filename1.c_str(), PROT_READ, MAP_SHARED|MAP_FIXED, NULL);
-  mapped_addr2 = client_umap(filename2.c_str(), PROT_READ, MAP_SHARED|MAP_FIXED, NULL);
-  for(read_addr = (char *)mapped_addr, read_addr2 = (char *)mapped_addr2; (read_addr - mapped_addr) < 4096*1024 ; read_addr += 4096, read_addr2 += 4096 ){
+  mapped_addr = client_umap(filename1.c_str(), PROT_READ, MAP_SHARED, NULL);
+  mapped_addr2 = client_umap(filename2.c_str(), PROT_READ, MAP_SHARED, NULL);
+  char *end_addr = (char *)mapped_addr + 4096*1024;
+  for(read_addr = (char *)mapped_addr, read_addr2 = (char *)mapped_addr2; read_addr <= end_addr ; read_addr++, read_addr2++ ){
     if(*read_addr != *read_addr2){
         diff = true;
-        std::cout<<"Files differ at offset"<<(unsigned long)(read_addr - mapped_addr)<<std::endl; 
+        std::cout<<"Files differ at offset "<<(unsigned long)read_addr - (unsigned long)mapped_addr<<std::endl; 
         break;
     }
   }
