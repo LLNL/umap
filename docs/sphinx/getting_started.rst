@@ -65,6 +65,6 @@ Here is a simple mpumap Client application that shows the use of API defined
 in mpumapclient.h 
 
 .. literalinclude:: ../../tests/umap-service/diff_mpumap_app.cpp
-                    :lines: 8-73
+                    :lines: 8-74
 
 Note: use -lmpumapd and -lmpumapclient to link service and client apps, respectively. 
