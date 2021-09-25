@@ -1,18 +1,13 @@
 .. _design:
 
-==============
-MP-UMap Design
-==============
-
-This page provides design details on MP-UMap.
-
----------------------------
+===========================
 MP-UMap Page Fault Handling
----------------------------
+===========================
 
-.. image:: images/mp-umap-page-fault.jpg
+.. image:: images/mp-umap-fault-handling.jpg
    :width: 400
 
+This page provides design details on MP-UMap.
 For this description, we call an application that uses mpumapd library to instantiate a MP-UMap service as a UMap-Server. 
 The Applications App1 and App2 use mpumapclient library to communicate and interface with UMap-Server. 
 In contrast to UMap, as shown in Figure, UMap-Server runs independently of the application and it launches one fault 

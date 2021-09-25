@@ -26,12 +26,12 @@ Any questions? File an issue on GitHub.
   :caption: Basics
 
   getting_started
-  design
 
 .. toctree::
   :maxdepth: 2
   :caption: Reference
 
+  design
   advanced_configuration
   environment_variables
 
