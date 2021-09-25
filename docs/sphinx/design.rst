@@ -18,10 +18,12 @@ figure, we illustrate a scenario where two applications App1 and App2 page fault
 respectively. Corresponding fault monitoring threads translate these application addresses to server's address space 
 as Server Virtual Address (SVA) SVA1 and SVA2. These addresses are then placed on a fault event queue to a group of 
 worker threads called filler threads (FTs). The job of a filler in UMap-server, is to perform the following:
-#. Read the appropriate page from the Store Objects
-#. Update status of the page in Page Buffer Manager
-#. Issue Ioctls on target Uffd_fd to copy the contents of the read buffer into the faulting page
-#. Signal the blocked application about completion of the faults handling
+
+1. Read the appropriate page from the Store Objects
+2. Update status of the page in Page Buffer Manager
+3. Issue Ioctls on target Uffd_fd to copy the contents of the read buffer into the faulting page
+4. Signal the blocked application about completion of the faults handling
+
 Additionally, the fillers need to handle the case when SVA1 and SVA2 are the same. This scenario is different 
 from contending requests arising from different threads of a single process. There, the UMap-server receives 
 the page faults on the same fault monitor, which allows these requests to be grouped together. Also, a single 
