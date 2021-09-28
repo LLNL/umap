@@ -13,8 +13,7 @@ if(OPENMP_FOUND)
   set(CMAKE_EXE_LINKER_FLAGS 
     "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
   add_executable(umap-server umap-server.cpp)
-  add_executable(umap-client umap-client.cpp)
-  add_executable(umap-client-no-unmap umap-client-no-unmap.cpp)
+  add_executable(singlefile-no-unmap singlefile-no-unmap.cpp)
   add_executable(diff_mpumap_app diff_mpumap_app.cpp)
 
   if(STATIC_UMAP_LINK)
@@ -27,14 +26,12 @@ if(OPENMP_FOUND)
  
   add_dependencies(umap-server ${umap-lib})
   target_link_libraries(umap-server ${umap-lib}) 
-  add_dependencies(umap-client ${umapclient-lib})
-  target_link_libraries(umap-client ${umapclient-lib}) 
-  add_dependencies(umap-client-no-unmap ${umapclient-lib})
-  target_link_libraries(umap-client-no-unmap ${umapclient-lib}) 
+  add_dependencies(singlefile-no-unmap ${umapclient-lib})
+  target_link_libraries(singlefile-no-unmap ${umapclient-lib}) 
   add_dependencies(diff_mpumap_app ${umapclient-lib})
   target_link_libraries(diff_mpumap_app ${umapclient-lib}) 
 
-  install(TARGETS umap-server umap-client umap-client-no-unmap diff_mpumap_app 
+  install(TARGETS umap-server singlefile-no-unmap diff_mpumap_app 
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib/static
     RUNTIME DESTINATION bin )

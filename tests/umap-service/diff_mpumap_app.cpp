@@ -1,3 +1,9 @@
+//////////////////////////////////////////////////////////////////////////////
+////// Copyright 2017-2021 Lawrence Livermore National Security, LLC and other
+////// UMAP Project Developers. See the top-level LICENSE file for details.
+//////
+////// SPDX-License-Identifier: LGPL-2.1-only
+//////////////////////////////////////////////////////////////////////////////////
 /*
  We rename the header file to avoid name conflict
  with umap header. This allows mp-umap and umap to
@@ -8,6 +14,8 @@
 #include "umap/mpumapclient.h"
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 using namespace std;
 #include <iostream>
 
@@ -22,6 +30,13 @@ void disp_umap_env_variables() {
       << "UMAP_EVICT_HIGH_WATER_THRESHOLD - currently: " << umapcfg_get_evict_high_water_threshold()
       << " percent full\n"
       << std::endl;
+}
+
+long get_file_size(std::string filename)
+{
+    struct stat stat_buf;
+    int rc = stat(filename.c_str(), &stat_buf);
+    return rc == 0 ? stat_buf.st_size : -1;
 }
 
 int main(int argc, char *argv[]){
@@ -55,28 +70,36 @@ int main(int argc, char *argv[]){
   } 
   init_umap_client(sock_path.c_str());
   disp_umap_env_variables(); 
-  mapped_addr = client_umap(filename1.c_str(), PROT_READ, MAP_SHARED, NULL);
-  mapped_addr2 = client_umap(filename2.c_str(), PROT_READ, MAP_SHARED, NULL);
-  char *end_addr = (char *)mapped_addr + 4096*1024;
-  for(read_addr = (char *)mapped_addr, read_addr2 = (char *)mapped_addr2; read_addr <= end_addr ; read_addr++, read_addr2++ ){
-    if(*read_addr != *read_addr2){
-        diff = true;
-        std::cout<<"Files differ at offset "<<(unsigned long)read_addr - (unsigned long)mapped_addr<<std::endl; 
-        break;
+  long flen = get_file_size(filename1);
+  if(get_file_size(filename2) == flen){
+    mapped_addr = client_umap(filename1.c_str(), PROT_READ, MAP_SHARED, NULL);
+    mapped_addr2 = client_umap(filename2.c_str(), PROT_READ, MAP_SHARED, NULL);
+    char *end_addr = (char *)mapped_addr + flen - 1;
+    for(read_addr = (char *)mapped_addr, read_addr2 = (char *)mapped_addr2; read_addr <= end_addr ; read_addr++, read_addr2++ ){
+      if(*read_addr != *read_addr2){
+          diff = true;
+          std::cout<<"Files differ at offset "<<(unsigned long)read_addr - (unsigned long)mapped_addr<<std::endl; 
+          break;
+      }
     }
+    if(!diff){
+      std::cout<<"No difference detected at page boundaries"<<std::endl;
+    }
+    client_uunmap(filename1.c_str()); 
+    client_uunmap(filename2.c_str()); 
+    return 0;
+  }else{
+    std::cout<<"Files are different but Umap-server did not get tested as the file sizes are different"<<std::endl;
+    return -1;
   }
-  if(!diff){
-    std::cout<<"No difference detected at page boundaries"<<std::endl;
-  }
-  client_uunmap(filename1.c_str()); 
-  client_uunmap(filename2.c_str()); 
-  return 0;
 }
 */
 
 #include "umap/umap-client.h"
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 using namespace std;
 #include <iostream>
 
@@ -91,6 +114,13 @@ void disp_umap_env_variables() {
       << "UMAP_EVICT_HIGH_WATER_THRESHOLD - currently: " << umapcfg_get_evict_high_water_threshold()
       << " percent full\n"
       << std::endl;
+}
+
+long get_file_size(std::string filename)
+{
+    struct stat stat_buf;
+    int rc = stat(filename.c_str(), &stat_buf);
+    return rc == 0 ? stat_buf.st_size : -1;
 }
 
 int main(int argc, char *argv[]){
@@ -124,20 +154,26 @@ int main(int argc, char *argv[]){
   } 
   init_umap_client(sock_path.c_str());
   disp_umap_env_variables(); 
-  mapped_addr = client_umap(filename1.c_str(), PROT_READ, MAP_SHARED, NULL);
-  mapped_addr2 = client_umap(filename2.c_str(), PROT_READ, MAP_SHARED, NULL);
-  char *end_addr = (char *)mapped_addr + 4096*1024;
-  for(read_addr = (char *)mapped_addr, read_addr2 = (char *)mapped_addr2; read_addr <= end_addr ; read_addr++, read_addr2++ ){
-    if(*read_addr != *read_addr2){
-        diff = true;
-        std::cout<<"Files differ at offset "<<(unsigned long)read_addr - (unsigned long)mapped_addr<<std::endl; 
-        break;
+  long flen = get_file_size(filename1);
+  if(get_file_size(filename2) == flen){
+    mapped_addr = client_umap(filename1.c_str(), PROT_READ, MAP_SHARED, NULL);
+    mapped_addr2 = client_umap(filename2.c_str(), PROT_READ, MAP_SHARED, NULL);
+    char *end_addr = (char *)mapped_addr + flen - 1;
+    for(read_addr = (char *)mapped_addr, read_addr2 = (char *)mapped_addr2; read_addr <= end_addr ; read_addr++, read_addr2++ ){
+      if(*read_addr != *read_addr2){
+          diff = true;
+          std::cout<<"Files differ at offset "<<(unsigned long)read_addr - (unsigned long)mapped_addr<<std::endl; 
+          break;
+      }
     }
+    if(!diff){
+      std::cout<<"No difference detected at page boundaries"<<std::endl;
+    }
+    client_uunmap(filename1.c_str()); 
+    client_uunmap(filename2.c_str()); 
+    return 0;
+  }else{
+    std::cout<<"Files are different but Umap-server did not get tested as the file sizes are different"<<std::endl;
+    return -1;
   }
-  if(!diff){
-    std::cout<<"No difference detected at page boundaries"<<std::endl;
-  }
-  client_uunmap(filename1.c_str()); 
-  client_uunmap(filename2.c_str()); 
-  return 0;
 }

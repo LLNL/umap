@@ -22,7 +22,7 @@ access to UMAP buffer. The following lines should get you up and running:
 
   $ git clone https://github.com/LLNL/umap.git
   $ cd umap
-  $ git checkout mp_umap_pre_release
+  $ git checkout mpumap
   $ cmake3 -DCMAKE_BUILD_PREFIX=. -DENABLE_TESTS_LINK_STATIC_UMAP=ON -DCMAKE_INSTALL_PREFIX=../install ..; 
   $ cmake3 --build . --target install
 
@@ -52,19 +52,19 @@ of UMAP_SERVER_PATH, which is set to '/tmp/umap-server'
 A simple mpumap Service looks like the following: 
 
 .. literalinclude:: ../../tests/umap-service/umap-server.cpp
-                    :lines: 8-23
+                    :lines: 15-30
 
 In order for a process to interact with the umap-service client applications
 interact with target service through the following client API calls defined
 in mpumapclient.h
 
 .. literalinclude:: ../../src/umap/umap-client.h
-                    :lines: 7-72
+                    :lines: 15-80
 
 Here is a simple mpumap Client application that shows the use of API defined 
 in mpumapclient.h 
 
 .. literalinclude:: ../../tests/umap-service/diff_mpumap_app.cpp
-                    :lines: 8-74
+                    :lines: 14-95
 
 Note: use -lmpumapd and -lmpumapclient to link service and client apps, respectively. 

@@ -1,5 +1,5 @@
 #############################################################################
-# Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
+# Copyright 2017-2021 Lawrence Livermore National Security, LLC and other
 # UMAP Project Developers. See the top-level LICENSE file for details.
 #
 # SPDX-License-Identifier: LGPL-2.1-only
@@ -31,6 +31,5 @@ add_subdirectory(src)
 
 if (ENABLE_TESTS)
   set(STATIC_UMAP_LINK ${ENABLE_TESTS_LINK_STATIC_UMAP} CACHE BOOL "Linking option for Umap binaries" FORCE)
-#  add_subdirectory(examples)
   add_subdirectory(tests)
 endif()
