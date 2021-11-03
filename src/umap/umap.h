@@ -69,6 +69,8 @@ struct umap_prefetch_item {
   void* page_base_addr;
 };
 
+int umap_has_write_support();
+  
 void umap_prefetch( int npages, struct umap_prefetch_item* page_array );
 void umap_fetch_and_pin( char* paddr, uint64_t size );  
 uint64_t umapcfg_get_umap_page_size( void );
