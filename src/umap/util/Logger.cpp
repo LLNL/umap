@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <sstream>
+#include <iomanip>
 
 namespace Umap {
 
@@ -57,9 +59,13 @@ void Logger::logMessage( message::Level level,
 
   std::lock_guard<std::mutex> guard(g_logging_mutex);
   if (m_log_timestamp) {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(3) << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 1000.0;
+ 
     std::cout
       << getpid() << ":"
       << syscall(__NR_gettid) << " "
+      << ss.str() << " "
       << "[" << MessageLevelName[ level ] << "]"
       << "[" << fileName  << ":" << line << "]:"
       << message
