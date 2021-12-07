@@ -63,9 +63,9 @@ void Logger::logMessage( message::Level level,
     ss << std::fixed << std::setprecision(3) << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 1000.0;
  
     std::cout
+      << ss.str() << ":"
       << getpid() << ":"
       << syscall(__NR_gettid) << " "
-      << ss.str() << " "
       << "[" << MessageLevelName[ level ] << "]"
       << "[" << fileName  << ":" << line << "]:"
       << message
