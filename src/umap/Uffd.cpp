@@ -268,7 +268,7 @@ Uffd::register_region( RegionDescriptor* rd )
     );
   }
 
-  if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS)
+  if ( !(uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) )
     UMAP_ERROR("unexpected userfaultfd ioctl set: " << uffdio_register.ioctls);
 }
 
