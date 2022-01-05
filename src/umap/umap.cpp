@@ -56,6 +56,13 @@ int umap_flush(){
 
 }
 
+int umap_has_write_support(){
+#ifdef UMAP_RO_MODE
+  return 0;
+#else
+  return 1;
+#endif
+}
 
 void umap_prefetch( int npages, umap_prefetch_item* page_array )
 {
