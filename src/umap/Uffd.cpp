@@ -267,8 +267,12 @@ Uffd::register_region( RegionDescriptor* rd )
         << "Number of regions is: " << m_rm.get_num_active_regions()
     );
   }
-
-  if ((uffdio_register.ioctls & UFFD_API_RANGE_IOCTLS) != UFFD_API_RANGE_IOCTLS)
+  
+  if( !(uffdio_register.ioctls & (1 << _UFFDIO_COPY))
+#ifdef UFFDIO_WRITEPROTECT
+      || !(uffdio_register.ioctls & (1 << _UFFDIO_WRITEPROTECT))
+#endif
+    )
     UMAP_ERROR("unexpected userfaultfd ioctl set: " << uffdio_register.ioctls);
 }
 
