@@ -115,7 +115,7 @@
 #ifndef NTIMES
 #   define NTIMES	10
 #endif
-
+#   define NTIMES       1
 /*  Users are allowed to modify the "OFFSET" variable, which *may* change the
  *         relative alignment of the arrays (though compilers may change the 
  *         effective offset by making the arrays non-contiguous on some systems). 
@@ -292,13 +292,15 @@ if( fd0>0 && fd1>0 && fd2>0 ){
 #endif
 
     /* Get initial value for system clock. */
+double t00 =  mysecond();
 #pragma omp parallel for
     for (j=0; j<STREAM_ARRAY_SIZE; j++) {
 	    a[j] = 1.0;
 	    b[j] = 2.0;
 	    c[j] = 0.0;
 	}
-
+double t11 =  mysecond();
+printf("TIME IN SECONDS JUST FOR INITIALIZATION %.3f\n", (t11-t00));return 0;
     printf(HLINE);
 
     if  ( (quantum = checktick()) >= 1) 

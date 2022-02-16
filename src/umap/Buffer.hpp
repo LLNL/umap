@@ -40,7 +40,13 @@ namespace Umap {
       void mark_page_as_present(PageDescriptor* pd);
       void mark_page_as_free( PageDescriptor* pd );
 
+#ifndef LOCK_OPT
       bool low_threshold_reached( void );
+#else
+      inline bool low_threshold_reached( void ) {return m_busy_pages.size() <= m_evict_low_water;}
+      void process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswrites, int num_pages);
+#endif
+
 
       void fetch_and_pin(char* paddr, uint64_t size);
 
@@ -61,12 +67,16 @@ namespace Umap {
       std::unordered_map<char*, PageDescriptor*> m_present_pages;
 
       std::vector<PageDescriptor*> m_free_pages;
+      std::vector<PageDescriptor*> m_free_pages_secondary;
       std::deque<PageDescriptor*> m_busy_pages;
 
       uint64_t m_evict_low_water;   // % to evict too
       uint64_t m_evict_high_water;  // % to start evicting
 
       pthread_mutex_t m_mutex;
+      pthread_mutex_t m_free_pages_secondary_mutex;
+      pthread_mutex_t m_busy_pages_mutex;
+      void fast_drain();
 
       int m_waits_for_avail_pd;
       pthread_cond_t m_avail_pd_cond;
@@ -82,9 +92,9 @@ namespace Umap {
 	      ((Buffer *) obj)->monitor();
         return NULL;
       }
-
+#ifndef LOCK_OPT
       void release_page_descriptor( PageDescriptor* pd );
-
+#endif
       PageDescriptor* page_already_present( char* page_addr );
       PageDescriptor* get_page_descriptor( char* page_addr, RegionDescriptor* rd );
       uint64_t apply_int_percentage( int percentage, uint64_t item );

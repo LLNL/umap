@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <unordered_set>
+#include <unordered_map>
 
 #include "umap/PageDescriptor.hpp"
 #include "umap/store/Store.hpp"
@@ -42,11 +43,32 @@ namespace Umap {
 
       inline void insert_page_descriptor(PageDescriptor* pd) {
         m_active_pages.insert(pd);
+        #ifdef LOCK_OPT
+        m_present_pages[pd->page] = pd;
+        //UMAP_LOG(Info, "inserted: " << pd << " m_present_pages.size()=" << m_present_pages.size());  
+        //for(auto it : m_present_pages)
+          //UMAP_LOG(Info, " : " << m_present_pages.size() << " : "<< it.second );
+        #endif
       }
+      #ifdef LOCK_OPT
+      inline PageDescriptor* find(char* paddr) {
+        
+        //for(auto it : m_present_pages)
+          //UMAP_LOG(Info, " : " << it.second );
+        auto it = m_present_pages.find(paddr);
+        if( it==m_present_pages.end() )
+          return nullptr;
+        else
+          return it->second;
+      }
+      #endif       
 
       inline void erase_page_descriptor(PageDescriptor* pd) {
         UMAP_LOG(Debug, "Erasing PD: " << pd);
         m_active_pages.erase(pd);
+        #ifdef LOCK_OPT
+        m_present_pages.erase(pd->page);
+        #endif        
       }
 
       inline PageDescriptor* get_next_page_descriptor( void ) {
@@ -69,6 +91,9 @@ namespace Umap {
       Store*   m_store;
 
       std::unordered_set<PageDescriptor*> m_active_pages;
+      #ifdef LOCK_OPT
+      std::unordered_map<char*, PageDescriptor*> m_present_pages;
+      #endif
   };
 } // end of namespace Umap
 #endif // _UMAP_RegionDescripto_HPP

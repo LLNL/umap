@@ -63,8 +63,8 @@ namespace Umap {
          os << ", DIRTY";
       if ( pd->deferred )
          os << ", DEFERRED";
-      if ( pd->spurious_count )
-         os << ", spurious: " << pd->spurious_count;
+      //if ( pd->spurious_count )
+         //os << ", spurious: " << pd->spurious_count;
 
       os << " }";
     }

@@ -21,7 +21,10 @@ namespace Umap {
     bool              dirty;
     bool              deferred;
     bool              data_present;
-    int               spurious_count;
+    //int               spurious_count;
+#ifdef LOCK_OPT
+    pthread_mutex_t   m_mutex;
+#endif
 
     std::string print_state( void ) const;
     void set_state_free( void );

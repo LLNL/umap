@@ -37,6 +37,7 @@ struct less_than_key {
   }
 };
 
+#ifndef LOCK_OPT
 void
 Uffd::uffd_handler( void )
 {
@@ -121,6 +122,108 @@ Uffd::uffd_handler( void )
   }
   UMAP_LOG(Debug, "Good bye");
 }
+#else
+void
+Uffd::uffd_handler( void )
+{
+  struct pollfd pollfd[3] = {
+      { .fd = m_uffd_fd, .events = POLLIN }
+    , { .fd = m_pipe[0], .events = POLLIN }
+    , { .fd = m_pipe[1], .events = POLLIN }
+  };
+
+  //
+  // For the Uffd worker thread, we use our work queue as a sentinel for
+  // when it is time to leave (since this particular thread gets its work
+  // from the m_uffd_fd kernel module.
+  //
+  while ( wq_is_empty() ) {
+    int pollres = poll(&pollfd[0], 3, -1);
+
+    switch (pollres) {
+      case 1:
+        break;
+      case -1:
+        UMAP_ERROR("poll failed: " << strerror(errno));
+      default:
+        UMAP_ERROR("poll: unexpected result: " << pollres);
+    }
+
+    if (pollfd[1].revents & POLLIN || pollfd[2].revents & POLLIN)
+      break;
+
+    if (pollfd[0].revents & POLLERR)
+      UMAP_ERROR("POLLERR: ");
+
+    if ( !(pollfd[0].revents & POLLIN) )
+      continue;
+
+    int readres = read(m_uffd_fd, &m_events[0], m_max_fault_events * sizeof(struct uffd_msg));
+
+    if (readres == -1) {
+      if (errno == EAGAIN)
+        continue;
+
+      UMAP_ERROR("read failed: " << strerror(errno));
+    }
+
+    assert("Invalid read result returned" && (readres % sizeof(struct uffd_msg) == 0));
+
+    int msgs = readres / sizeof(struct uffd_msg);
+
+    assert("invalid message size" && msgs >= 1 && msgs <= m_max_fault_events);
+
+    //
+    // Since uffd page events arrive on the system page boundary which could
+    // be different from umap's page size, the page address for the incoming
+    // events are adjusted to the beginning of the umap page address.  The
+    // events are then sorted in page base address / operation type order and
+    // are processed only once while duplicates are skipped.
+    //
+    for (int i = 0; i < msgs; ++i)
+      m_events[i].arg.pagefault.address &= ~(m_page_size-1);
+
+    std::sort(&m_events[0], &m_events[msgs], less_than_key());
+
+    //printf("Start %zu messages \n", msgs);
+    char* addrs[msgs];
+    bool iswrites[msgs];
+    int p = 0; //need to specifically initialize to 0, strange!
+    auto last_rd = m_rm.containing_region((char*)(m_events[0].arg.pagefault.address));
+    char* last_addr = nullptr;
+    for (int i = 0; i < msgs; ++i) {
+      //printf("addr %p\n", (char*)(m_events[i].arg.pagefault.address));
+      if ((char*)(m_events[i].arg.pagefault.address) == last_addr)
+        continue;
+
+      last_addr = (char*)(m_events[i].arg.pagefault.address);
+
+#ifndef UMAP_RO_MODE
+      bool iswrite = (m_events[i].arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE) != 0);
+#else
+      bool iswrite = false;
+#endif
+
+      auto rd = m_rm.containing_region(last_addr);
+      //printf("rd[%p %p]\n", rd->start(), rd->end());
+      if(rd != last_rd){
+        m_buffer->process_page_events(last_rd, addrs, iswrites, p);
+        p=0;
+        last_rd = rd;
+      }
+      addrs[p] = last_addr;
+      iswrites[p] = iswrite;
+      p ++;
+      
+    }//end of msgs
+    if(p>0)
+      m_buffer->process_page_events(last_rd, addrs, iswrites, p);
+    //printf("End %zu messages \n", msgs);
+
+  }//end of while
+  UMAP_LOG(Debug, "Good bye");
+}
+#endif
 
 void
 Uffd::process_page( bool iswrite, char* addr )

@@ -50,6 +50,8 @@ target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
+#add_definitions(-DLOCK_OPT) 
+
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib

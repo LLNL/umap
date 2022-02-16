@@ -38,7 +38,7 @@ namespace Umap {
     while ( 1 ) {
       auto w = get_work();
 
-      UMAP_LOG(Debug, ": " << w << " " << m_buffer);
+      //UMAP_LOG(Debug, ": " << w << " " << m_buffer);
 
       if (w.type == Umap::WorkItem::WorkType::EXIT)
         break;    // Time to leave
