@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: LGPL-2.1-only
 #############################################################################
-project(multi_thread)
+project(multithread_flush)
 
 FIND_PACKAGE( OpenMP REQUIRED )
 if(OPENMP_FOUND)
@@ -12,7 +12,7 @@ if(OPENMP_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   set(CMAKE_EXE_LINKER_FLAGS 
     "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-  add_executable(multi_thread multi_thread.cpp)
+  add_executable(multithread_flush multithread_flush.cpp)
 
   
   if(STATIC_UMAP_LINK)
@@ -21,16 +21,16 @@ if(OPENMP_FOUND)
     set(umap-lib "umap")
   endif()
 
-  add_dependencies(multi_thread ${umap-lib})
-  target_link_libraries(multi_thread ${umap-lib})
+  add_dependencies(multithread_flush ${umap-lib})
+  target_link_libraries(multithread_flush ${umap-lib})
 
   include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
-  install(TARGETS multi_thread
+  install(TARGETS multithread_flush
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib/static
     RUNTIME DESTINATION bin )
 else()
-  message("Skipping multi_thread, OpenMP required")
+  message("Skipping multithread_flush, OpenMP required")
 endif()
 

@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: LGPL-2.1-only
 #############################################################################
-project(flush_buffer)
+project(stream)
 
 FIND_PACKAGE( OpenMP REQUIRED )
 if(OPENMP_FOUND)
@@ -12,24 +12,25 @@ if(OPENMP_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
   set(CMAKE_EXE_LINKER_FLAGS 
     "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-  add_executable(flush_buffer flush_buffer.cpp)
+  add_executable(stream stream.c)
 
+  
   if(STATIC_UMAP_LINK)
-     set(umap-lib "umap-static")
+    set(umap-lib "umap-static")
   else()
-     set(umap-lib "umap")
+    set(umap-lib "umap")
   endif()
-  
-  add_dependencies(flush_buffer ${umap-lib})
-  target_link_libraries(flush_buffer ${umap-lib}) 
-  
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
-  install(TARGETS flush_buffer
+  add_dependencies(stream ${umap-lib})
+  target_link_libraries(stream ${umap-lib})
+
+  include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
+
+  install(TARGETS stream
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib/static
     RUNTIME DESTINATION bin )
 else()
-  message("Skipping flush_buffer, OpenMP required")
+  message("Skipping stream, OpenMP required")
 endif()
 
