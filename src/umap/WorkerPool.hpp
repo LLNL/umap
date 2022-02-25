@@ -21,6 +21,9 @@ namespace Umap {
     enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FAST_EVICT, FLUSH };
     PageDescriptor* page_desc;
     WorkType type;
+    #ifdef PROF
+    std::chrono::steady_clock::time_point timing;
+    #endif
   };
 
   static std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
@@ -57,11 +60,11 @@ namespace Umap {
         delete m_wq;
       }
 
-      void send_work(const WorkItem& work) {
+      inline void send_work(const WorkItem& work) {
         m_wq->enqueue(work);
       }
 
-      WorkItem get_work() {
+      inline WorkItem get_work() {
         return m_wq->dequeue();
       }
 

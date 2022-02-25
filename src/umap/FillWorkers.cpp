@@ -36,7 +36,13 @@ namespace Umap {
     }
 
     while ( 1 ) {
+
       auto w = get_work();
+
+      #ifdef PROF
+      auto t0 = std::chrono::steady_clock::now();
+      UMAP_LOG(Info, "from send till get_work \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t0-w.timing).count()) );
+      #endif
 
       //UMAP_LOG(Debug, ": " << w << " " << m_buffer);
 
@@ -49,8 +55,17 @@ namespace Umap {
       else {
         uint64_t offset = w.page_desc->region->store_offset(w.page_desc->page);
 
+        #ifdef PROF1
+        auto t00 = std::chrono::steady_clock::now();
+        #endif
+
         if (w.page_desc->region->store()->read_from_store(copyin_buf, page_size, offset) == -1)
           UMAP_ERROR("read_from_store failed");
+
+        #ifdef PROF1
+        auto t01 = std::chrono::steady_clock::now();
+        UMAP_LOG(Info, "read_from_store \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t01-t00).count()) );
+        #endif        
 
         if ( ! w.page_desc->dirty ) {
           m_uffd->copy_in_page_and_write_protect(copyin_buf, w.page_desc->page);
@@ -59,6 +74,11 @@ namespace Umap {
           m_uffd->copy_in_page(copyin_buf, w.page_desc->page);
         }
         w.page_desc->data_present = true;
+        
+        #ifdef PROF1
+        auto t02 = std::chrono::steady_clock::now();
+        UMAP_LOG(Info, "copy_in_page \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t02-t01).count()) );
+        #endif 
       }
 
       m_buffer->mark_page_as_present(w.page_desc);

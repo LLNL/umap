@@ -206,6 +206,7 @@ Uffd::uffd_handler( void )
 
       auto rd = m_rm.containing_region(last_addr);
       //printf("rd[%p %p]\n", rd->start(), rd->end());
+
       if(rd != last_rd){
         m_buffer->process_page_events(last_rd, addrs, iswrites, p);
         p=0;

@@ -42,8 +42,9 @@ namespace Umap {
       inline uint64_t count( void )    { return m_active_pages.size();      }
 
       inline void insert_page_descriptor(PageDescriptor* pd) {
+        #ifndef LOCK_OPT
         m_active_pages.insert(pd);
-        #ifdef LOCK_OPT
+        #else
         m_present_pages[pd->page] = pd;
         //UMAP_LOG(Info, "inserted: " << pd << " m_present_pages.size()=" << m_present_pages.size());  
         //for(auto it : m_present_pages)
@@ -64,9 +65,10 @@ namespace Umap {
       #endif       
 
       inline void erase_page_descriptor(PageDescriptor* pd) {
+        #ifndef LOCK_OPT
         UMAP_LOG(Debug, "Erasing PD: " << pd);
         m_active_pages.erase(pd);
-        #ifdef LOCK_OPT
+        #else
         m_present_pages.erase(pd->page);
         #endif        
       }

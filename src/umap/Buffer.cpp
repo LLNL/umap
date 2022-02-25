@@ -16,6 +16,10 @@
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 
+#ifdef PROF
+#include <chrono>
+#endif
+
 namespace Umap {
 //
 // Called after data has been placed into the page
@@ -507,7 +511,10 @@ void Buffer::fast_drain(){
 
 void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswrites, int num_pages)
 {
-  //UMAP_LOG(Info, "Starting num_pages = " << num_pages);
+  #ifdef PROF1
+  int num_pages_old = num_pages;
+  auto t0 = std::chrono::steady_clock::now();
+  #endif
 
   while ( num_pages>0 ) {
     int pivot = 0;
@@ -518,8 +525,12 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
 
       //auto pd = page_already_present(paddr);
       //auto pp = m_present_pages.find(paddr);
-      PageDescriptor* pd = rd->find(paddr);
-  
+      #ifdef PROF1
+      auto t2 = std::chrono::steady_clock::now();
+      #endif
+
+      PageDescriptor* pd = rd->find(paddr);    
+
       //
       // Most likely case
       //
@@ -541,15 +552,30 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
           pd->data_present = false;
           m_busy_pages.push_front(pd);
         }
-
+        #ifdef PROF1
+        auto t22 = std::chrono::steady_clock::now();
+        #endif
         rd->insert_page_descriptor(pd);
+        #ifdef PROF1
+        auto t23 = std::chrono::steady_clock::now();
+        UMAP_LOG(Info, "insert_page_descriptor \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t23-t22).count()) );
+        #endif
         m_present_pages[pd->page] = pd;
         
         WorkItem work;
         work.type = Umap::WorkItem::WorkType::NONE;
         work.page_desc = pd;
+        #ifdef PROF1
+        auto t24 = std::chrono::steady_clock::now();
+        #endif
+        #ifdef PROF
+        work.timing = std::chrono::steady_clock::now();
+        #endif
         m_rm.get_fill_workers_h()->send_work(work);
-
+        #ifdef PROF1
+        auto t25 = std::chrono::steady_clock::now();
+        UMAP_LOG(Info, "send_work \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t25-t24).count()) );
+        #endif
         //UMAP_LOG(Info, "NEW: " << pd << " From: " << this);        
       }
       //
@@ -571,7 +597,7 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
       // PRESENT.  If this is the case, we need to wait for it to finish
       // with whatever is happening to it and then check again
       //
-      else{
+      else if ( pd->state != PageDescriptor::State::LEAVING ){
         /*UMAP_LOG(Debug, "Waiting for state: (ANY)" << ", " << pp->second);
 
         ++m_stats.waits;
@@ -584,10 +610,18 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
         iswrites[pivot] = iswrite;
         pivot ++;
       }
+      
+      #ifdef PROF1
+      auto t3 = std::chrono::steady_clock::now();
+      UMAP_LOG(Info, "paddr "<< paddr << " \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t3-t2).count()) );
+      #endif  
     }
     num_pages = pivot;
   }
-
+  #ifdef PROF1
+  auto t1 = std::chrono::steady_clock::now();
+  UMAP_LOG(Info, "num_pages "<< num_pages_old << " \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t1-t0).count()) );
+  #endif
   /*
   // Kick the eviction daemon if the high water mark has been reached
   //

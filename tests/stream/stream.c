@@ -95,7 +95,7 @@
  *          per array.
  */
 #ifndef STREAM_ARRAY_SIZE
-#   define STREAM_ARRAY_SIZE	10000000
+#   define STREAM_ARRAY_SIZE	40000000
 #endif
 
 /*  2) STREAM runs each kernel "NTIMES" times and reports the *best* result
@@ -217,9 +217,9 @@ main()
 size_t umap_region_length = sizeof(STREAM_TYPE) * STREAM_ARRAY_SIZE;
 size_t umap_psize = umapcfg_get_umap_page_size();
 umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
-int fd0 = open_prealloc_file( "stream_a", umap_region_length);
-int fd1 = open_prealloc_file( "stream_b", umap_region_length);
-int fd2 = open_prealloc_file( "stream_c", umap_region_length);
+int fd0 = open_prealloc_file( "/mnt/pmem/pm0/stream_a", umap_region_length);
+int fd1 = open_prealloc_file( "/mnt/pmem/pm0/stream_b", umap_region_length);
+int fd2 = open_prealloc_file( "/mnt/pmem/pm0/stream_c", umap_region_length);
 if( fd0>0 && fd1>0 && fd2>0 ){
 	a = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
     if ( a == UMAP_FAILED ) {
@@ -300,7 +300,7 @@ double t00 =  mysecond();
 	    c[j] = 0.0;
 	}
 double t11 =  mysecond();
-printf("TIME IN SECONDS JUST FOR INITIALIZATION %.3f\n", (t11-t00));return 0;
+printf("TIME IN SECONDS for initial run is %.3f\n", (t11-t00));return 0;
     printf(HLINE);
 
     if  ( (quantum = checktick()) >= 1) 
