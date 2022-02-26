@@ -96,10 +96,11 @@ void Buffer::mark_page_as_free( PageDescriptor* pd )
 
   if ( ! pd->deferred )
     m_free_pages_secondary.push_back(pd);
-
+  
   pd->page = nullptr;
 
   pthread_mutex_unlock(&m_free_pages_secondary_mutex);
+  //printf("103 m_free_pages_secondary.size()=%zu \n", m_free_pages_secondary.size());
 }
 #endif
 
@@ -172,6 +173,7 @@ PageDescriptor* Buffer::evict_oldest_page()
 // Called from Evict Manager to begin eviction process on at most N (=32)
 // oldest present (non-deferred) pages without waiting for status change
 //
+#ifndef LOCK_OPT
 std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 {
   std::vector<PageDescriptor*> evicted_pages;
@@ -206,7 +208,47 @@ std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 
   return evicted_pages;
 }
+#else
+//
+// Called from Evict Manager to begin eviction process on at most N (=32)
+// oldest present (non-deferred) pages without waiting for status change
+//
+std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
+{
+  std::vector<PageDescriptor*> evicted_pages;
+  std::vector<PageDescriptor*> pending_pages;
+  size_t num_busy_pages = m_busy_pages.size();
+  const int max_num_evicted_pages = (num_busy_pages<32) ?num_busy_pages:32;
+  int num_evicted_pages = 0;
 
+  lock();
+  num_busy_pages = m_busy_pages.size();
+  if( num_busy_pages>0 ){
+    int i = num_busy_pages - 1;
+    for(; (i>=0 && num_evicted_pages<max_num_evicted_pages); i--){
+        PageDescriptor* pd = m_busy_pages[i];
+        if( !pd->deferred && pd->state == PageDescriptor::State::PRESENT ){
+          m_stats.pages_deleted++;
+          num_evicted_pages ++;
+
+          pd->state = PageDescriptor::State::LEAVING;
+          evicted_pages.push_back(pd);
+        }else{
+          pending_pages.push_back(pd);
+        }
+        m_busy_pages.pop_back();
+    }
+
+    size_t num_pending_pages = pending_pages.size();
+    for(size_t k=0; k<num_pending_pages; k++){
+      m_busy_pages.push_back(pending_pages[k]);
+    }
+  }
+  unlock();
+
+  return evicted_pages;
+}
+#endif
 void Buffer::flush_dirty_pages()
 {
   lock();
@@ -462,9 +504,11 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
 }
 #ifdef LOCK_OPT
 void Buffer::fast_drain(){
-  UMAP_LOG(Info, "m_free_pages_secondary.size()= "<<m_free_pages_secondary.size()<<")");
+  while(m_free_pages.size()==0){
+    usleep(10);
+  //UMAP_LOG(Info, "m_free_pages_secondary.size()= "<<m_free_pages_secondary.size()<<")");
   // first check the secondary free buffer by Evictors
-  if( m_free_pages_secondary.size() > 8){  
+  if( m_free_pages_secondary.size() > 8){
     int err;   
     if ( (err = pthread_mutex_lock(&m_free_pages_secondary_mutex)) != 0 )
       UMAP_ERROR("pthread_mutex_lock m_free_pages_secondary failed: " << strerror(err));
@@ -473,9 +517,10 @@ void Buffer::fast_drain(){
     m_free_pages_secondary.clear();
 
     pthread_mutex_unlock(&m_free_pages_secondary_mutex);
+    //printf("520 m_free_pages_secondary.size()=%zu m_free_pages.size()=%zu\n", m_free_pages_secondary.size(), m_free_pages.size());
   }
   // otherwise quickly drop N clean pages from busy_pages
-  else{
+  else if(0){
     std::vector<PageDescriptor*> pending_pages;
     
     //if ( (err = pthread_mutex_lock(&m_busy_pages_mutex)) != 0 )
@@ -483,12 +528,13 @@ void Buffer::fast_drain(){
 
     size_t num_busy_pages = m_busy_pages.size();
     assert( num_busy_pages>0 );
+    UMAP_LOG(Info, "num_busy_pages = "<<num_busy_pages );
 
     int max_num_freed_pages = (num_busy_pages>32) ?32 :num_busy_pages;
     int num_evicted_pages = 0;
     size_t page_size = m_rm.get_umap_page_size();
-    for(size_t i = num_busy_pages - 1; (i>=0 && num_evicted_pages<max_num_freed_pages); i--){
-        PageDescriptor* pd = m_busy_pages[i];
+    for(int i = num_busy_pages - 1; (i>=0 && num_evicted_pages<max_num_freed_pages); i--){
+        PageDescriptor* pd = m_busy_pages[i];UMAP_LOG(Info, "i = "<<i << pd );
         if( !pd->deferred && pd->state == PageDescriptor::State::PRESENT && !pd->dirty ){
           if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
             UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
@@ -506,6 +552,7 @@ void Buffer::fast_drain(){
       m_busy_pages.push_back(it);
     }
     //pthread_mutex_lock(&m_busy_pages_mutex);
+  }
   }
 }
 
@@ -622,17 +669,17 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
   auto t1 = std::chrono::steady_clock::now();
   UMAP_LOG(Info, "num_pages "<< num_pages_old << " \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t1-t0).count()) );
   #endif
-  /*
+  
   // Kick the eviction daemon if the high water mark has been reached
   //
-  if ( m_busy_pages.size() == m_evict_high_water ) {
+  if ( m_busy_pages.size() >= m_evict_high_water ) {
     WorkItem w;
 
     w.type = Umap::WorkItem::WorkType::THRESHOLD;
     w.page_desc = nullptr;
     m_rm.get_evict_manager()->send_work(w);
   }
-*/
+
 }
 #endif
 

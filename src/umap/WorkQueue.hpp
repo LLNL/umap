@@ -111,7 +111,7 @@ class WorkQueue {
         int head_old = heads[curr_worker].load();
         int tail_old = tails[curr_worker].load();
         int size = (head_old>=tail_old) ?(head_old-tail_old) : (8-tail_old+head_old);
-        //if(queue_id==1) printf("108 curr_worker %d next_worker %d tail_old %d head_old %d size %d\n", curr_worker, next_worker, tail_old, head_old, size);
+        //if(queue_id==3) printf("108 curr_worker %d next_worker %d tail_old %d head_old %d size %d\n", curr_worker, next_worker, tail_old, head_old, size);
         if( size!=7 ){
           m_queue[curr_worker][head_old] = item;
           int head_new = head_old==7 ?0 : (head_old+1);
@@ -127,13 +127,13 @@ class WorkQueue {
         int head_old = heads[tid].load();
         int tail_old = tails[tid].load();
         int size = (head_old>=tail_old) ?(head_old-tail_old) : (8-tail_old+head_old);
-        //if(queue_id==1) printf("124 tid %d tail_old %d head_old %d size %d\n", tid, tail_old, head_old, size);
+        //if(queue_id==3) printf("130 tid %d tail_old %d head_old %d size %d\n", tid, tail_old, head_old, size);
       
-        if( size>0){
+        if( size>0 ){
           T item = m_queue[tid][tail_old];
           int tail_new = (tail_old==7) ?0 : (tail_old+1);
           tails[tid].store(tail_new);
-          //if(queue_id==1) printf("124 tid %d size %d tail_old %d head_old %d tail_new %d paddr %p\n", tid, size, tail_old, head_old, tail_new, item.page_desc->page);
+          //if(queue_id==3) printf("136 tid %d size %d tail_old %d head_old %d tail_new %d paddr %p\n", tid, size, tail_old, head_old, tail_new, item.page_desc->page);
           return item;
         }
      }

@@ -14,14 +14,20 @@
 #include "umap/Uffd.hpp"
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
+#ifdef LOCK_OPT
+static int tid_g=0;
+#endif
 
 namespace Umap {
 void EvictWorkers::EvictWorker( void )
 {
   uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
+  int t_id = tid_g;
+  tid_g ++;
+  printf("EvictWorker t_id %d Enter FillWorker\n", t_id);
 
   while ( 1 ) {
-    auto w = get_work();
+    auto w = get_work(t_id);
 
     UMAP_LOG(Debug, " " << w << " " << m_buffer);
 
