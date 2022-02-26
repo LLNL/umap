@@ -36,7 +36,7 @@ namespace Umap {
 
   void PageDescriptor::set_state_present( void ) {
     if ( state != FILLING && state != UPDATING )
-      UMAP_ERROR("Invalid state transition from: " << print_state());
+      UMAP_ERROR("Invalid state transition from: " << print_state() << " " << this);
     state = PRESENT;
   }
 

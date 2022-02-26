@@ -32,10 +32,17 @@ class WorkQueue {
         , m_idle_waiters(0)
     {
 #ifdef LOCK_OPT
-      head.store(1);
-      tail.store(0);
+      next_worker=0;
+      heads = new std::atomic<int>[max_workers];
+      for(int i=0;i<max_workers;i++) heads[i].store(0);
+      tails = new std::atomic<int>[max_workers];
+      for(int i=0;i<max_workers;i++) tails[i].store(0);
+      m_queue = (T**) malloc(sizeof(T*)*max_workers);
+      for(int i=0;i<max_workers;i++) m_queue[i] = (T*) malloc(sizeof(T)*8);
       queue_id = queue_id_g;
       queue_id_g ++;
+      printf("queue_id %d max_workers %d \n", queue_id, max_workers);
+
 #endif      
       pthread_mutex_init(&m_mutex, NULL);
       pthread_cond_init(&m_cond, NULL);
@@ -97,52 +104,63 @@ class WorkQueue {
 #else
     void enqueue(T item) {//only a UFFD thread can increment head
 
-      int tail_old = tail.load();
-      while( tail_old == head ){
-        tail_old = tail.load();
+      while(1){
+        int curr_worker = next_worker;
+        next_worker = ((next_worker+1)==m_max_waiting) ?0 :(next_worker+1);
+
+        int head_old = heads[curr_worker].load();
+        int tail_old = tails[curr_worker].load();
+        int size = (head_old>=tail_old) ?(head_old-tail_old) : (8-tail_old+head_old);
+        //if(queue_id==1) printf("108 curr_worker %d next_worker %d tail_old %d head_old %d size %d\n", curr_worker, next_worker, tail_old, head_old, size);
+        if( size!=7 ){
+          m_queue[curr_worker][head_old] = item;
+          int head_new = head_old==7 ?0 : (head_old+1);
+          heads[curr_worker].store(head_new);
+          return;
+        } 
       }
-      //UMAP_LOG(Info, "queue_id " << queue_id << " tail " << tail << ", head "<< head);
-      m_queue[head] = item;
-      int head_new = head==127 ?0 : (head+1);
-      head.store(head_new);
-      //UMAP_LOG(Info, "queue_id " << queue_id << " tail " << tail << ", head "<< head);
     }
     
-    T dequeue() { //multiple worker threads can increment tail
-      int head_old = head.load();
-      int tail_old = tail.load();
-      int tail_new = (tail_old==127) ?0 : (tail_old+1);
-      T item = m_queue[tail_new];
-      //UMAP_LOG(Info, "queue_id " << queue_id << " tail " << tail << ", head "<< head << ", tail_new "<< tail_new);
-      while ( (tail_new==head_old) || !tail.compare_exchange_weak(tail_old, tail_new )){
-        head_old = head.load();
-        tail_new = (tail_old==127) ?0 : (tail_old+1);
-        item = m_queue[tail_new];
-      }
-      //UMAP_LOG(Info, "queue_id " << queue_id << " tail " << tail << ", head "<< head);
-      return item;
+    T dequeue(int tid=0) { //multiple worker threads can increment tail   
+
+      while(1) {
+        int head_old = heads[tid].load();
+        int tail_old = tails[tid].load();
+        int size = (head_old>=tail_old) ?(head_old-tail_old) : (8-tail_old+head_old);
+        //if(queue_id==1) printf("124 tid %d tail_old %d head_old %d size %d\n", tid, tail_old, head_old, size);
+      
+        if( size>0){
+          T item = m_queue[tid][tail_old];
+          int tail_new = (tail_old==7) ?0 : (tail_old+1);
+          tails[tid].store(tail_new);
+          //if(queue_id==1) printf("124 tid %d size %d tail_old %d head_old %d tail_new %d paddr %p\n", tid, size, tail_old, head_old, tail_new, item.page_desc->page);
+          return item;
+        }
+     }
     }
 
     void wait_for_idle( void ) {
-      int tail_old = tail.load();
-      int tail_new = (tail_old==127) ?0 : (tail_old+1);
-
-      while ( !head.compare_exchange_weak(tail_new, tail_new ) ){
-        tail_old = tail.load();
-        tail_new = (tail_old==127) ?0 : (tail_old+1);
+      for(int i=0; i<m_max_waiting;i++){
+        while(1){
+          int head_old = heads[i].load();
+          int tail_old = tails[i].load();
+          int size = (head_old>=tail_old) ?(head_old-tail_old) : (8-tail_old+head_old);
+          if(size==0)
+            break;
+        }
       }
     }
 
     bool is_empty() {
-      
-      int tail_old = tail.load();
-      int tail_new = (tail_old==127) ?0 : (tail_old+1);
-      //UMAP_LOG(Info,  "queue_id " << queue_id << " head "<< head << " tail " << tail);
-
-      if ( head.compare_exchange_weak(tail_new, tail_new ) ){
-        return true;
+      bool result = true;
+      for(int i=0; i<m_max_waiting;i++){
+        int head_old = heads[i].load();
+        int tail_old = tails[i].load();
+        int size = (head_old>=tail_old) ?(head_old-tail_old) : (8-tail_old+head_old);
+        if(size>0)
+          return false;
       }
-      return false;
+      return result;
     }    
 #endif
 
@@ -154,10 +172,11 @@ class WorkQueue {
     std::list<T> m_queue;
     #else
     //std::deque<T> m_queue;
-    T m_queue[128];
+    T **m_queue;
     int queue_id;
-    std::atomic<int> head;
-    std::atomic<int> tail;
+    int next_worker;
+    std::atomic<int> *heads;
+    std::atomic<int> *tails;
     #endif
     uint64_t m_max_waiting;
     uint64_t m_waiting_workers;

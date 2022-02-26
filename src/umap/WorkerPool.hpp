@@ -64,8 +64,8 @@ namespace Umap {
         m_wq->enqueue(work);
       }
 
-      inline WorkItem get_work() {
-        return m_wq->dequeue();
+      inline WorkItem get_work(int t_id=0) {
+        return m_wq->dequeue(t_id);
       }
 
       bool wq_is_empty( void ) {

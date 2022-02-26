@@ -18,12 +18,19 @@
 #include "umap/WorkerPool.hpp"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
+#ifdef LOCK_OPT
+static int t_id_g=0;
+#endif
 
 namespace Umap {
-  void FillWorkers::FillWorker( void ) {
+  void FillWorkers::FillWorker( void ){
     char* copyin_buf;
     uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
     std::size_t sz = page_size;
+    int t_id = t_id_g;
+    t_id_g ++;
+    printf("FillWorker t_id %d Enter FillWorker\n", t_id);
+
 
     if (posix_memalign((void**)&copyin_buf, page_size, sz)) {
       UMAP_ERROR("posix_memalign failed to allocated "
@@ -37,14 +44,16 @@ namespace Umap {
 
     while ( 1 ) {
 
-      auto w = get_work();
+      auto w = get_work(t_id);
 
       #ifdef PROF
       auto t0 = std::chrono::steady_clock::now();
       UMAP_LOG(Info, "from send till get_work \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t0-w.timing).count()) );
       #endif
+      
+      //printf("FillWorker t_id %d paddr %p\n", t_id, w.page_desc->page);
 
-      //UMAP_LOG(Debug, ": " << w << " " << m_buffer);
+      //UMAP_LOG(Info, " t_id "<<t_id<<" : " << w << " " << m_buffer);
 
       if (w.type == Umap::WorkItem::WorkType::EXIT)
         break;    // Time to leave
