@@ -217,9 +217,9 @@ main()
 size_t umap_region_length = sizeof(STREAM_TYPE) * STREAM_ARRAY_SIZE;
 size_t umap_psize = umapcfg_get_umap_page_size();
 umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
-int fd0 = open_prealloc_file( "/mnt/pmem/pm0/stream_a", umap_region_length);
-int fd1 = open_prealloc_file( "/mnt/pmem/pm0/stream_b", umap_region_length);
-int fd2 = open_prealloc_file( "/mnt/pmem/pm0/stream_c", umap_region_length);
+int fd0 = open_prealloc_file( "stream_a", umap_region_length);
+int fd1 = open_prealloc_file( "stream_b", umap_region_length);
+int fd2 = open_prealloc_file( "stream_c", umap_region_length);
 if( fd0>0 && fd1>0 && fd2>0 ){
 	a = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
     if ( a == UMAP_FAILED ) {

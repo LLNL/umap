@@ -29,8 +29,6 @@ namespace Umap {
     std::size_t sz = page_size;
     int t_id = t_id_g;
     t_id_g ++;
-    printf("FillWorker t_id %d Enter FillWorker\n", t_id);
-
 
     if (posix_memalign((void**)&copyin_buf, page_size, sz)) {
       UMAP_ERROR("posix_memalign failed to allocated "

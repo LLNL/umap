@@ -42,8 +42,8 @@ class WorkQueue {
       queue_id = queue_id_g;
       queue_id_g ++;
       printf("queue_id %d max_workers %d \n", queue_id, max_workers);
+#endif
 
-#endif      
       pthread_mutex_init(&m_mutex, NULL);
       pthread_cond_init(&m_cond, NULL);
       pthread_cond_init(&m_idle_cond, NULL);

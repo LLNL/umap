@@ -504,8 +504,9 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
 }
 #ifdef LOCK_OPT
 void Buffer::fast_drain(){
+  
   while(m_free_pages.size()==0){
-    usleep(10);
+    //usleep(10);
   //UMAP_LOG(Info, "m_free_pages_secondary.size()= "<<m_free_pages_secondary.size()<<")");
   // first check the secondary free buffer by Evictors
   if( m_free_pages_secondary.size() > 8){
