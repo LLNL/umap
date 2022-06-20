@@ -33,10 +33,25 @@ would like to build an optimized (-O3) version, simply run
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 ```
 
+## Docker Container
+There is a `Dockerfile` included in the repository to make it easier to build a container image with a basic Umap development environment.
+
+A few caveats:
+
+Umap checks the kernel headers present in the build-time environment to decide whether or not WP mode should be enabled. The included `Dockerfile` will build Umap with WP support enabled even if the host kernel doesn't support that feature. There is also the potential for API mismatches between the kernel headers in the container and the host system kernel.
+
+The Docker container also needs to be run without `seccomp` confinement. Umap relies on being able to make host kernel syscalls that are otherwise blocked by Docker's default `seccomp` profile. Specifically, Umap relies on the `userfaultfd` family of syscalls. See [here](https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile]) for more information about which syscalls are blocked by Docker's default `seccomp` profile.
+
+### Example: Building and running the Umap Docker container
+```
+podman build -t umap .
+podman run --security-opt seccomp=unconfined -it umap bash
+```
+
 ## Build Requirements
 Building Umap requires a C++ compiler, CMake >= 3.5.1, as well as the Linux kernel headers.
 
-Additionally, Umap will automatically enable read/write mode *at library compile time* if it detects that the installed kernel supports it by looking at the defined symbols in the kernel headers. Some Linux distributions, such as Ubuntu 20.04.2, provide a 5.8 kernel that supports read/write mode but don't ship with headers that define these symbols. 
+Additionally, Umap will automatically enable read/write mode *at library compile time* if it detects that the installed kernel supports it by looking at the defined symbols in the kernel headers. Some Linux distributions, such as Ubuntu 20.04.2, provide a 5.8 kernel that supports read/write mode but don't ship with headers that define these symbols.
 
 Read-only mode: Linux kernel >= 4.3
 
