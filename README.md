@@ -43,9 +43,9 @@ Umap checks the kernel headers present in the build-time environment to decide w
 The Docker container also needs to be run without `seccomp` confinement. Umap relies on being able to make host kernel syscalls that are otherwise blocked by Docker's default `seccomp` profile. Specifically, Umap relies on the `userfaultfd` family of syscalls. See [here](https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile]) for more information about which syscalls are blocked by Docker's default `seccomp` profile.
 
 ### Example: Building and running the Umap Docker container
-```
-podman build -t umap .
-podman run --security-opt seccomp=unconfined -it umap bash
+```bash
+docker build -t umap .
+docker run --security-opt seccomp=unconfined -it umap bash
 ```
 
 ## Build Requirements
