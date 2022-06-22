@@ -37,10 +37,9 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 There is a `Dockerfile` included in the repository to make it easier to build a container image with a basic Umap development environment.
 
 A few caveats:
+The [runtime requirements](#runtime-requirements) of the Docker container are the same as the non-containerized Umap. Additionally, it's important to note that Umap checks the kernel headers present in the build-time environment to decide whether or not WP mode should be enabled. The included `Dockerfile` will always build Umap with WP support enabled because the Ubuntu 22.04 kernel headers included in the the container indicate that WP is supported, even if the host kernel doesn't actually support that feature. Umap will return an error at runtime if it's built with WP enabled but run on a kernel without WP support.
 
-Umap checks the kernel headers present in the build-time environment to decide whether or not WP mode should be enabled. The included `Dockerfile` will build Umap with WP support enabled even if the host kernel doesn't support that feature. There is also the potential for API mismatches between the kernel headers in the container and the host system kernel.
-
-The Docker container also needs to be run without `seccomp` confinement. Umap relies on being able to make host kernel syscalls that are otherwise blocked by Docker's default `seccomp` profile. Specifically, Umap relies on the `userfaultfd` family of syscalls. See [here](https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile]) for more information about which syscalls are blocked by Docker's default `seccomp` profile.
+Additionally. the Docker container needs to be run without `seccomp` confinement. Umap relies on being able to make host kernel syscalls that are otherwise blocked by Docker's default `seccomp` profile. Specifically, Umap relies on the `userfaultfd` family of syscalls. See [here](https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile]) for more information about which syscalls are blocked by Docker's default `seccomp` profile.
 
 ### Example: Building and running the Umap Docker container
 ```bash
