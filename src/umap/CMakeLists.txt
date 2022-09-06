@@ -43,12 +43,37 @@ set(umapsrc
     ${umapheaders})
 
 find_package(Threads REQUIRED)
+
+
+
+set(zfpheaders
+    store/StoreZFP.h
+)
+set(zfpsrcs
+    store/StoreZFP.cpp
+)
+list(APPEND umapheaders ${zfpheaders})
+list(APPEND umapsrc ${zfpheaders} ${zfpsrcs})
+
+set (ZFP_ROOT "/home/peng8/skylake/zfp/zfp_umap")
+include_directories(${ZFP_ROOT}/include)
+include_directories(${ZFP_ROOT}/array)
+find_library(LIBZFP NAMES zfp PATHS ${ZFP_ROOT}/lib)
+if (LIBZFP)    
+    link_libraries(${LIBZFP})
+else()
+   message(FATAL_ERROR "Cannot find ZFP library, please set ZFP_ROOT")
+endif()
+
+
 add_library(umap SHARED ${umapsrc} )
 add_library(umap-static STATIC ${umapsrc} )
 set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
 target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
+#add_definitions(-DPROF)
 
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
@@ -60,3 +85,5 @@ install(FILES umap.h DESTINATION include/umap)
 install(FILES store/Store.hpp DESTINATION include/umap/store )
 
 install(FILES store/SparseStore.h DESTINATION include/umap/store)
+
+install(FILES store/StoreZFP.h DESTINATION include/umap/store)

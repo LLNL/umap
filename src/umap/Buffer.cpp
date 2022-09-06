@@ -16,168 +16,126 @@
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 
+#ifdef PROF
+#include <chrono>
+#endif
+
 namespace Umap {
+
+  int WorkerPool::queue_id_g = 0;
+  
 //
 // Called after data has been placed into the page
 //
+
 void Buffer::mark_page_as_present(PageDescriptor* pd)
 {
-  lock();
+
+  //lock();
 
   pd->set_state_present();
 
-  if ( m_waits_for_state_change )
-    pthread_cond_broadcast( &m_state_change_cond );
+  if ( m_waits_for_present_state_change )
+    pthread_cond_broadcast( &m_present_state_change_cond );
 
-  unlock();
+  //unlock();
+
 }
+
 
 //
 // Called after page has been flushed to store and page is no longer present
 //
+
 void Buffer::mark_page_as_free( PageDescriptor* pd )
 {
-  lock();
-
-  UMAP_LOG(Debug, "Removing page: " << pd);
+  int page_ratio = pd->region->page_size()/m_psize;
   pd->region->erase_page_descriptor(pd);
 
-  m_present_pages.erase(pd->page);
+  int err;
+  if ( (err=pthread_mutex_lock(&m_free_pages_secondary_mutex)) != 0 )
+    UMAP_ERROR("pthread_mutex_lock m_free_pages_secondary failed: " << strerror(err));
 
-  pd->set_state_free();
-  pd->spurious_count = 0;
+  m_free_pages_secondary.push_back(pd);
+  m_free_page_secondary_size.store(m_free_page_secondary_size.load() + page_ratio);
 
-  //
-  // We only put the page descriptor back onto the free list if it isn't
-  // deferred.  Note: It will be marked as deferred when the page is part of a
-  // Region that has been unmapped.  It will become undeferred later when the
-  // eviction manager takes it off the end of the end of the buffer.
-  //
-  if ( ! pd->deferred )
-    release_page_descriptor(pd);
+  //if ( m_waits_for_free_state_change )
+    //pthread_cond_broadcast( &m_free_state_change_cond );
+    
+  pthread_mutex_unlock(&m_free_pages_secondary_mutex);
 
-  if ( m_waits_for_state_change )
-    pthread_cond_broadcast( &m_state_change_cond );
-
-  pd->page = nullptr;
-
-  unlock();
-}
-
-void Buffer::release_page_descriptor( PageDescriptor* pd )
-{
-    m_free_pages.push_back(pd);
-
-    if ( m_waits_for_avail_pd )
-      pthread_cond_broadcast(&m_avail_pd_cond);
-}
-
-//
-// Called from Evict Manager to begin eviction process on oldest present
-// page
-//
-PageDescriptor* Buffer::evict_oldest_page()
-{
-  PageDescriptor* pd = nullptr;
-
-  lock();
-
-  while ( m_busy_pages.size() != 0 ) {
-    pd = m_busy_pages.back();
-
-    // Deferred means that this page was previously evicted as part of an
-    // uunmap of a Region.  This means that this page descriptor points to a
-    // page that has already been given back to the system so all we need to
-    // do is take it off of the busy list and release the descriptor.
-    //
-    if ( pd->deferred ) {
-      UMAP_LOG(Debug, "Deferred Page: " << pd);
-
-      //
-      // Make sure that the page has truly been flushed.
-      //
-      wait_for_page_state(pd, PageDescriptor::State::FREE);
-
-      m_busy_pages.pop_back();
-      m_stats.pages_deleted++;
-
-      //
-      // Jump to the next page descriptor
-      //
-      release_page_descriptor(pd);
-      pd = nullptr;
-    }
-    else {
-      UMAP_LOG(Debug, "Normal Page: " << pd);
-      wait_for_page_state(pd, PageDescriptor::State::PRESENT);
-      m_busy_pages.pop_back();
-      m_stats.pages_deleted++;
-      pd->set_state_leaving();
-      break;
-    }
-  }
-
-  unlock();
-  return pd;
 }
 
 //
 // Called from Evict Manager to begin eviction process on at most N (=32)
-// oldest present (non-deferred) pages without waiting for status change
+// oldest present (non-deferred) pages 
+// return at least one page unless m_busy_pages is empty
 //
 std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 {
   std::vector<PageDescriptor*> evicted_pages;
-  std::vector<PageDescriptor*> pending_pages;
-  const int max_num_evicted_pages = 32;
-  int num_evicted_pages = 0;
 
-  lock();
-  size_t num_busy_pages = m_busy_pages.size();
-  if( num_busy_pages>0 ){
-    size_t i = num_busy_pages - 1;
-    for(; (i>=0 && num_evicted_pages<max_num_evicted_pages); i--){
-        PageDescriptor* pd = m_busy_pages[i];
-        if( !pd->deferred && pd->state == PageDescriptor::State::PRESENT ){
-          m_stats.pages_deleted++;
-          num_evicted_pages ++;
+  lock();//need to modify m_busy_pages
 
-          pd->state = PageDescriptor::State::LEAVING;
-          evicted_pages.push_back(pd);
-        }else{
-          pending_pages.push_back(pd);
-        }
+  while( m_busy_pages.size()>0 ) {
+    
+    // LRU
+    PageDescriptor* pd = m_busy_pages.back();
+
+    if( pd->state == PageDescriptor::State::PRESENT ){
+      m_busy_pages.pop_back();
+      m_busy_page_size -= pd->region->page_size() / m_psize;
+      pd->set_state_leaving();
+      evicted_pages.push_back(pd);      
+      if( evicted_pages.size()==32 ) 
+        break;
+
+    }else if(pd->state == PageDescriptor::State::FILLING || pd->state == PageDescriptor::State::UPDATING){
+      //If the last one is still updating/filling, should stop the eviction process
+      //This has huge impact on performance, don't wait for any status update
+      /*if( evicted_pages.size()==0 ){
+        wait_for_page_present_state(pd);
+        pd->set_state_leaving();
+        evicted_pages.push_back(pd);
         m_busy_pages.pop_back();
-    }
-
-    size_t num_pending_pages = pending_pages.size();
-    for(size_t k=0; k<num_pending_pages; k++){
-      m_busy_pages.push_back(pending_pages[k]);
-    }
+        m_busy_page_size -= pd->region->page_size() / m_psize;
+      }*/
+      break;
+    }else if(pd->state == PageDescriptor::State::LEAVING || pd->state == PageDescriptor::State::FREE) {
+      UMAP_ERROR(" Invalid page status in busy list" << this << pd);
+      break;
+    }    
   }
+
   unlock();
+
+#ifdef PROF
+  UMAP_LOG(Info, " Evicted_pages=" << evicted_pages.size() );
+  for(auto pd : evicted_pages)
+    UMAP_LOG(Info, pd);
+#endif
 
   return evicted_pages;
 }
 
-  void Buffer::flush_dirty_pages()
-  {
-    lock();
+void Buffer::flush_dirty_pages()
+{
+  lock();
 
-    for (auto it = m_busy_pages.begin(); it != m_busy_pages.end(); it++) {
-      
-      if ( (*it)->dirty ) {
-        PageDescriptor* pd = *it;
-        UMAP_LOG(Debug, "schedule Dirty Page: " << pd);
-        wait_for_page_state(pd, PageDescriptor::State::PRESENT);
-        m_rm.get_evict_manager()->schedule_flush(pd);
-      }
-    }
-
-    m_rm.get_evict_manager()->WaitAll();
+  for (auto it = m_busy_pages.begin(); it != m_busy_pages.end(); it++) {
     
-    unlock();
+    if ( (*it)->dirty ) {
+      PageDescriptor* pd = *it;
+      UMAP_LOG(Debug, "schedule Dirty Page: " << pd);
+      wait_for_page_present_state(pd);
+      m_rm.get_evict_manager()->schedule_flush(pd);
+    }
   }
+
+  m_rm.get_evict_manager()->WaitAll();
+  
+  unlock();
+}
   
 //
 // Called from uunmap by the unmapping thread of the application
@@ -187,28 +145,28 @@ std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
-  if (m_rm.get_num_active_regions() > 1) {
-    lock();
-    while ( rd->count() ) {
-      auto pd = rd->get_next_page_descriptor();
-      if(pd->state != PageDescriptor::State::LEAVING ){
-        pd->deferred = true;
-        wait_for_page_state(pd, PageDescriptor::State::PRESENT);
+  lock();
+  std::unordered_map<char*, PageDescriptor*> present_pages = rd->get_present_pages();
+  const int pages_per_region_page = rd->page_size() / m_psize;
+
+  for(std::deque<PageDescriptor*>::iterator it = m_busy_pages.begin(); it != m_busy_pages.end(); ) {
+    PageDescriptor* pd = *it;
+    if (rd->find(pd->page) != nullptr ) {
+        wait_for_page_present_state(pd);
+        it = m_busy_pages.erase(it);
+        m_busy_page_size -= pages_per_region_page;
         pd->set_state_leaving();
         m_rm.get_evict_manager()->schedule_eviction(pd);
-      }
-      wait_for_page_state(pd, PageDescriptor::State::FREE);
+    } else {
+        ++it;
     }
-    unlock();
   }
-  else {
-    m_rm.get_evict_manager()->EvictAll();
+    
+  unlock();
+  
+  while(rd->has_present_pages()){
+    sleep(1);
   }
-}
-
-bool Buffer::low_threshold_reached( void )
-{
-  return m_busy_pages.size() <= m_evict_low_water;
 }
 
 typedef struct FetchFuncParams {
@@ -238,7 +196,7 @@ void *FetchFunc(void *arg)
     if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
       UMAP_ERROR("failed to read_from_store at offset="<<offset);
   
-    m_uffd->copy_in_page(copyin_buf, region_st + offset );
+    m_uffd->copy_in_page(copyin_buf, region_st + offset , psize );
   }
 
   free(copyin_buf);
@@ -257,7 +215,7 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   char* pend = paddr + size;  
   if( pend > rd->end() ){
     pend = (char*) rd->end();
-    UMAP_LOG(Info, "the prefetched rergion is larger than the region (end at "<<pend<<")");
+    UMAP_LOG(Info, "the prefetched region is larger than the region (end at "<<pend<<")");
   }
 
   /* get aligned fetch size */
@@ -273,7 +231,7 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   while (file >> token) {
     if (token == "MemAvailable:") {
       if (file >> mem) {
-	mem_avail_kb = mem;
+	      mem_avail_kb = mem;
       } else {
         UMAP_ERROR("UMAP unable to determine system memory size\n");
       }
@@ -284,31 +242,25 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
 
   const uint64_t mem_margin_kb = 16777216;
   mem_avail_kb = (mem_avail_kb > mem_margin_kb) ?(mem_avail_kb-mem_margin_kb) : 0;
-  
 
-  uint64_t psize = m_rm.get_umap_page_size();
-  size_t num_free_pages = m_free_pages.size();
-  uint64_t free_page_mem = psize * num_free_pages;
-  uint64_t mem_avail = (mem_avail_kb*1024/psize) * psize;
+  size_t  num_free_pages = m_free_page_size + m_free_page_secondary_size;
+  uint64_t free_page_mem = m_psize * num_free_pages;
+  uint64_t     mem_avail = (mem_avail_kb*1024/m_psize) * m_psize;
 
   UMAP_LOG(Info, " MemAvailable = " << mem
 	   << " Mem Usable = " << mem_avail
 	   << " fetch_and_pin = " << size
-	   << " free_page_mem = " << free_page_mem << " (" << num_free_pages <<" x " << psize <<" )");
+	   << " free_page_mem = " << free_page_mem << " (" << num_free_pages <<" x " << m_psize <<" )");
 
   /* Reduce the number of free pages if avail mem is insufficient */
   if( ( free_page_mem + size) >= mem_avail ){
 
     uint64_t reduced_mem = ( free_page_mem + size) - mem_avail;
     if( reduced_mem < free_page_mem){
-      size_t new_num_free_pages = (free_page_mem - reduced_mem)/psize;
+      size_t new_num_free_pages = (free_page_mem - reduced_mem)/m_psize;
       m_free_pages.resize(new_num_free_pages);
       
-      m_size = m_busy_pages.size() + m_free_pages.size();
-      m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
-      m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
-          
-      UMAP_LOG(Info, "Reduced Buffer Size to " << m_size );
+      adjust_hi_lo_watermark();          
 
     }else{
       /* TODO: evict current pages? */
@@ -317,17 +269,16 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   }
 
 
-  /* get page alighed offset*/
+  /* get page aligned offset */
   Uffd* m_uffd = m_rm.get_uffd_h();
-  size_t num_pages = (offset_end - offset_st)/psize;
+  size_t num_pages = (offset_end - offset_st)/m_psize;
   size_t num_fetch_threads = (num_pages>1024) ?8 : 1;
-  size_t stride = num_pages/num_fetch_threads*psize;
+  size_t stride = num_pages/num_fetch_threads*m_psize;
 
-  time_t start = time(NULL);
   pthread_t fetchThreads[num_fetch_threads];
   FetchFuncParams params[num_fetch_threads];
   for(int i=0; i<num_fetch_threads; i++){
-    params[i].psize = psize;
+    params[i].psize = m_psize;
     params[i].rd = rd;
     params[i].m_uffd = m_uffd;
     params[i].offset_st = offset_st + stride*i;
@@ -345,133 +296,133 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   for(int i=0; i<num_fetch_threads; i++)
     pthread_join(fetchThreads[i], NULL);
 
-  time_t end = time(NULL);
-  UMAP_LOG(Info,"Fetch_and_pin: "<< (end-start) << " seconds");
-
   unlock();
 }
 
-  
-void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd)
+void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswrites, int num_pages)
 {
-  WorkItem work;
-  work.type = Umap::WorkItem::WorkType::NONE;
-
   lock();
-  auto pd = page_already_present(paddr);
+  uint64_t region_page_size  = rd->page_size();
+  int      region_page_ratio = region_page_size/m_psize;
 
-  if ( pd != nullptr ) {  // Page is already present
-    if (iswrite && pd->dirty == false) {
-      work.page_desc = pd;
-      pd->dirty = true;
-      pd->set_state_updating();
-      UMAP_LOG(Debug, "PRE: " << pd << " From: " << this);
-    }
-    else {
-      static int hiwat = 0;
+  int remaining_pages = num_pages;
+  while( remaining_pages>0 ){
+    int pivot = 0;
+    for( int p = 0; p < remaining_pages; p++ ){
+      char*  paddr = paddrs[p];
+      bool iswrite = iswrites[p];
+      PageDescriptor* pd = rd->find(paddr);
 
-      pd->spurious_count++;
-      if (pd->spurious_count > hiwat) {
-        hiwat = pd->spurious_count;
-        UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
+      //if ( pd != nullptr ) UMAP_LOG(Info, "paddr " <<(void*)paddr << " iswrite=" << iswrite << pd);
+      //
+      // Most likely case
+      //
+      if ( pd == nullptr ){  // This page has not been brought in yet
+        
+        //pd = get_page_descriptor(paddr, rd); // may stall, waiting for free_pages
+        {
+          if ( m_free_page_size < region_page_ratio ){
+            if( m_rm.get_evict_manager()->wq_is_empty() ){
+              WorkItem w;
+              w.type = Umap::WorkItem::WorkType::THRESHOLD;
+              w.page_desc = nullptr;
+              m_rm.get_evict_manager()->send_work(w);
+            }
+            unlock(); //release control to EvictMgr to modify busy_list
+            
+            int t = m_free_page_secondary_size.load();
+            //while( (t+m_free_page_size) < region_page_ratio ){t = m_free_page_secondary_size.load();}
+            if( (t+m_free_page_size) >= region_page_ratio ){
+              pthread_mutex_lock(&m_free_pages_secondary_mutex);
+              lock(); //take control back from EvictMgr to modify free_list
+
+              for(auto it : m_free_pages_secondary)
+                m_free_pages.push_back(it);
+              m_free_page_size += m_free_page_secondary_size.load();
+              m_free_pages_secondary.clear();
+              m_free_page_secondary_size.store(0);
+
+              pthread_mutex_unlock(&m_free_pages_secondary_mutex);//give control back to EvictWorkers to modify free_secondary_list
+            }else{
+              paddrs[pivot] = paddr;
+              iswrites[pivot] = iswrite;
+              pivot ++;
+              lock();
+              continue;
+            }
+          }
+          
+          pd = m_free_pages.back();
+          m_free_pages.pop_back();
+          m_free_page_size -= region_page_ratio;
+          pd->page = paddr;
+          pd->region = rd;
+          pd->set_state_filling();
+          pd->dirty = iswrite;
+          pd->data_present = false;
+          m_busy_pages.push_front(pd);
+          m_busy_page_size += region_page_ratio;
+          rd->insert_page_descriptor(pd);
+        }
+                
+        WorkItem work;
+        work.type = Umap::WorkItem::WorkType::NONE;
+        work.page_desc = pd;
+        m_rm.get_fill_workers_h()->send_work(work);
+         
       }
-
-      UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
-      unlock();
-      return;
+      //
+      // Next most likely is that it is just present in the buffer
+      //
+      else if ( pd->state == PageDescriptor::State::PRESENT ){
+        // Page is already present
+        if (iswrite && pd->dirty == false) {
+          WorkItem work;
+          work.type = Umap::WorkItem::WorkType::NONE;
+          work.page_desc = pd;        
+          pd->dirty = true;
+          pd->set_state_updating();
+          m_rm.get_fill_workers_h()->send_work(work);
+        }
+      }
+      // There is a chance that the state of this page is not/no-longer
+      // PRESENT.  If this is the case, we need to wait for it to finish
+      // with whatever is happening to it and then check again
+      //
+      else{ //in transient status
+        //UMAP_LOG(Info, "Add to pivot " <<pivot<< " iswrite = "<< iswrite << " ELSE: " << pd );
+        if ( pd->state == PageDescriptor::State::FILLING ){
+          //continue;
+        }else if ( pd->state == PageDescriptor::State::UPDATING ){
+          continue;
+        }else if ( pd->state == PageDescriptor::State::LEAVING ){
+          //critical to put into pivot, or, deadlock
+        }else if ( pd->state == PageDescriptor::State::FREE ){
+          //critical to put into pivot, or, deadlock
+        }
+        paddrs[pivot] = paddr;
+        iswrites[pivot] = iswrite;
+        pivot ++;
+      }
     }
-  }
-  else {                  // This page has not been brought in yet
-    pd = get_page_descriptor(paddr, rd);
-    pd->data_present = false;
-    work.page_desc = pd;
-
-    rd->insert_page_descriptor(pd);
-    m_present_pages[pd->page] = pd;
-
-    if (iswrite)
-      pd->dirty = true;
-
-    UMAP_LOG(Debug, "NEW: " << pd << " From: " << this);
+    remaining_pages = pivot;
   }
 
-  m_rm.get_fill_workers_h()->send_work(work);
+  unlock();
 
-  //
+#ifdef PROF
+  UMAP_LOG(Info, "finish processing " << num_pages << " events"); 
+#endif
+
   // Kick the eviction daemon if the high water mark has been reached
   //
-  if ( m_busy_pages.size() == m_evict_high_water ) {
+  if ( m_busy_page_size >= m_evict_high_water ) {
     WorkItem w;
-
     w.type = Umap::WorkItem::WorkType::THRESHOLD;
     w.page_desc = nullptr;
     m_rm.get_evict_manager()->send_work(w);
   }
 
-  m_stats.events_processed ++;
-  unlock();
-}
-
-// Return nullptr if page not present, PageDescriptor * otherwise
-PageDescriptor* Buffer::page_already_present( char* page_addr )
-{
-  while (1) {
-    auto pp = m_present_pages.find(page_addr);
-  
-    //
-    // Most likely case
-    //
-    if ( pp == m_present_pages.end() )
-      return nullptr;
-
-    //
-    // Next most likely is that it is just present in the buffer
-    //
-    if ( pp->second->state == PageDescriptor::State::PRESENT )
-      return pp->second;
-
-    // There is a chance that the state of this page is not/no-longer
-    // PRESENT.  If this is the case, we need to wait for it to finish
-    // with whatever is happening to it and then check again
-    //
-    UMAP_LOG(Debug, "Waiting for state: (ANY)" << ", " << pp->second);
-
-    ++m_stats.waits;
-    ++m_waits_for_state_change;
-    pthread_cond_wait(&m_state_change_cond, &m_mutex);
-    --m_waits_for_state_change;
-  }
-}
-
-PageDescriptor* Buffer::get_page_descriptor(char* vaddr, RegionDescriptor* rd)
-{
-  while ( m_free_pages.size() == 0 )  {
-    ++m_waits_for_avail_pd;
-    m_stats.not_avail++;
-
-    ++m_stats.waits;
-    ++m_waits_for_state_change;
-    pthread_cond_wait(&m_avail_pd_cond, &m_mutex);
-
-    --m_waits_for_avail_pd;
-  }
-
-  PageDescriptor* rval;
-
-  rval = m_free_pages.back();
-  m_free_pages.pop_back();
-
-  rval->page = vaddr;
-  rval->region = rd;
-  rval->dirty = false;
-  rval->deferred = false;
-  rval->set_state_filling();
-  rval->spurious_count = 0;
-
-  m_stats.pages_inserted++;
-  m_busy_pages.push_front(rval);
-
-  return rval;
 }
 
 uint64_t Buffer::apply_int_percentage( int percentage, uint64_t item )
@@ -491,18 +442,24 @@ uint64_t Buffer::apply_int_percentage( int percentage, uint64_t item )
   return rval;
 }
 
+void Buffer::adjust_hi_lo_watermark(){
+  
+  uint64_t m_size = m_free_page_size + m_free_page_secondary_size + m_busy_page_size;
+
+  m_evict_low_water  = apply_int_percentage(m_rm.get_evict_low_water_threshold(),  m_size);
+  m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
+
+  if( m_evict_low_water>=m_evict_high_water ){
+    m_evict_high_water = m_size;
+    m_evict_low_water  = 1;
+  }
+}
+
 void Buffer::lock()
 {
   int err;
-  if ( (err = pthread_mutex_trylock(&m_mutex)) != 0 ) {
-    if (err != EBUSY)
-      UMAP_ERROR("pthread_mutex_trylock failed: " << strerror(err));
-
-    if ( (err = pthread_mutex_lock(&m_mutex)) != 0 )
-      UMAP_ERROR("pthread_mutex_lock failed: " << strerror(err));
-    m_stats.lock_collision++;
-  }
-  m_stats.lock++;
+  if ( (err = pthread_mutex_lock(&m_mutex)) != 0 )
+    UMAP_ERROR("pthread_mutex_lock failed: " << strerror(err));
 }
 
 void Buffer::unlock()
@@ -510,17 +467,15 @@ void Buffer::unlock()
   pthread_mutex_unlock(&m_mutex);
 }
 
-void Buffer::wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st)
+void Buffer::wait_for_page_present_state( PageDescriptor* pd)
 {
-  UMAP_LOG(Debug, "Waiting for state: " << st << ", " << pd);
 
-  while ( pd->state != st ) {
-    ++m_stats.waits;
-    ++m_waits_for_state_change;
+  while ( pd->state != PageDescriptor::State::PRESENT ) {
+    ++m_waits_for_present_state_change;
 
-    pthread_cond_wait(&m_state_change_cond, &m_mutex);
+    pthread_cond_wait(&m_present_state_change_cond, &m_mutex);
 
-    --m_waits_for_state_change;
+    --m_waits_for_present_state_change;
   }
 }
 
@@ -532,7 +487,7 @@ void Buffer::monitor(void)
   /* start the monitoring loop */
   while( is_monitor_on ){
 
-    UMAP_LOG(Info, "m_size = " << m_size
+    UMAP_LOG(Info, "Maximum pages in buffer = " << (m_free_page_size+m_free_page_secondary_size+m_busy_page_size)
 	     << ", num_busy_pages = " << m_busy_pages.size()
 	     << ", num_free_pages = " << m_free_pages.size()
 	     << ", events_processed = " << m_stats.events_processed );
@@ -543,28 +498,33 @@ void Buffer::monitor(void)
 
 }
 
-Buffer::Buffer( void )
-  :     m_rm(RegionManager::getInstance())
-      , m_size(m_rm.get_max_pages_in_buffer())
+Buffer::Buffer( RegionManager& rm )
+  :   m_rm(rm)
       , m_waits_for_avail_pd(0)
-      , m_waits_for_state_change(0)
+      , m_waits_for_present_state_change(0)
+      , m_waits_for_free_state_change(0)
+      , m_free_page_size (m_rm.get_max_pages_in_buffer())
+      , m_busy_page_size (0)
+      , m_psize (m_rm.get_umap_page_size())
 {
-  m_array = (PageDescriptor *)calloc(m_size, sizeof(PageDescriptor));
+  m_array = (PageDescriptor *)calloc(m_free_page_size, sizeof(PageDescriptor));
   if ( m_array == nullptr )
-    UMAP_ERROR("Failed to allocate " << m_size*sizeof(PageDescriptor)
+    UMAP_ERROR("Failed to allocate " << m_free_page_size*sizeof(PageDescriptor)
         << " bytes for buffer page descriptors");
 
-  for ( int i = 0; i < m_size; ++i )
+  for ( int i = 0; i < m_free_page_size; ++i )
     m_free_pages.push_back(&m_array[i]);
 
   pthread_mutex_init(&m_mutex, NULL);
   pthread_cond_init(&m_avail_pd_cond, NULL);
-  pthread_cond_init(&m_state_change_cond, NULL);
+  pthread_cond_init(&m_present_state_change_cond, NULL);
+  pthread_mutex_init(&m_free_pages_secondary_mutex, NULL);
+  pthread_cond_init(&m_free_state_change_cond, NULL);
 
-  m_evict_low_water = apply_int_percentage(m_rm.get_evict_low_water_threshold(), m_size);
-  m_evict_high_water = apply_int_percentage(m_rm.get_evict_high_water_threshold(), m_size);
+  m_free_page_secondary_size.store(0);
+  adjust_hi_lo_watermark();
 
-  /* monitor page stats periodically */
+  /* start up the monitoring thread if requested */
   if( m_rm.get_monitor_freq()>0 ){
     is_monitor_on = true;
     int ret = pthread_create( &monitorThread, NULL, MonitorThreadEntryFunc, this);
@@ -574,7 +534,7 @@ Buffer::Buffer( void )
   }else{
     is_monitor_on = false;
   }
-
+  UMAP_LOG(Info, this);
 }
 
 Buffer::~Buffer( void ) {
@@ -587,21 +547,27 @@ Buffer::~Buffer( void ) {
     pthread_join( monitorThread , NULL );
   }
   
-  assert("Pages are still present" && m_present_pages.size() == 0);
+  assert("Pages are still present" && m_busy_pages.size() == 0);
   pthread_cond_destroy(&m_avail_pd_cond);
-  pthread_cond_destroy(&m_state_change_cond);
+  pthread_cond_destroy(&m_present_state_change_cond);
+  pthread_cond_destroy(&m_free_state_change_cond);
   pthread_mutex_destroy(&m_mutex);
+  pthread_mutex_destroy(&m_free_pages_secondary_mutex);
   free(m_array);
 }
 
 std::ostream& operator<<(std::ostream& os, const Umap::Buffer* b)
 {
   if ( b != nullptr ) {
-    os << "{ m_size: " << b->m_size
+    os << "{ Maximum pages in buffer: " << (b->m_free_page_size+b->m_free_page_secondary_size+b->m_busy_page_size)
       << ", m_waits_for_avail_pd: " << b->m_waits_for_avail_pd
-      << ", m_present_pages.size(): " << std::setw(2) << b->m_present_pages.size()
       << ", m_free_pages.size(): " << std::setw(2) << b->m_free_pages.size()
+      << ", m_free_page_size (in unit of global umap page): "    << std::setw(2) << b->m_free_page_size
+      << ", m_free_page_secondary_size (in unit of global umap page): " << std::setw(2) << b->m_free_page_secondary_size
       << ", m_busy_pages.size(): " << std::setw(2) << b->m_busy_pages.size()
+      << ", m_busy_page_size (in unit of global umap page): "    << std::setw(2) << b->m_busy_page_size
+      << ", m_evict_low_water (in unit of global umap page): "   << std::setw(2) << b->m_evict_low_water
+      << ", m_evict_high_water (in unit of global umap page): "  << std::setw(2) << b->m_evict_high_water
       << " }"
       ;
   }

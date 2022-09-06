@@ -94,42 +94,77 @@ Uffd::uffd_handler( void )
     // events are then sorted in page base address / operation type order and
     // are processed only once while duplicates are skipped.
     //
-    for (int i = 0; i < msgs; ++i)
-      m_events[i].arg.pagefault.address &= ~(m_page_size-1);
 
+    // support arbitrary umap page size (multiple of 4KB)
     std::sort(&m_events[0], &m_events[msgs], less_than_key());
+#ifdef PROF
+    for (int i = 0; i < msgs; ++i) 
+      printf("\t %llx \n", m_events[i].arg.pagefault.address);
+#endif
 
-    char* last_addr = nullptr;
-    for (int i = 0; i < msgs; ++i) {
-      if ((char*)(m_events[i].arg.pagefault.address) == last_addr)
+    auto     last_rd = m_rm.containing_region((char*)(m_events[0].arg.pagefault.address));
+    uint64_t last_rd_page_size = last_rd->page_size();
+    uint64_t last_rd_start = (uint64_t) last_rd->start();
+    uint64_t last_rd_end   = (uint64_t) last_rd->end();
+    uint64_t last_addr     = m_events[0].arg.pagefault.address;
+#ifdef PROF
+    printf("UFFD:: paddr %p (paddr - rd_start)=%d last_rd_page_size = %ld = %ld\n", 
+          last_addr, (last_addr - last_rd_start), last_rd_page_size, ((last_addr - last_rd_start)%last_rd_page_size)); 
+#endif
+    last_addr = last_addr - (last_addr - last_rd_start) % last_rd_page_size;
+    char*   addrs[msgs];
+    bool iswrites[msgs];
+    addrs[0] = (char*)(last_addr);
+#ifndef UMAP_RO_MODE
+    iswrites[0] = (m_events[0].arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE) != 0);
+#else
+    iswrites[0] = false;
+#endif
+    int p = 1;      
+
+    for (int i = 1; i < msgs; ++i) {
+      uint64_t addr = (m_events[i].arg.pagefault.address);
+
+      if ( addr < (last_addr + last_rd_page_size) )
         continue;
 
-      last_addr = (char*)(m_events[i].arg.pagefault.address);
+      if( addr >= last_rd_end ){
+        m_buffer->process_page_events(last_rd, addrs, iswrites, p);
+        p=0;
 
+        last_rd = m_rm.containing_region((char*)addr);
+        last_rd_page_size = last_rd->page_size();
+        last_rd_start = (uint64_t) last_rd->start();
+        last_rd_end = (uint64_t) last_rd->end();
+      }
+
+      last_addr = addr - (addr - last_rd_start) % last_rd_page_size;
+      
 #ifndef UMAP_RO_MODE
       bool iswrite = (m_events[i].arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE) != 0);
 #else
       bool iswrite = false;
 #endif
+      addrs[p] = (char*) last_addr;
+      iswrites[p] = iswrite;
+      p ++;
+    }//end of msgs
 
-      //
-      // TODO: Since the addresses are sorted, we could optimize the
-      // search to continue from where it last found something.
-      //
-      process_page(iswrite, last_addr);
-    }
-  }
+    m_buffer->process_page_events(last_rd, addrs, iswrites, p);
+
+  }//end of while
+
   UMAP_LOG(Debug, "Good bye");
 }
 
-void
+/*void
 Uffd::process_page( bool iswrite, char* addr )
 {
   auto rd = m_rm.containing_region(addr);
 
   if ( rd != nullptr )
     m_buffer->process_page_event(addr, iswrite, rd);
-}
+}*/
 
 void
 Uffd::ThreadEntry()
@@ -137,9 +172,9 @@ Uffd::ThreadEntry()
   uffd_handler();
 }
 
-Uffd::Uffd( void )
+Uffd::Uffd(  RegionManager& rm  )
   :   WorkerPool("Uffd Manager", 1)
-    , m_rm(RegionManager::getInstance())
+    , m_rm( rm ) //RegionManager::getInstance()
     , m_max_fault_events(m_rm.get_max_fault_events())
     , m_page_size(m_rm.get_umap_page_size())
     , m_buffer(m_rm.get_buffer_h())
@@ -170,7 +205,7 @@ Uffd::~Uffd()
 }
 
 void
-Uffd::enable_write_protect(
+Uffd::enable_write_protect( uint64_t psize,
           void*
 #ifndef UMAP_RO_MODE
           page_address
@@ -189,7 +224,7 @@ Uffd::enable_write_protect(
 }
 
 void
-Uffd::disable_write_protect(
+Uffd::disable_write_protect(uint64_t psize, 
   void*
 #ifndef UMAP_RO_MODE
   page_address
@@ -198,7 +233,7 @@ Uffd::disable_write_protect(
 {
 #ifndef UMAP_RO_MODE
   struct uffdio_writeprotect wp = {
-      .range = { .start = (uint64_t)page_address, .len = m_page_size }
+      .range = { .start = (uint64_t)page_address, .len = psize }
     , .mode = 0
   };
 
@@ -208,12 +243,12 @@ Uffd::disable_write_protect(
 }
 
 void
-Uffd::copy_in_page(char* data, void* page_address)
+Uffd::copy_in_page(char* data, void* page_address, uint64_t psize)
 {
   struct uffdio_copy copy = {
       .dst = (uint64_t)page_address
     , .src = (uint64_t)data
-    , .len = m_page_size
+    , .len = psize
     , .mode = 0
   };
 
@@ -222,13 +257,13 @@ Uffd::copy_in_page(char* data, void* page_address)
 }
 
 void
-Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
+Uffd::copy_in_page_and_write_protect(char* data, void* page_address, uint64_t psize)
 {
   UMAP_LOG(Debug, "(page_address = " << page_address << ")");
   struct uffdio_copy copy = {
       .dst = (uint64_t)page_address
     , .src = (uint64_t)data
-    , .len = m_page_size
+    , .len = psize
 #ifndef UMAP_RO_MODE
     , .mode = UFFDIO_COPY_MODE_WP
 #else
@@ -290,9 +325,9 @@ Uffd::unregister_region( RegionDescriptor* rd )
     , .mode = 0
   };
 
-  UMAP_LOG(Debug,
-    "Unregistering " << (uffdio_register.range.len / m_page_size)
-    << " pages from: " << (void*)(uffdio_register.range.start)
+  UMAP_LOG(Info,
+    "Unregistering " << (uffdio_register.range.len / rd->page_size())
+    << " pages (" << rd->page_size() << " bytes) from: " << (void*)(uffdio_register.range.start)
     << " - " << (void*)(uffdio_register.range.start +
                               (uffdio_register.range.len-1)));
 

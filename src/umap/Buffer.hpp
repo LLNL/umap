@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 #include <deque>
+#include <atomic>
 
 #include "umap/RegionDescriptor.hpp"
 #include "umap/PageDescriptor.hpp"
@@ -40,39 +41,47 @@ namespace Umap {
       void mark_page_as_present(PageDescriptor* pd);
       void mark_page_as_free( PageDescriptor* pd );
 
-      bool low_threshold_reached( void );
+      inline bool low_threshold_reached( void ) {return (m_busy_page_size <= m_evict_low_water) ;}
+      void process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswrites, int num_pages);
+
 
       void fetch_and_pin(char* paddr, uint64_t size);
+      void adjust_hi_lo_watermark();
 
-      PageDescriptor* evict_oldest_page( void );
       std::vector<PageDescriptor*> evict_oldest_pages( void );
-      void process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd);
       void evict_region(RegionDescriptor* rd);
       void flush_dirty_pages();
     
-      explicit Buffer( void );
+      explicit Buffer( RegionManager& rm );
       ~Buffer( void );
 
     private:
       RegionManager& m_rm;
-      uint64_t m_size;          // Maximum pages this buffer may have
       PageDescriptor* m_array;
 
-      std::unordered_map<char*, PageDescriptor*> m_present_pages;
+      //std::unordered_map<char*, PageDescriptor*> m_present_pages;
 
       std::vector<PageDescriptor*> m_free_pages;
-      std::deque<PageDescriptor*> m_busy_pages;
+      std::vector<PageDescriptor*> m_free_pages_secondary; // evictors append to this to avoid lock on the free_list
+      std::deque<PageDescriptor*>  m_busy_pages;
+      uint64_t m_free_page_size;  // the number of free pages in the unit of umap psize
+      std::atomic<int> m_free_page_secondary_size;
+      uint64_t m_busy_page_size;  // the number of busy pages in the unit of umap psize
 
-      uint64_t m_evict_low_water;   // % to evict too
+      uint64_t m_evict_low_water;   // % to stop  evicting
       uint64_t m_evict_high_water;  // % to start evicting
+      uint64_t m_psize; // % global umap page size, regional page size must be a multiple of m_psize
 
       pthread_mutex_t m_mutex;
+      pthread_mutex_t m_free_pages_secondary_mutex;
 
       int m_waits_for_avail_pd;
       pthread_cond_t m_avail_pd_cond;
 
-      int m_waits_for_state_change;
-      pthread_cond_t m_state_change_cond;
+      int m_waits_for_present_state_change;
+      int m_waits_for_free_state_change;
+      pthread_cond_t m_present_state_change_cond;
+      pthread_cond_t m_free_state_change_cond;
 
       BufferStats m_stats;
       bool is_monitor_on;
@@ -83,15 +92,13 @@ namespace Umap {
         return NULL;
       }
 
-      void release_page_descriptor( PageDescriptor* pd );
-
       PageDescriptor* page_already_present( char* page_addr );
-      PageDescriptor* get_page_descriptor( char* page_addr, RegionDescriptor* rd );
+      //PageDescriptor* get_page_descriptor( char* page_addr, RegionDescriptor* rd );
       uint64_t apply_int_percentage( int percentage, uint64_t item );
 
       void lock();
       void unlock();
-      void wait_for_page_state( PageDescriptor* pd, PageDescriptor::State st);
+      void wait_for_page_present_state( PageDescriptor* pd);
   };
 
   std::ostream& operator<<(std::ostream& os, const Umap::BufferStats& stats);

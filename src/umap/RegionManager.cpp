@@ -35,19 +35,38 @@ RegionManager::getInstance( void )
 }
 
 void
-RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size)
+RegionManager::addRegion(Store* store, char* region, uint64_t region_size, 
+                        char* mmap_region, uint64_t mmap_region_size, uint64_t region_page_size)
 {
+  if( (region_page_size>0) && (region_page_size%m_umap_page_size > 0) ){
+    UMAP_ERROR("region_page_size " << region_page_size << " should be a multiple of umap_page_size = " << m_umap_page_size);
+  }
+  if( region_page_size>max_page_size ){
+    UMAP_ERROR("region_page_size " << region_page_size << " cannot be larger than 8 x umap_page_size = " << m_umap_page_size);
+  }
+  if( get_max_pages_in_buffer() % (region_page_size/m_umap_page_size) > 0 ){
+    UMAP_ERROR("max_pages_in_buffer " << get_max_pages_in_buffer() << " cannot hold region_page_ratio" << (region_page_size/m_umap_page_size));
+  }
+
+  uint64_t max_buf_size = m_umap_page_size*get_max_pages_in_buffer();
+  if( region_page_size >= max_buf_size ){
+    UMAP_ERROR("region_page_size " << region_page_size << " should be smaller than buffer size = " << max_buf_size );
+  }
+
   std::lock_guard<std::mutex> lock(m_mutex);
 
+  /*
   if ( m_active_regions.empty() ) {
     UMAP_LOG(Debug, "No active regions, initializing engine");
     m_buffer = new Buffer();
     m_uffd = new Uffd();
     m_fill_workers = new FillWorkers();
     m_evict_manager = new EvictManager();
+    m_evict_workers = m_evict_manager->get_fill_workers();
   }
+  */
 
-  auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store);
+  auto rd = new RegionDescriptor(region, region_size, mmap_region, mmap_region_size, store, region_page_size);
   m_active_regions[(void*)region] = rd;
 
   UMAP_LOG(Debug,
@@ -58,6 +77,7 @@ RegionManager::addRegion(Store* store, char* region, uint64_t region_size, char*
 
   m_uffd->register_region(rd);
   m_last_iter = m_active_regions.end();
+
 }
 
 void
@@ -69,7 +89,7 @@ RegionManager::removeRegion( char* region )
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
-  UMAP_LOG(Debug,
+  UMAP_LOG(Info,
       "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
       << ", region_size: " << it->second->size()
       << ", number of regions: " << m_active_regions.size()
@@ -81,13 +101,45 @@ RegionManager::removeRegion( char* region )
   m_active_regions.erase(it);
 
   m_last_iter = m_active_regions.end();
-
+  
+  /*
   if ( m_active_regions.empty() ) {
     delete m_evict_manager; m_evict_manager = nullptr;
     delete m_fill_workers; m_fill_workers = nullptr;
     delete m_uffd; m_uffd = nullptr;
     delete m_buffer; m_buffer = nullptr;
   }
+  */
+}
+
+void
+RegionManager::adaptRegion( char* addr, uint64_t region_page_size )
+{
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto it = m_active_regions.find(addr);
+
+  if (it == m_active_regions.end())
+    UMAP_ERROR("umap fault monitor not found for: " << (void*)addr);
+
+  m_buffer->evict_region(it->second);
+  
+  if( (region_page_size>0) && (region_page_size%m_umap_page_size > 0) ){
+    UMAP_ERROR("region_page_size " << region_page_size << " should be a multiple of umap_page_size = " << m_umap_page_size);
+  }
+  if( region_page_size>max_page_size ){
+    UMAP_ERROR("region_page_size " << region_page_size << " cannot be larger than 8 x umap_page_size = " << m_umap_page_size);
+  }
+  if( get_max_pages_in_buffer() % (region_page_size/m_umap_page_size) > 0 ){
+    UMAP_ERROR("max_pages_in_buffer " << get_max_pages_in_buffer() << " cannot hold region_page_ratio" << (region_page_size/m_umap_page_size));
+  }
+
+  uint64_t max_buf_size = m_umap_page_size*get_max_pages_in_buffer();
+  if( region_page_size >= max_buf_size ){
+    UMAP_ERROR("region_page_size " << region_page_size << " should be smaller than buffer size = " << max_buf_size );
+  }
+
+  it->second->set_page_size(region_page_size);
+ 
 }
 
 int 
@@ -110,12 +162,20 @@ RegionManager::fetch_and_pin( char* paddr, uint64_t size )
 void
 RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
 {
-  for (int i{0}; i < npages; ++i)
-    m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
+  UMAP_ERROR("TO DO");
+  /*for (int i{0}; i < npages; ++i)
+  {
+    //m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
+
+    char* addr = (char*)(page_array[i].page_base_addr);
+    auto rd = containing_region(addr);
+    if ( rd != nullptr )
+      m_buffer->process_page_event(rd, addr, false, rd);
+  }*/
 }
 
 RegionManager::RegionManager()
-{
+{ 
   m_version.major = UMAP_VERSION_MAJOR;
   m_version.minor = UMAP_VERSION_MINOR;
   m_version.patch = UMAP_VERSION_PATCH;
@@ -132,7 +192,7 @@ RegionManager::RegionManager()
     set_max_fault_events(MAX_FAULT_EVENTS);
 
   unsigned int nthreads = std::thread::hardware_concurrency();
-  nthreads = (nthreads == 0) ? 16 : nthreads;
+  nthreads = (nthreads <= 8) ? 2 : 8;
 
   if ( (read_env_var("UMAP_PAGE_FILLERS", &env_value)) != nullptr )
     set_num_fillers(env_value);
@@ -142,7 +202,7 @@ RegionManager::RegionManager()
   if ( (read_env_var("UMAP_PAGE_EVICTORS", &env_value)) != nullptr )
     set_num_evictors(env_value);
   else
-    set_num_evictors(nthreads);
+    set_num_evictors(nthreads/2);
 
   if ( (read_env_var("UMAP_EVICT_HIGH_WATER_THRESHOLD", &env_value)) != nullptr )
     set_evict_high_water_threshold(env_value);
@@ -169,6 +229,21 @@ RegionManager::RegionManager()
   else
     m_monitor_freq = 0;
 
+  max_page_size = m_umap_page_size * 8;
+
+  m_buffer = new Buffer(*this);
+  m_uffd = new Uffd(*this);
+  m_fill_workers = new FillWorkers(*this);
+  m_evict_manager = new EvictManager(*this);
+
+}
+
+RegionManager::~RegionManager()
+{
+  delete m_fill_workers; m_fill_workers = nullptr;
+  delete m_evict_manager; m_evict_manager = nullptr;
+  delete m_uffd; m_uffd = nullptr;
+  delete m_buffer; m_buffer = nullptr;
 }
 
 uint64_t

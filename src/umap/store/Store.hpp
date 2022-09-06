@@ -16,6 +16,8 @@ class Store {
 
     virtual ssize_t read_from_store(char* buf, std::size_t nb, off_t off) = 0;
     virtual ssize_t  write_to_store(char* buf, std::size_t nb, off_t off) = 0;
+
+    virtual int predict_offsets(off_t* offsets, off_t off) = 0;
 };
 } // end of namespace Umap
 #endif

@@ -13,6 +13,7 @@
 
 #include "umap/Buffer.hpp"
 #include "umap/EvictManager.hpp"
+#include "umap/EvictWorkers.hpp"
 #include "umap/FillWorkers.hpp"
 #include "umap/Uffd.hpp"
 #include "umap/umap.h"
@@ -22,6 +23,7 @@
 namespace Umap {
 class FillWorkers;
 class EvictManager;
+class EvictWorkers;
 
 struct Version {
   int major;
@@ -51,12 +53,14 @@ class RegionManager {
         , uint64_t region_size
         , char*    mmap_region
         , uint64_t mmap_region_size
+        , uint64_t region_page_size
     );
 
     int flush_buffer();
     void prefetch(int npages, umap_prefetch_item* page_array);
     void fetch_and_pin( char* paddr, uint64_t size );
     void removeRegion( char* mmap_region );
+    void adaptRegion( char* addr, uint64_t region_page_size );
     Version  get_umap_version( void ) { return m_version; }
     long     get_system_page_size( void ) { return m_system_page_size; }
     uint64_t get_max_pages_in_buffer( void ) { return m_max_pages_in_buffer; }
@@ -71,14 +75,17 @@ class RegionManager {
     Uffd* get_uffd_h() { return m_uffd; }
     FillWorkers* get_fill_workers_h() { return m_fill_workers; }
     EvictManager* get_evict_manager() { return m_evict_manager; }
+    EvictWorkers* get_evict_workers() { return m_evict_workers; }
     RegionDescriptor* containing_region( char* vaddr );
     uint64_t get_num_active_regions( void ) { return (uint64_t)m_active_regions.size(); }
+    uint64_t get_max_page_size( void ) { return max_page_size; }
 
   private:
     Version  m_version;
     uint64_t m_max_pages_in_buffer;
     int      m_monitor_freq;
     long     m_umap_page_size;
+    long     max_page_size;
     uint64_t m_system_page_size;
     uint64_t m_num_fillers;
     uint64_t m_num_evictors;
@@ -89,12 +96,14 @@ class RegionManager {
     Uffd* m_uffd;
     FillWorkers* m_fill_workers;
     EvictManager* m_evict_manager;
+    EvictWorkers* m_evict_workers;
     std::mutex m_mutex;
 
     std::map<void*, RegionDescriptor*> m_active_regions;
     std::map<void*, RegionDescriptor*>::iterator m_last_iter;
 
     RegionManager( void );
+    ~RegionManager( void );
 
     uint64_t* read_env_var( const char* env, uint64_t* val);
     uint64_t        get_max_pages_in_memory( void );

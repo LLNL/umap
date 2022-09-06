@@ -10,6 +10,8 @@
 #include <iostream>
 #include <string>
 
+#include "umap/util/Macros.hpp"
+
 namespace Umap {
   class RegionDescriptor;
 
@@ -19,16 +21,43 @@ namespace Umap {
     RegionDescriptor* region;
     State             state;
     bool              dirty;
-    bool              deferred;
+    //bool              deferred;
     bool              data_present;
     int               spurious_count;
+    pthread_mutex_t   m_mutex;
 
     std::string print_state( void ) const;
-    void set_state_free( void );
-    void set_state_filling( void );
-    void set_state_updating( void );
-    void set_state_present( void );
-    void set_state_leaving( void );
+
+    inline void set_state_free( void ) {
+      if ( state != LEAVING )
+        UMAP_ERROR("Invalid state transition from: " << print_state() << " " << this);
+      state = FREE;
+    }
+
+    inline void set_state_filling( void ) {
+      if ( state != FREE )
+        UMAP_ERROR("Invalid state transition from: " << print_state());
+      state = FILLING;
+    }
+
+    inline void set_state_present( void ) {
+      if ( state != FILLING && state != UPDATING )
+        UMAP_ERROR("Invalid state transition from: " << print_state() << " " << this);
+      state = PRESENT;
+    }
+
+    inline void set_state_updating( void ) {
+      if ( state != PRESENT )
+        UMAP_ERROR("Invalid state transition from: " << print_state());
+      state = UPDATING;
+    }
+
+    inline void set_state_leaving( void ) {
+      if ( state != PRESENT )
+        UMAP_ERROR("Invalid state transition from: " << print_state());
+      state = LEAVING;
+    }
+
   };
 
   std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor::State st);

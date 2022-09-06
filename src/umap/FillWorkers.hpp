@@ -17,12 +17,13 @@ namespace Umap {
 
   class FillWorkers : public WorkerPool {
     public:
-      FillWorkers( void );
+      FillWorkers( RegionManager& rm );
       ~FillWorkers( void );
 
     private:
       Uffd*    m_uffd;
       Buffer*  m_buffer;
+      RegionManager& m_rm;
 
       void FillWorker( void );
       void ThreadEntry( void );

@@ -44,10 +44,10 @@ namespace Umap {
   ssize_t  StoreFile::write_to_store(char* buf, size_t nb, off_t off)
   {
     size_t rval = 0;
-
-    UMAP_LOG(Debug, "pwrite(fd=" << fd << ", buf=" << (void*)buf
+#ifdef PROF
+    UMAP_LOG(Info, "pwrite(fd=" << fd << ", buf=" << (void*)buf
                     << ", nb=" << nb << ", off=" << off << ")";);
-
+#endif
     rval = pwrite(fd, buf, nb, off);
     if (rval == -1) {
       int eno = errno;

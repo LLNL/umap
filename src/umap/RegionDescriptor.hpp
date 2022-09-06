@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <unordered_set>
+#include <unordered_map>
 
 #include "umap/PageDescriptor.hpp"
 #include "umap/store/Store.hpp"
@@ -22,12 +23,18 @@ namespace Umap {
     public:
       RegionDescriptor(   char* umap_region, uint64_t umap_size
                         , char* mmap_region, uint64_t mmap_size
-                        , Store* store )
+                        , Store* store
+                        , uint64_t region_psize)
         : m_umap_region(umap_region), m_umap_region_size(umap_size)
         , m_mmap_region(mmap_region), m_mmap_region_size(mmap_size)
-        , m_store(store) {}
+        , m_store(store)
+        , m_region_psize(region_psize) {
+          pthread_mutex_init(&m_mutex, NULL);
+        }
 
-      ~RegionDescriptor( void ) {}
+      ~RegionDescriptor( void ) {
+        pthread_mutex_destroy(&m_mutex);
+      }
 
       inline uint64_t store_offset( char* addr ) {
         assert("Invalid address for calculating offset" && addr >= start() && addr < end());
@@ -38,27 +45,54 @@ namespace Umap {
       inline Store*   store( void )    { return m_store;                    }
       inline char*    start( void )    { return m_umap_region;              }
       inline char*    end( void )      { return start() + size();           }
-      inline uint64_t count( void )    { return m_active_pages.size();      }
+      inline uint64_t count( void )    { return m_present_pages.size();      }
+      inline uint64_t page_size( void ){ return m_region_psize; }
+      void set_page_size( uint64_t p ){ m_region_psize = p; }
 
       inline void insert_page_descriptor(PageDescriptor* pd) {
-        m_active_pages.insert(pd);
-      }
+        pthread_mutex_lock(&m_mutex);
+        m_present_pages[pd->page] = pd;
+        pthread_mutex_unlock(&m_mutex);
+      } 
 
-      inline void erase_page_descriptor(PageDescriptor* pd) {
-        UMAP_LOG(Debug, "Erasing PD: " << pd);
-        m_active_pages.erase(pd);
-      }
-
-      inline PageDescriptor* get_next_page_descriptor( void ) {
-        if ( m_active_pages.size() == 0 )
+      inline PageDescriptor* find(char* paddr) {
+        pthread_mutex_lock(&m_mutex);
+        auto it = m_present_pages.find(paddr);
+        pthread_mutex_unlock(&m_mutex);
+        //
+        // Most likely case
+        //
+        if( it==m_present_pages.end() )
           return nullptr;
+        else{
+          //
+          // Next most likely is that it is in the buffer but may be in PRESENT, LEAVING, DEFERRED status
+          //
+          return it->second;
+        }
+      }
+     
 
-        auto it = m_active_pages.begin();
-        auto rval = *it;
-        rval->deferred = false;
-        erase_page_descriptor(rval);
+      void erase_page_descriptor(PageDescriptor* pd) {
+        pthread_mutex_lock(&m_mutex);
+        m_present_pages.erase(pd->page);
+        pd->set_state_free();
+        pd->page = nullptr;
+        pthread_mutex_unlock(&m_mutex);
+      }
 
-        return rval;
+      std::unordered_map<char*, PageDescriptor*> get_present_pages( void ) {
+        pthread_mutex_lock(&m_mutex);
+        std::unordered_map<char*, PageDescriptor*> res = m_present_pages;
+        pthread_mutex_unlock(&m_mutex);
+        return res;
+      }
+
+      bool has_present_pages( void ) {
+        pthread_mutex_lock(&m_mutex);
+        bool res = (m_present_pages.size()>0);
+        pthread_mutex_unlock(&m_mutex);
+        return res;
       }
 
     private:
@@ -67,8 +101,10 @@ namespace Umap {
       char*    m_mmap_region;
       uint64_t m_mmap_region_size;
       Store*   m_store;
+      uint64_t m_region_psize;
+      pthread_mutex_t m_mutex;
 
-      std::unordered_set<PageDescriptor*> m_active_pages;
+      std::unordered_map<char*, PageDescriptor*> m_present_pages;
   };
 } // end of namespace Umap
 #endif // _UMAP_RegionDescripto_HPP

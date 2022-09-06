@@ -19,16 +19,18 @@ namespace Umap {
 
   class EvictManager : public WorkerPool {
     public:
-      EvictManager( void );
+      EvictManager( RegionManager& rm );
       ~EvictManager( void );
       void schedule_eviction(PageDescriptor* pd);
       void schedule_flush(PageDescriptor* pd);
       void EvictAll( void );
       void WaitAll( void );
+      EvictWorkers* get_fill_workers() {return m_evict_workers;};
 
     private:
       Buffer* m_buffer;
       EvictWorkers* m_evict_workers;
+      RegionManager& m_rm;
 
       void EvictMgr(void);
       void ThreadEntry( void );

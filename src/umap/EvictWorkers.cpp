@@ -15,44 +15,51 @@
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 
+static int tid_g = 0;
+
 namespace Umap {
 void EvictWorkers::EvictWorker( void )
 {
-  uint64_t page_size = RegionManager::getInstance().get_umap_page_size();
+  int t_id = tid_g;
+  tid_g ++;
 
   while ( 1 ) {
-    auto w = get_work();
-
-    UMAP_LOG(Debug, " " << w << " " << m_buffer);
-
+    auto w = get_work(t_id);
     if ( w.type == Umap::WorkItem::WorkType::EXIT )
       break;    // Time to leave
 
     auto pd = w.page_desc;
+    RegionDescriptor *rd = pd->region;
+    uint64_t psize = rd->page_size();
+    char    *paddr = pd->page;
+//#ifdef PROF
+    //UMAP_LOG(Info, " "<<t_id<<" : " << w << " psize " << psize << " " << m_buffer);
+//#endif
 
+    // write back dirty pages to data store
     if ( pd->dirty ) {
-      auto store = pd->region->store();
-      auto offset = pd->region->store_offset(pd->page);
+      auto store  = rd->store();
+      auto offset = rd->store_offset(paddr);
 
-      m_uffd->enable_write_protect(pd->page);
-
-      if (store->write_to_store(pd->page, page_size, offset) == -1)
+      m_uffd->enable_write_protect(psize, paddr);
+      
+      if (store && store->write_to_store(paddr, psize, offset) == -1)
         UMAP_ERROR("write_to_store failed: "
             << errno << " (" << strerror(errno) << ")");
 
       pd->dirty = false;
     }
 
+    // flush without evicting from the buffer
     if (w.type == Umap::WorkItem::WorkType::FLUSH)
       continue;
     
-    if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
-      if (madvise(pd->page, page_size, MADV_DONTNEED) == -1)
-        UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
-    }
+    // evict from the buffer
+    if (madvise(paddr, psize, MADV_DONTNEED) == -1)
+      UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
 
-    UMAP_LOG(Debug, "Removing page: " << w.page_desc);
-    m_buffer->mark_page_as_free(w.page_desc);
+    m_buffer->mark_page_as_free(pd);
+
   }
 }
 

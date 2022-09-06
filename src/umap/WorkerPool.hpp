@@ -16,11 +16,16 @@
 #include "umap/WorkQueue.hpp"
 #include "umap/util/Macros.hpp"
 
+
+
 namespace Umap {
   struct WorkItem {
-    enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FAST_EVICT, FLUSH };
+    enum WorkType { NONE, EXIT, THRESHOLD, EVICT, FLUSH };
     PageDescriptor* page_desc;
     WorkType type;
+    #ifdef PROF
+    std::chrono::steady_clock::time_point timing;
+    #endif
   };
 
   static std::ostream& operator<<(std::ostream& os, const Umap::WorkItem& b)
@@ -33,23 +38,24 @@ namespace Umap {
       case Umap::WorkItem::WorkType::EXIT: os << ", type: " << "EXIT"; break;
       case Umap::WorkItem::WorkType::THRESHOLD: os << ", type: " << "THRESHOLD"; break;
       case Umap::WorkItem::WorkType::EVICT: os << ", type: " << "EVICT"; break;
-      case Umap::WorkItem::WorkType::FAST_EVICT: os << ", type: " << "FAST_EVICT"; break;
       case Umap::WorkItem::WorkType::FLUSH: os << ", type: " << "FLUSH"; break;
     }
 
     os << " }";
     return os;
   }
-
+  
   class WorkerPool {
     public:
       WorkerPool(const std::string& pool_name, uint64_t num_threads)
         :   m_pool_name(pool_name)
           , m_num_threads(num_threads)
-          , m_wq(new WorkQueue<WorkItem>(num_threads))
+          , m_wq(new WorkQueue<WorkItem>(num_threads, queue_id_g))
       {
         if (m_pool_name.length() > 15)
           m_pool_name.resize(15);
+        
+        queue_id_g++;
       }
 
       virtual ~WorkerPool() {
@@ -57,12 +63,12 @@ namespace Umap {
         delete m_wq;
       }
 
-      void send_work(const WorkItem& work) {
+      inline void send_work(const WorkItem& work) {
         m_wq->enqueue(work);
       }
 
-      WorkItem get_work() {
-        return m_wq->dequeue();
+      inline WorkItem get_work(int t_id=0) {
+        return m_wq->dequeue(t_id);
       }
 
       bool wq_is_empty( void ) {
@@ -70,8 +76,8 @@ namespace Umap {
       }
 
       void start_thread_pool() {
-        UMAP_LOG(Debug, "Starting " <<  m_pool_name << " Pool of "
-            << m_num_threads << " threads");
+
+        UMAP_LOG(Info, m_pool_name << " of " << m_num_threads << " threads on queue " << m_wq->get_queue_id() );
 
         for ( uint64_t i = 0; i < m_num_threads; ++i) {
           pthread_t t;
@@ -87,9 +93,6 @@ namespace Umap {
       }
 
       void stop_thread_pool() {
-        UMAP_LOG(Debug, "Stopping " <<  m_pool_name << " Pool of "
-            << m_num_threads << " threads");
-
         WorkItem w = {.page_desc = nullptr, .type = Umap::WorkItem::WorkType::EXIT };
 
         //
@@ -105,8 +108,6 @@ namespace Umap {
           (void) pthread_join(pt, NULL);
 
         m_threads.clear();
-
-        UMAP_LOG(Debug, m_pool_name << " stopped");
       }
 
       void wait_for_idle( void ) {
@@ -126,6 +127,11 @@ namespace Umap {
       uint64_t                m_num_threads;
       WorkQueue<WorkItem>*    m_wq;
       std::vector<pthread_t>  m_threads;
+      static int queue_id_g;
   };
+
 } // end of namespace Umap
+
+
+
 #endif // _UMAP_WorkerPool_HPP

@@ -36,6 +36,7 @@ void* umap_ex(
   , int           fd
   , off_t         offset
   , Umap::Store*  store
+  , uint64_t      page_size = 0
 );
 } // namespace Umap
 #endif // __cplusplus
@@ -58,9 +59,24 @@ void* umap(
   , off_t offset
 );
 
+void* umap_variable(
+     void* addr
+   , size_t length
+   , int prot
+   , int flags
+   , int fd
+   , off_t offset
+   , uint64_t page_size
+ );
+ 
 int uunmap(
     void*  addr
   , size_t length
+);
+
+void umap_adapt_pagesize(
+     void* addr
+   , uint64_t page_size
 );
 
 int umap_flush(); 

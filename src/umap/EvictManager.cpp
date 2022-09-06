@@ -24,55 +24,39 @@ void EvictManager::EvictMgr( void ) {
       break;    // Time to leave
 
     while ( ! m_buffer->low_threshold_reached() ) {
-#if 0
-      WorkItem work;
-      work.type = Umap::WorkItem::WorkType::EVICT;
-      work.page_desc = m_buffer->evict_oldest_page(); // Could block
-
-      if ( work.page_desc == nullptr )
-        break;
-
-      UMAP_LOG(Debug, m_buffer << ", " << work.page_desc);
-
-      m_evict_workers->send_work(work);
-#else
       std::vector<PageDescriptor*> evicted_pages = m_buffer->evict_oldest_pages();
       for(auto pd : evicted_pages){
         WorkItem work;
         work.type = Umap::WorkItem::WorkType::EVICT;
         work.page_desc = pd;
-        assert( work.page_desc != nullptr );
         m_evict_workers->send_work(work);
       }
-#endif
     }
   }
 }
 void EvictManager::WaitAll( void )
 {
-  UMAP_LOG(Debug, "Entered");
   m_evict_workers->wait_for_idle();
-  UMAP_LOG(Debug, "Done");
 }
   
 void EvictManager::EvictAll( void )
 {
-  UMAP_LOG(Debug, "Entered");
+  //while ( ! m_buffer->low_threshold_reached() ){}
+  
+  std::vector<PageDescriptor*> evicted_pages = m_buffer->evict_oldest_pages();
 
-  for (auto pd = m_buffer->evict_oldest_page(); pd != nullptr; pd = m_buffer->evict_oldest_page()) {
-    UMAP_LOG(Debug, "evicting: " << pd);
-    if (pd->dirty) {
-      WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::FAST_EVICT };
+  while( evicted_pages.size() > 0 ){
+    for(auto pd : evicted_pages){
+      WorkItem work;
+      work.type = Umap::WorkItem::WorkType::EVICT;
+      work.page_desc = pd;
       m_evict_workers->send_work(work);
     }
-    else {
-      m_buffer->mark_page_as_free(pd);
-    }
+    evicted_pages = m_buffer->evict_oldest_pages();
   }
 
   m_evict_workers->wait_for_idle();
 
-  UMAP_LOG(Debug, "Done");
 }
 
 void EvictManager::schedule_eviction(PageDescriptor* pd)
@@ -89,23 +73,20 @@ void EvictManager::schedule_flush(PageDescriptor* pd)
   m_evict_workers->send_work(work);
 }
 
-EvictManager::EvictManager( void ) :
+EvictManager::EvictManager( RegionManager& rm ) :
         WorkerPool("Evict Manager", 1)
-      , m_buffer(RegionManager::getInstance().get_buffer_h())
+      , m_buffer(rm.get_buffer_h())
+      , m_rm( rm )
 {
-  m_evict_workers = new EvictWorkers(  RegionManager::getInstance().get_num_evictors()
-                                     , m_buffer, RegionManager::getInstance().get_uffd_h());
+  m_evict_workers = new EvictWorkers(  m_rm.get_num_evictors()
+                                     , m_buffer, m_rm.get_uffd_h());
   start_thread_pool();
 }
 
 EvictManager::~EvictManager( void ) {
-  UMAP_LOG(Debug, "Calling EvictAll");
   EvictAll();
-  UMAP_LOG(Debug, "Calling stop_thread_pool");
   stop_thread_pool();
-  UMAP_LOG(Debug, "Deleting eviction workers");
   delete m_evict_workers;
-  UMAP_LOG(Debug, "Done");
 }
 
 void EvictManager::ThreadEntry() {

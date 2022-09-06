@@ -8,7 +8,7 @@
 
 #include "umap/PageDescriptor.hpp"
 #include "umap/RegionDescriptor.hpp"
-#include "umap/util/Macros.hpp"
+
 
 namespace Umap {
   std::string PageDescriptor::print_state( void ) const {
@@ -22,36 +22,6 @@ namespace Umap {
     }
   }
 
-  void PageDescriptor::set_state_free( void ) {
-    if ( state != LEAVING )
-      UMAP_ERROR("Invalid state transition from: " << print_state());
-    state = FREE;
-  }
-
-  void PageDescriptor::set_state_filling( void ) {
-    if ( state != FREE )
-      UMAP_ERROR("Invalid state transition from: " << print_state());
-    state = FILLING;
-  }
-
-  void PageDescriptor::set_state_present( void ) {
-    if ( state != FILLING && state != UPDATING )
-      UMAP_ERROR("Invalid state transition from: " << print_state());
-    state = PRESENT;
-  }
-
-  void PageDescriptor::set_state_updating( void ) {
-    if ( state != PRESENT )
-      UMAP_ERROR("Invalid state transition from: " << print_state());
-    state = UPDATING;
-  }
-
-  void PageDescriptor::set_state_leaving( void ) {
-    if ( state != PRESENT )
-      UMAP_ERROR("Invalid state transition from: " << print_state());
-    state = LEAVING;
-  }
-
   std::ostream& operator<<(std::ostream& os, const Umap::PageDescriptor* pd)
   {
     if (pd != nullptr) {
@@ -61,10 +31,10 @@ namespace Umap {
 
       if ( pd->dirty )
          os << ", DIRTY";
-      if ( pd->deferred )
-         os << ", DEFERRED";
-      if ( pd->spurious_count )
-         os << ", spurious: " << pd->spurious_count;
+      //if ( pd->deferred )
+      //   os << ", DEFERRED";
+      //if ( pd->spurious_count )
+         //os << ", spurious: " << pd->spurious_count;
 
       os << " }";
     }

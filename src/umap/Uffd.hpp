@@ -45,17 +45,17 @@ namespace Umap {
 
   class Uffd : public WorkerPool {
     public:
-      Uffd( void );
+      Uffd( RegionManager& rm );
       ~Uffd( void);
 
-      void process_page(bool iswrite, char* addr );
+      //void process_page(bool iswrite, char* addr );
       void register_region( RegionDescriptor* region );
       void unregister_region( RegionDescriptor* region );
 
-      void  enable_write_protect( void* );
-      void disable_write_protect( void* );
-      void copy_in_page(char* data, void* page_address);
-      void copy_in_page_and_write_protect(char* data, void* page_address);
+      void  enable_write_protect( uint64_t psize, void* );
+      void disable_write_protect( uint64_t psize, void* );
+      void copy_in_page(char* data, void* page_address, uint64_t psize);
+      void copy_in_page_and_write_protect(char* data, void* page_address, uint64_t psize);
 
     private:
       RegionManager&        m_rm;
