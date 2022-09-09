@@ -5,6 +5,4 @@
 # SPDX-License-Identifier: LGPL-2.1-only
 #############################################################################
 add_subdirectory(churn)
-add_subdirectory(pfbenchmark)
-add_subdirectory(multithread_flush)
 add_subdirectory(umap-sparsestore)
