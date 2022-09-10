@@ -44,9 +44,9 @@ RegionManager::addRegion(Store* store, char* region, uint64_t region_size,
   if( region_page_size>max_page_size ){
     UMAP_ERROR("region_page_size " << region_page_size << " cannot be larger than 8 x umap_page_size = " << m_umap_page_size);
   }
-  if( get_max_pages_in_buffer() % (region_page_size/m_umap_page_size) > 0 ){
-    UMAP_ERROR("max_pages_in_buffer " << get_max_pages_in_buffer() << " cannot hold region_page_ratio" << (region_page_size/m_umap_page_size));
-  }
+  //if( get_max_pages_in_buffer() % (region_page_size/m_umap_page_size) > 0 ){
+    //UMAP_ERROR("max_pages_in_buffer " << get_max_pages_in_buffer() << " cannot hold region_page_ratio" << (region_page_size/m_umap_page_size));
+  //}
 
   uint64_t max_buf_size = m_umap_page_size*get_max_pages_in_buffer();
   if( region_page_size >= max_buf_size ){
