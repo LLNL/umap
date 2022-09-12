@@ -145,11 +145,19 @@ void Buffer::flush_dirty_pages()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
-  while ( !low_threshold_reached() ){sleep(1);}//critical, avoid race condition of equeue workitems for evictors
+  while ( !low_threshold_reached() ){
+    if( m_rm.get_evict_manager()->wq_is_empty() ){
+      WorkItem w;
+      w.type = Umap::WorkItem::WorkType::THRESHOLD;
+      w.page_desc = nullptr;
+      m_rm.get_evict_manager()->send_work(w);
+    }
+    sleep(1);
+}//critical, avoid race condition of equeue workitems for evictors
 
   lock();
   std::unordered_map<char*, PageDescriptor*> present_pages = rd->get_present_pages();
-  const int pages_per_region_page = rd->page_size() / m_psize;
+  uint64_t pages_per_region_page = (rd->page_size() / m_psize);
 
   for(std::deque<PageDescriptor*>::iterator it = m_busy_pages.begin(); it != m_busy_pages.end(); ) {
     PageDescriptor* pd = *it;
