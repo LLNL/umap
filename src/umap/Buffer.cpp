@@ -145,6 +145,8 @@ void Buffer::flush_dirty_pages()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
+  while ( !low_threshold_reached() ){sleep(1);}//critical, avoid race condition of equeue workitems for evictors
+
   lock();
   std::unordered_map<char*, PageDescriptor*> present_pages = rd->get_present_pages();
   const int pages_per_region_page = rd->page_size() / m_psize;
@@ -166,6 +168,7 @@ void Buffer::evict_region(RegionDescriptor* rd)
   
   while(rd->has_present_pages()){
     sleep(1);
+    //rd->print_present_pages();
   }
 }
 

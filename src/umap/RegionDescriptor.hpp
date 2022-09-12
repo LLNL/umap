@@ -94,6 +94,13 @@ namespace Umap {
         pthread_mutex_unlock(&m_mutex);
         return res;
       }
+            
+      void print_present_pages( void ) {
+        pthread_mutex_lock(&m_mutex);
+        for(auto pd : m_present_pages )
+          UMAP_LOG(Info, pd.second);
+        pthread_mutex_unlock(&m_mutex);
+      }
 
     private:
       char*    m_umap_region;
