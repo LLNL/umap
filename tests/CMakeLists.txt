@@ -6,4 +6,4 @@
 #############################################################################
 add_subdirectory(churn)
 add_subdirectory(umap-sparsestore)
-add_subdirectory(streaming)
+add_subdirectory(variable_page)

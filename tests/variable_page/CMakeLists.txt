@@ -12,7 +12,7 @@ if(OPENMP_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} -g -fopenmp")
   set(CMAKE_EXE_LINKER_FLAGS 
     "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-  add_executable(streaming streaming.cpp)
+  add_executable(streaming main.cpp)
 
   
   if(STATIC_UMAP_LINK)
