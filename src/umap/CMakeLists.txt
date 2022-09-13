@@ -45,31 +45,58 @@ set(umapsrc
 find_package(Threads REQUIRED)
 
 
+include(ExternalProject)
+if (USE_ZFP)
 
-set(zfpheaders
-    store/StoreZFP.h
-)
-set(zfpsrcs
+   # build ZFP from the official github
+   
+   ExternalProject_Add(ZFP
+	PREFIX ${CMAKE_BINARY_DIR}/zfp
+      	#GIT_REPOSITORY https://github.com/LLNL/ZFP.git
+	#GIT_TAG 0.5.3
+	#GIT_SHALLOW 1
+	URL https://github.com/LLNL/zfp/archive/refs/tags/0.5.1.zip
+      	BUILD_COMMAND make -j
+      	BUILD_IN_SOURCE 1
+	BUILD_ALWAYS 1
+      	LOG_BUILD 0
+      	INSTALL_COMMAND "make install"
+      	LOG_INSTALL 0
+   )
+
+   set(zfpheaders
+	store/StoreZFP.h
+   )	 
+   set(zfpsrcs
     store/StoreZFP.cpp
-)
-list(APPEND umapheaders ${zfpheaders})
-list(APPEND umapsrc ${zfpheaders} ${zfpsrcs})
+   )
 
-set (ZFP_ROOT "/home/peng8/skylake/zfp/zfp_umap")
-include_directories(${ZFP_ROOT}/include)
-include_directories(${ZFP_ROOT}/array)
-find_library(LIBZFP NAMES zfp PATHS ${ZFP_ROOT}/lib)
-if (LIBZFP)    
-    link_libraries(${LIBZFP})
-else()
-   message(FATAL_ERROR "Cannot find ZFP library, please set ZFP_ROOT")
-endif()
+   list(APPEND umapheaders ${zfpheaders})
+   list(APPEND umapsrc ${zfpheaders} ${zfpsrcs})
+   add_library(umap SHARED ${umapsrc} )
+   add_library(umap-static STATIC ${umapsrc} )
+   add_dependencies( umap ZFP )
+   
+   ExternalProject_Get_Property(ZFP source_dir)
+   message(${source_dir})
+   include_directories(${source_dir}/include)
+   include_directories(${source_dir}/array)
+
+   set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
+   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${install_dir}/lib/libzfp.so)
+
+else(USE_ZFP)
+
+   add_library(umap SHARED ${umapsrc} )
+   add_library(umap-static STATIC ${umapsrc} )
+   set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
+   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+
+endif(USE_ZFP)
 
 
-add_library(umap SHARED ${umapsrc} )
-add_library(umap-static STATIC ${umapsrc} )
-set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
-target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+if (USE_ZFP)
+endif(USE_ZFP)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 

@@ -1,5 +1,5 @@
 UMAP_DIR=../../../..
-PFM_DIR=/home/peng8/skylake/Software/perfmon2-libpfm4
+PFM_DIR=/Software/perfmon2-libpfm4
 
 CXX=g++
 CXXFLAGS= -fopenmp -fPIC -O3 -Wall -std=c++14 -g -I../include -I${UMAP_DIR}/build/include
