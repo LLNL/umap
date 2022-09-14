@@ -25,7 +25,6 @@ void Profiler::mt_register_address (void *p, size_t bytes)
         ma.offset = init_size - 1;
         key.ma = ma;
         metrics m;
-        m.score=0;
         m.samples = (atomic<long>*) malloc(sizeof(atomic<long>));
         *(m.samples) = 0;
         m.ma = ma;
@@ -163,7 +162,6 @@ void Profiler::reset()
     while (it != data.end())
     {
         __reset_metrics(it->second);
-        it->second.tier_id = 0;
         it++;
     }
     __mutex.unlock_shared();
