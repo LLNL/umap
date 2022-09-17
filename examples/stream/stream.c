@@ -235,7 +235,7 @@ main(int argc, char *argv[])
 
 	if( fd0>0 && fd1>0 && fd2>0 ){
 		//a = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
-		a = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0, 8192);
+		a = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0, 4096);
 		if ( a == UMAP_FAILED ) {
 			printf("failed to umap a %s \n", strerror(errno));
 		}
@@ -245,12 +245,17 @@ main(int argc, char *argv[])
 			printf("failed to umap b %s \n", strerror(errno));
 		}
 		//c = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0);
-		c = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0, 8192);
+		c = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0, 16384);
 		if ( c == UMAP_FAILED ) {
 			printf("failed to umap c %s \n", strerror(errno));
 		}
 	}
 	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
+
+	bytes[0] = 2 * sizeof(STREAM_TYPE) * array_size;
+	bytes[1] = 2 * sizeof(STREAM_TYPE) * array_size;
+	bytes[2] = 3 * sizeof(STREAM_TYPE) * array_size;
+	bytes[3] = 3 * sizeof(STREAM_TYPE) * array_size;
 
     int			quantum, checktick();
     int			BytesPerWord;
@@ -345,10 +350,6 @@ main(int argc, char *argv[])
 		for (j = 0; j < array_size; j++)
 			a[j] = 2.0E0 * a[j];
 		t = 1.0E6 * (mysecond() - t);
-
-//for (j = 0; j < array_size; j++)
-//	if(a[j] != 2.0E0 ) printf("a[%d] = %f\n", j, a[j]);
-//return 0;
 
 		if( (int)(t/quantum) < 20 ){
 			printf("Each test below will take on the order"
