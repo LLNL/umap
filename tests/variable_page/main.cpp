@@ -22,8 +22,6 @@
 # include <sys/time.h>
 #include "umap/umap.h"
 
-#define FLUSH_BUF 1
-
 using namespace std;
 
 int
@@ -100,7 +98,8 @@ void validate_file( const char* filename , size_t bytes ){
 
 int main(int argc, char **argv)
 {
-  printf("%s file_name bytes [region_pagesize] \n", argv[0]);
+  printf("%s file_name num_bytes [region_pagesize] \n", argv[0]);
+  if( argc != 3 && argc != 4 ) return 0;
   const char* filename_prefix = argv[1];
   uint64_t umap_region_length = atoll(argv[2]);
   uint64_t umap_pagesize = umapcfg_get_umap_page_size();

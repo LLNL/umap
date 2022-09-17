@@ -32,9 +32,7 @@ void EvictWorkers::EvictWorker( void )
     RegionDescriptor *rd = pd->region;
     uint64_t psize = rd->page_size();
     char    *paddr = pd->page;
-//#ifdef PROF
-    //UMAP_LOG(Info, " "<<t_id<<" : " << w << " psize " << psize << " " << m_buffer);
-//#endif
+    //UMAP_LOG(Info, pd);
 
     // write back dirty pages to data store
     if ( pd->dirty ) {

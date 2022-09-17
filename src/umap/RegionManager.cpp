@@ -89,7 +89,7 @@ RegionManager::removeRegion( char* region )
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
-  UMAP_LOG(Info,
+  UMAP_LOG(Debug,
       "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
       << ", region_size: " << it->second->size()
       << ", number of regions: " << m_active_regions.size()

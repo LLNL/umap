@@ -26,43 +26,32 @@ void EvictManager::EvictMgr( void ) {
     while ( ! m_buffer->low_threshold_reached() ) {
       std::vector<PageDescriptor*> evicted_pages = m_buffer->evict_oldest_pages();
       for(auto pd : evicted_pages){
-        WorkItem work;
-        work.type = Umap::WorkItem::WorkType::EVICT;
-        work.page_desc = pd;
-        m_evict_workers->send_work(work);
+        schedule_eviction(pd);
       }
     }
   }
 }
-void EvictManager::WaitAll( void )
+/*void EvictManager::WaitAll( void )
 {
   m_evict_workers->wait_for_idle();
-}
+}*/
   
 void EvictManager::EvictAll( void )
 {
-  //while ( ! m_buffer->low_threshold_reached() ){}
-  
-  std::vector<PageDescriptor*> evicted_pages = m_buffer->evict_oldest_pages();
 
-  while( evicted_pages.size() > 0 ){
+  while( m_buffer->get_busy_pages() > 0 ){
+    std::vector<PageDescriptor*> evicted_pages = m_buffer->evict_oldest_pages();
     for(auto pd : evicted_pages){
-      WorkItem work;
-      work.type = Umap::WorkItem::WorkType::EVICT;
-      work.page_desc = pd;
-      m_evict_workers->send_work(work);
+      schedule_eviction(pd);
     }
-    evicted_pages = m_buffer->evict_oldest_pages();
   }
-
-  m_evict_workers->wait_for_idle();
 
 }
 
 void EvictManager::schedule_eviction(PageDescriptor* pd)
 {
   WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::EVICT };
-
+  
   m_evict_workers->send_work(work);
 }
 

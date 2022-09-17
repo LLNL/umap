@@ -325,11 +325,10 @@ Uffd::unregister_region( RegionDescriptor* rd )
     , .mode = 0
   };
 
-  UMAP_LOG(Info,
+  UMAP_LOG(Debug,
     "Unregistering " << (uffdio_register.range.len / rd->page_size())
     << " pages (" << rd->page_size() << " bytes) from: " << (void*)(uffdio_register.range.start)
-    << " - " << (void*)(uffdio_register.range.start +
-                              (uffdio_register.range.len-1)));
+    << " - " << (void*)(uffdio_register.range.start + (uffdio_register.range.len-1)));
 
   if (ioctl(m_uffd_fd, UFFDIO_UNREGISTER, &uffdio_register.range))
     UMAP_ERROR("ioctl(UFFDIO_UNREGISTER) failed: " << strerror(errno));

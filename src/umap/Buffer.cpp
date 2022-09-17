@@ -16,10 +16,6 @@
 #include "umap/WorkerPool.hpp"
 #include "umap/util/Macros.hpp"
 
-#ifdef PROF
-#include <chrono>
-#endif
-
 namespace Umap {
 
   int WorkerPool::queue_id_g = 0;
@@ -75,7 +71,8 @@ std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 {
   std::vector<PageDescriptor*> evicted_pages;
 
-  lock();//need to modify m_busy_pages
+  //need lock before modifying m_busy_pages
+  lock();
 
   while( m_busy_pages.size()>0 ) {
     
@@ -91,7 +88,7 @@ std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
         break;
 
     }else if(pd->state == PageDescriptor::State::FILLING || pd->state == PageDescriptor::State::UPDATING){
-      //If the last one is still updating/filling, should stop the eviction process
+      //If the lastest page is still updating/filling, pause the eviction process
       //This has huge impact on performance, don't wait for any status update
       /*if( evicted_pages.size()==0 ){
         wait_for_page_present_state(pd);
@@ -109,30 +106,48 @@ std::vector<PageDescriptor*> Buffer::evict_oldest_pages()
 
   unlock();
 
-#ifdef PROF
-  UMAP_LOG(Info, " Evicted_pages=" << evicted_pages.size() );
+  /*UMAP_LOG(Info, " Evicted_pages=" << evicted_pages.size() );
   for(auto pd : evicted_pages)
     UMAP_LOG(Info, pd);
-#endif
+  */
 
   return evicted_pages;
 }
 
 void Buffer::flush_dirty_pages()
 {
+  while ( !low_threshold_reached() ){ 
+    if( m_rm.get_evict_manager()->wq_is_empty() ){
+      WorkItem w;
+      w.type = Umap::WorkItem::WorkType::THRESHOLD;
+      w.page_desc = nullptr;
+      m_rm.get_evict_manager()->send_work(w);
+    }
+    sleep(1);
+  }//critical, avoid race condition of equeue workitems for evictors
+
   lock();
 
   for (auto it = m_busy_pages.begin(); it != m_busy_pages.end(); it++) {
     
     if ( (*it)->dirty ) {
       PageDescriptor* pd = *it;
-      UMAP_LOG(Debug, "schedule Dirty Page: " << pd);
       wait_for_page_present_state(pd);
       m_rm.get_evict_manager()->schedule_flush(pd);
     }
   }
-
-  m_rm.get_evict_manager()->WaitAll();
+  
+  bool done = false;
+  while ( !done ){
+    done = true;
+    for (auto it = m_busy_pages.begin(); it != m_busy_pages.end(); it++) {
+      if ( (*it)->dirty ) {
+        done = false;
+        sleep(1);
+        break;
+      }
+    }
+  }
   
   unlock();
 }
@@ -145,7 +160,7 @@ void Buffer::flush_dirty_pages()
 //
 void Buffer::evict_region(RegionDescriptor* rd)
 {
-  while ( !low_threshold_reached() ){
+  while ( !low_threshold_reached() ){ 
     if( m_rm.get_evict_manager()->wq_is_empty() ){
       WorkItem w;
       w.type = Umap::WorkItem::WorkType::THRESHOLD;
@@ -153,7 +168,7 @@ void Buffer::evict_region(RegionDescriptor* rd)
       m_rm.get_evict_manager()->send_work(w);
     }
     sleep(1);
-}//critical, avoid race condition of equeue workitems for evictors
+  }//critical, avoid race condition of equeue workitems for evictors
 
   lock();
   std::unordered_map<char*, PageDescriptor*> present_pages = rd->get_present_pages();
@@ -166,6 +181,7 @@ void Buffer::evict_region(RegionDescriptor* rd)
         it = m_busy_pages.erase(it);
         m_busy_page_size -= pages_per_region_page;
         pd->set_state_leaving();
+        //UMAP_LOG(Info, pd);
         m_rm.get_evict_manager()->schedule_eviction(pd);
     } else {
         ++it;
@@ -175,9 +191,11 @@ void Buffer::evict_region(RegionDescriptor* rd)
   unlock();
   
   while(rd->has_present_pages()){
+    //present_pages = rd->get_present_pages();
+    //for( auto it : present_pages)
+      //UMAP_LOG(Info, it.second);
     sleep(1);
-    //rd->print_present_pages();
-  }
+  }//faster than wait on condition
 }
 
 typedef struct FetchFuncParams {
@@ -421,9 +439,7 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
 
   unlock();
 
-#ifdef PROF
-  UMAP_LOG(Info, "finish processing " << num_pages << " events"); 
-#endif
+  UMAP_LOG(Debug, "finish processing " << num_pages << " events");
 
   // Kick the eviction daemon if the high water mark has been reached
   //
@@ -545,7 +561,7 @@ Buffer::Buffer( RegionManager& rm )
   }else{
     is_monitor_on = false;
   }
-  UMAP_LOG(Info, this);
+  UMAP_LOG(Debug, this);
 }
 
 Buffer::~Buffer( void ) {

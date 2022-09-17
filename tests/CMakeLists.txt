@@ -6,4 +6,5 @@
 #############################################################################
 add_subdirectory(churn)
 add_subdirectory(umap-sparsestore)
+add_subdirectory(flush_buffer)
 add_subdirectory(variable_page)

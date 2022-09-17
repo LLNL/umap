@@ -94,11 +94,6 @@ class WorkQueue {
 
     void wait_for_idle( void ) {
       for(int i=0; i<m_max_waiting;i++){
-
-#ifdef PROF        
-        printf("wait_for_idle:: queue_id %d tid %d tail %d head %d\n", queue_id, i, tails[i].load(), heads[i].load() );
-#endif
-
         while(1){
           int head_old = heads[i].load();
           int tail_old = tails[i].load();

@@ -51,6 +51,7 @@ namespace Umap {
       std::vector<PageDescriptor*> evict_oldest_pages( void );
       void evict_region(RegionDescriptor* rd);
       void flush_dirty_pages();
+      size_t get_busy_pages(){return m_busy_pages.size(); }
     
       explicit Buffer( RegionManager& rm );
       ~Buffer( void );
@@ -92,7 +93,7 @@ namespace Umap {
         return NULL;
       }
 
-      PageDescriptor* page_already_present( char* page_addr );
+      //PageDescriptor* page_already_present( char* page_addr );
       //PageDescriptor* get_page_descriptor( char* page_addr, RegionDescriptor* rd );
       uint64_t apply_int_percentage( int percentage, uint64_t item );
 

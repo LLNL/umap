@@ -20,29 +20,24 @@
 #include "errno.h"
 #include "umap/umap.h"
 
-#define FLUSH_BUF 1
-
 using namespace std;
 
 int
 open_prealloc_file( const char* fname, uint64_t totalbytes)
 {
-  /*
-  int status = unlink(fname);
-  int eno = errno;
-  if ( status!=0 && eno != ENOENT ) {
-    std::cerr << "Failed to unlink " << fname << ": "<< strerror(eno) << " Errno=" << eno <<std::endl;
-    exit(1);
-  }
-  */
-
   int fd = open(fname, O_RDWR | O_LARGEFILE | O_DIRECT | O_CREAT, S_IRUSR | S_IWUSR);
   if ( fd == -1 ) {
     int eno = errno;
     std::cerr << "Failed to create " << fname << ": " << strerror(eno) << std::endl;
     exit(1);
   }
+  std::cout << "open_prealloc_file "<< fname << "\n";
 
+  off_t fsize = lseek(fd, 0, SEEK_END);
+  std::cout << "File size " <<  fsize << " bytes\n";
+  if( fsize>=totalbytes ) return fd;
+
+  std::cout << "Extend File size to " <<  totalbytes << " bytes\n";
   // Pre-allocate disk space for the file.
   try {
     int x;
@@ -67,75 +62,80 @@ open_prealloc_file( const char* fname, uint64_t totalbytes)
 int
 main(int argc, char **argv)
 {
+  printf("%s file_name num_bytes \n", argv[0]);
+  if( argc != 3 && argc != 4 ) return 0;
   const char* filename = argv[1];
-
+  uint64_t umap_region_length = atoll(argv[2]);
   uint64_t umap_pagesize = umapcfg_get_umap_page_size();
-  std::cout << "umap_pagesize "  << umap_pagesize << "\n";
-
-  const uint64_t umap_region_length = 2 * umap_pagesize;
-  std::cout << "umap_region_length "  << umap_region_length << "\n";
-
-  assert(umap_region_length % umap_pagesize == 0);
+  uint64_t num_pages = (umap_region_length-1)/umap_pagesize + 1;
+  umap_region_length = umap_pagesize * num_pages;
+  std::cout << umap_pagesize << " bytes x " <<  num_pages << " pages = " << umap_region_length << " bytes\n";
 
   int fd = open_prealloc_file(filename, umap_region_length);
-  std::cout << "open_prealloc_file "<< filename << "\n";
 
-  void* base_addr = umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
+  void* base_addr;
+  if( argc == 3 ){
+    base_addr = umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
+  }else{
+    base_addr = umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0, atoi(argv[3]));    
+  }   
   if ( base_addr == UMAP_FAILED ) {
     int eno = errno;
     std::cerr << "Failed to umap " << filename << ": " << strerror(eno) << std::endl;
     return -1;
   }
-  std::cout << "umap base_addr at "<< base_addr <<"\n";
+  std::cout << "UMapped to "<< base_addr <<"\n";
 
 
-  /* Update to the in-core buffer*/
+  /* Update to array */
   uint64_t *arr = (uint64_t *) base_addr;
   size_t array_size = umap_region_length/sizeof(uint64_t);
 #pragma omp parallel for
   for(size_t i=0; i < array_size; i++)
     arr[i] = (uint64_t)(i);
-  std::cout << "Update Array of "<< array_size <<" uint64_t\n";
+  std::cout << "Updated Array of "<< array_size <<" uint64_t\n";
 
-
-#ifdef  FLUSH_BUF  
   if (umap_flush() < 0) {
-    std::cerr << "Failed to flush cache to " << filename << std::endl;
-    return -1;
+    std::cerr << "Failed to flush to " << filename << std::endl;
+    exit(1);
   }
-  std::cout << "umap_flush done\n";
-#endif
+  std::cout << "umap_flush is done\n";
 
-  //close(fd);
-  std::cout << "open the file separately to read content before calling uunmap \n";
+  // Check that updates have been flushed into the datastore
+  std::cout << "Open the file separately to read content before calling uunmap \n";
   ifstream rf(filename, ios::in | ios::binary);
   if(!rf) {
     std::cout << "Cannot open file!" << std::endl;
     exit(1);
   }
-  uint64_t arr_in[array_size];
+  uint64_t *arr_in = (uint64_t*)malloc( sizeof(uint64_t)*array_size );
   rf.read((char *) &arr_in[0], sizeof(uint64_t)*array_size);
   rf.close();
-  for(int i=0; i < array_size; i++) {
-    std::cout << "Arr["<< i <<"]: " <<arr_in[i] << std::endl;
+  bool is_validated = true;
+  for(size_t i=0; i < array_size; i++) {
+    if( arr_in[i] != (uint64_t) i ) {
+      printf("\t arr_in[%d] = %f \n", i, arr_in[i]);
+      is_validated = false;
+    } 
+  }
+  if(is_validated){
+    std::cout << "Flush successed.\n";
+  }else{
+    std::cout << "Flush failed.\n";
   }
 
-
-  std::cout << "Access from UMap region \n";
-  size_t stride = umap_pagesize/sizeof(uint64_t);
-  for(size_t i=0; i < array_size; i=i+stride)
-    std::cout << "Read array["<< i <<"] = "<< arr[i] << std::endl;
-
-
-  std::cout << "Call uunmap \n";
+  // Unmap the region
   if (uunmap(base_addr, umap_region_length) < 0) {
     int eno = errno;
     std::cerr << "Failed to uumap " << filename << ": " << strerror(eno) << std::endl;
-    return -1;
+    exit(1);
+  }else{
+    std::cout << "Umapped is done.\n";
   }
 
+  // finally, close the file
   close(fd);
-  std::cout << "file closed "<< filename << "\n";;
+  std::cout << "Passed\n";
   
   return 0;
 }

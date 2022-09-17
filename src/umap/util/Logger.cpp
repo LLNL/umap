@@ -19,7 +19,7 @@
 namespace Umap {
 
 static const char* env_name = "UMAP_LOG_LEVEL";
-static const char* env_name_no_timestamp = "UMAP_LOG_NO_TIMESTAMP_LEVEL";
+static const char* env_name_log_timestamp = "UMAP_LOG_TIMESTAMP_LEVEL";
 static message::Level defaultLevel = message::Info;
 std::mutex g_logging_mutex;
 Logger* Logger::s_Logger = nullptr;
@@ -73,6 +73,8 @@ void Logger::logMessage( message::Level level,
   }
   else {
     std::cout
+      << "[" << MessageLevelName[ level ] << "]"
+      << "[" << fileName  << ":" << line << "]:"    
       << message
       << std::endl;
   }
@@ -85,14 +87,14 @@ void Logger::initialize()
 
   message::Level level = defaultLevel;
   char* enval = getenv(env_name);
-  char* enval_no_timestamp = getenv(env_name_no_timestamp);
-  bool log_with_timestamp = true;
+  char* enval_log_timestamp = getenv(env_name_log_timestamp);
+  bool log_with_timestamp = false;
 
-  if ( enval != NULL || enval_no_timestamp != NULL ) {
+  if ( enval != NULL || enval_log_timestamp != NULL ) {
 
-    if (enval_no_timestamp != NULL) {
-      enval = enval_no_timestamp;
-      log_with_timestamp = false;
+    if (enval_log_timestamp != NULL) {
+      enval = enval_log_timestamp;
+      log_with_timestamp = true;
     }
 
     bool level_found = false;

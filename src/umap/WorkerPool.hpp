@@ -77,7 +77,7 @@ namespace Umap {
 
       void start_thread_pool() {
 
-        UMAP_LOG(Info, m_pool_name << " of " << m_num_threads << " threads on queue " << m_wq->get_queue_id() );
+        UMAP_LOG(Debug, m_pool_name << " of " << m_num_threads << " threads on queue " << m_wq->get_queue_id() );
 
         for ( uint64_t i = 0; i < m_num_threads; ++i) {
           pthread_t t;
