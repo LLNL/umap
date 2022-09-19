@@ -71,9 +71,11 @@ main(int argc, char **argv)
   std::cout << umap_pagesize << " bytes x " <<  num_pages << " pages = " << umap_region_length << " bytes\n";
 
 int num_passed = 0;
-#pragma omp parallel reduction(num_passed:+)
+int num_threads = 0;
+#pragma omp parallel reduction(+:num_passed, num_threads)
   {
     int tid = omp_get_thread_num();
+    num_threads ++;
     std::stringstream ss;
     ss << filename_prefix << "_t" << tid;
     std::string str = ss.str();
@@ -101,7 +103,7 @@ int num_passed = 0;
       std::cerr << "Thread "<< tid << "Failed to flush cache to " << filename << std::endl;
       exit(1);
     }
-    std::cout << "umap_flush done\n";
+    std::cout << "Thread "<< tid << " umap_flush done\n";
 
     /* Read in the datastore files to validate */
     std::cout << "Thread "<< tid << " open "<< filename <<" separately to read content.\n";
@@ -142,6 +144,8 @@ int num_passed = 0;
 
   if(num_passed==num_threads){
     std::cout << "Pass \n";
+  }else{
+    std::cout << num_passed << " / " << num_threads << "\n";
   }
   return 0;
 }
