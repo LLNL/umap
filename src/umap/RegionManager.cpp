@@ -119,7 +119,7 @@ RegionManager::adaptRegion( char* addr, uint64_t region_page_size )
   auto it = m_active_regions.find(addr);
 
   if (it == m_active_regions.end())
-    UMAP_ERROR("umap fault monitor not found for: " << (void*)addr);
+    UMAP_ERROR("umap region not found for: " << (void*)addr);
 
   m_buffer->evict_region(it->second);
   
@@ -129,13 +129,8 @@ RegionManager::adaptRegion( char* addr, uint64_t region_page_size )
   if( region_page_size>max_page_size ){
     UMAP_ERROR("region_page_size " << region_page_size << " cannot be larger than 8 x umap_page_size = " << m_umap_page_size);
   }
-  if( get_max_pages_in_buffer() % (region_page_size/m_umap_page_size) > 0 ){
-    UMAP_ERROR("max_pages_in_buffer " << get_max_pages_in_buffer() << " cannot hold region_page_ratio" << (region_page_size/m_umap_page_size));
-  }
-
-  uint64_t max_buf_size = m_umap_page_size*get_max_pages_in_buffer();
-  if( region_page_size >= max_buf_size ){
-    UMAP_ERROR("region_page_size " << region_page_size << " should be smaller than buffer size = " << max_buf_size );
+  if( (get_max_pages_in_buffer() / (region_page_size/m_umap_page_size)) < 64 ){
+    UMAP_ERROR("max_pages_in_buffer (" << get_max_pages_in_buffer() << ") should be large enough to hold at least 64 region_page " << (region_page_size));
   }
 
   it->second->set_page_size(region_page_size);

@@ -47,7 +47,7 @@ namespace Umap {
       inline char*    end( void )      { return start() + size();           }
       inline uint64_t count( void )    { return m_present_pages.size();      }
       inline uint64_t page_size( void ){ return m_region_psize; }
-      void set_page_size( uint64_t p ){ m_region_psize = p; }
+      void set_page_size( uint64_t p ) { m_region_psize = p; }
 
       inline void insert_page_descriptor(PageDescriptor* pd) {
         pthread_mutex_lock(&m_mutex);

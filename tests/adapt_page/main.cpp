@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: LGPL-2.1-only
 //////////////////////////////////////////////////////////////////////////////
 
-
 #include <fstream>
 #include <iostream>
 #include <fcntl.h>
@@ -84,9 +83,10 @@ void validate_file( const char* filename , size_t bytes ){
   size_t array_length = bytes/sizeof(double);
 
   for(size_t i=0; i < array_length; i++) {
-    if( a[i] != i * 1.0) {
+    if( a[i] != i * 8.0 ){
       printf("\t a[%d] = %f \n", i, a[i]); 
-    } 
+      break;
+    }
   }
 
   free(arr_in);
@@ -95,8 +95,8 @@ void validate_file( const char* filename , size_t bytes ){
 
 int main(int argc, char **argv)
 {
-  printf("%s file_name num_bytes [region_pagesize] \n", argv[0]);
-  if( argc != 3 && argc != 4 ) return 0;
+  printf("%s file_name num_bytes region_pagesize_initial region_pagesize_new \n", argv[0]);
+  if( argc != 5 ) return 0;
   const char* filename_prefix = argv[1];
   uint64_t umap_region_length = atoll(argv[2]);
   uint64_t umap_pagesize = umapcfg_get_umap_page_size();
@@ -112,11 +112,7 @@ int main(int argc, char **argv)
   std::cout << "open_prealloc_file "<< filename << " of " << umap_region_length << " bytes\n";
 
   void* base_addr;
-  if( argc > 3){
-    base_addr = umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0, atoi(argv[3]));
-  }else{
-    base_addr = umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0);
-  }
+  base_addr = umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd, 0, atoi(argv[3]));
   if ( base_addr == UMAP_FAILED ) {
     int eno = errno;
     std::cerr << " Failed to umap " << filename << ": " << strerror(eno) << std::endl;
@@ -149,12 +145,32 @@ int main(int argc, char **argv)
   }
   printf("Validation is done\n");
 
+  /* Adapt a region's page size */
+  t0 =  microsecond();
+  umap_adapt_pagesize(base_addr, atoi(argv[4]));
+  t1 =  microsecond();
+  printf("Adapt_page in %.1f microseconds\n", (t1-t0));
+
+  t0 =  microsecond();
+  #pragma omp parallel
+  {
+    if(omp_get_thread_num()==0)
+      std::cout << omp_get_num_threads() << " OMP threads \n";
+
+    #pragma omp for
+    for (size_t i = 0; i<array_length; i++){
+      a[i] = i * 8.0;
+    }
+  }
+  t1 =  microsecond();
+  printf("Update the newly adapted region is done in %.1f microseconds\n", (t1-t0));
+
   if (uunmap(base_addr, umap_region_length) < 0) {
     int eno = errno;
     std::cerr << "Failed to uumap " << filename << ": " << strerror(eno) << std::endl;
     exit(1);
   }
-  std::cout << "Calling uunmap is done. \n";
+  std::cout << "Uunmap is done. \n";
 
   close(fd);
   std::cout << "file closed "<< filename << "\n";
@@ -162,6 +178,7 @@ int main(int argc, char **argv)
 
   validate_file( filename, umap_region_length );
   std::cout << "validate_file finished \n";
+  std::cout << "Pass\n";
 
   return 0;
 }
