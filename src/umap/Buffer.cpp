@@ -171,9 +171,9 @@ void Buffer::evict_region(RegionDescriptor* rd)
   }//critical, avoid race condition of equeue workitems for evictors
 
   lock();
-  std::unordered_map<char*, PageDescriptor*> present_pages = rd->get_present_pages();
-  uint64_t pages_per_region_page = (rd->page_size() / m_psize);
 
+  // for normal pages
+  uint64_t pages_per_region_page = (rd->page_size() / m_psize);
   for(std::deque<PageDescriptor*>::iterator it = m_busy_pages.begin(); it != m_busy_pages.end(); ) {
     PageDescriptor* pd = *it;
     if (rd->find(pd->page) != nullptr ) {
@@ -186,6 +186,16 @@ void Buffer::evict_region(RegionDescriptor* rd)
     } else {
         ++it;
     }
+  }
+
+  // for pinned pages
+   std::unordered_map<char*, PageDescriptor*> present_pages = rd->get_present_pages(); 
+  for(auto it : present_pages ) {
+    PageDescriptor* pd = it.second;
+    if(pd->state == PageDescriptor::State::PRESENT){
+      pd->set_state_leaving();
+      m_rm.get_evict_manager()->schedule_eviction(pd);
+    }    
   }
     
   unlock();
@@ -212,7 +222,7 @@ void *FetchFunc(void *arg)
   uint64_t psize = params->psize;
   RegionDescriptor* rd = params->rd;
   Uffd* m_uffd = params->m_uffd;
-  char* region_st = rd->start();
+  char*    region_st = rd->start();
   uint64_t offset_st = params->offset_st;
   uint64_t offset_end= params->offset_end;
 
@@ -221,11 +231,16 @@ void *FetchFunc(void *arg)
     UMAP_ERROR("Failed to allocate copyin_buf");
   
   for(uint64_t offset = offset_st; offset < offset_end; offset+=psize){
+    char* paddr = region_st + offset;
+    PageDescriptor* pd = rd->find(paddr);
+    if( pd!=nullptr && pd->state == PageDescriptor::State::FILLING ){
+      if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
+        UMAP_ERROR("failed to read_from_store at offset="<<offset);
     
-    if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
-      UMAP_ERROR("failed to read_from_store at offset="<<offset);
-  
-    m_uffd->copy_in_page(copyin_buf, region_st + offset , psize );
+      m_uffd->copy_in_page(copyin_buf, region_st + offset , psize );
+      pd->data_present = true;
+      pd->set_state_present();
+    }
   }
 
   free(copyin_buf);
@@ -240,8 +255,18 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
   if ( rd == nullptr )
     UMAP_ERROR("the prefetched region is not found");
 
-  /* cap the prefetched region */
+  /* align to the region local */
   char* pend = paddr + size;  
+  uint64_t rd_page_size = rd->page_size();
+  uint64_t rd_start = (uint64_t) rd->start();
+  uint64_t addr = (uint64_t) paddr;
+  addr  = addr - (addr - rd_start) % rd_page_size;
+  paddr = (char*) addr;
+  addr = (uint64_t) pend;
+  addr = addr - (addr - rd_start) % rd_page_size;
+  pend = (char*) addr;
+
+  /* cap the prefetched region */  
   if( pend > rd->end() ){
     pend = (char*) rd->end();
     UMAP_LOG(Info, "the prefetched region is larger than the region (end at "<<pend<<")");
@@ -297,25 +322,42 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
     }
   }
 
+    
 
   /* get page aligned offset */
   Uffd* m_uffd = m_rm.get_uffd_h();
-  size_t num_pages = (offset_end - offset_st)/m_psize;
+  size_t num_pages = (offset_end - offset_st)/rd_page_size;
   size_t num_fetch_threads = (num_pages>1024) ?8 : 1;
-  size_t stride = num_pages/num_fetch_threads*m_psize;
+  size_t stride = num_pages/num_fetch_threads*rd_page_size;
 
   pthread_t fetchThreads[num_fetch_threads];
   FetchFuncParams params[num_fetch_threads];
   for(int i=0; i<num_fetch_threads; i++){
-    params[i].psize = m_psize;
+    params[i].psize = rd_page_size;
     params[i].rd = rd;
     params[i].m_uffd = m_uffd;
-    params[i].offset_st = offset_st + stride*i;
+    params[i].offset_st  = offset_st + stride*i;
     params[i].offset_end = params[i].offset_st + stride;
     if(i==(num_fetch_threads-1))
       params[i].offset_end = offset_end;
     UMAP_LOG(Info, "FetchThread "<<i<<" ["<<params[i].offset_st<<" , "<<params[i].offset_end<<"]");
-      
+
+    for(uint64_t offset = params[i].offset_st; offset < params[i].offset_end; offset+=rd_page_size){
+      char* paddr = rd->start() + offset;
+      PageDescriptor* pd = rd->find(paddr);
+      if( pd==nullptr ){
+        pd = m_free_pages.back();
+        m_free_pages.pop_back();
+        m_free_page_size -= rd_page_size / m_psize;
+        pd->page = paddr;
+        pd->region = rd;
+        pd->set_state_filling();
+        pd->dirty = true;
+        pd->data_present = false;
+        rd->insert_page_descriptor(pd);
+      }
+    }
+
     int ret = pthread_create(&fetchThreads[i], NULL, FetchFunc, &params[i]);
     if (ret) {
       UMAP_ERROR("Failed to launch fetchthread "<<i );

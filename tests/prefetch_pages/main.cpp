@@ -65,8 +65,9 @@ double microsecond()
   return ( (double) tp.tv_sec * 1.e6 + (double) tp.tv_usec );
 }
 
-void validate_file( const char* filename , size_t bytes ){
+int validate_file( const char* filename , size_t bytes ){
 
+  int res = 0;
   std::cout << "Open "<< filename <<" separately to read content.\n";
   ifstream rf(filename, ios::in | ios::binary);
   if(!rf) {
@@ -85,11 +86,13 @@ void validate_file( const char* filename , size_t bytes ){
   for(size_t i=0; i < array_length; i++) {
     if( a[i] != i * 3.0 ){
       printf("\t a[%d] = %f \n", i, a[i]); 
+      res = 1;
       break;
     }
   }
 
   free(arr_in);
+  return res;
 }
 
 
@@ -167,13 +170,16 @@ int main(int argc, char **argv)
   }
 
   /* Call prefetch  */
-  umap_prefetch_item page_array[num_prefetched_pages];
   char* ptr = (char*) base_addr;
+  // Option 1
+  umap_prefetch_item page_array[num_prefetched_pages];
   for(int i = 0; i<num_prefetched_pages; i++){
     page_array[i].page_base_addr = ptr;
     ptr += umap_pagesize;
   }
   umap_prefetch( num_prefetched_pages, page_array );
+  // Option 2
+  //umap_fetch_and_pin( ptr, num_prefetched_pages * umap_pagesize  );  
   std::cout << "Prefetch is done. \n";
 
 
@@ -200,9 +206,9 @@ int main(int argc, char **argv)
   std::cout << "file closed "<< filename << "\n";
 
 
-  validate_file( filename, umap_region_length );
+  int res = validate_file( filename, umap_region_length );
   std::cout << "validate_file finished \n";
-  std::cout << "Pass\n";
+  if(res==0) std::cout << "Pass\n";
 
   return 0;
 }
