@@ -157,16 +157,11 @@ RegionManager::fetch_and_pin( char* paddr, uint64_t size )
 void
 RegionManager::prefetch(int npages, umap_prefetch_item* page_array)
 {
-  UMAP_ERROR("TO DO");
-  /*for (int i{0}; i < npages; ++i)
-  {
-    //m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
 
-    char* addr = (char*)(page_array[i].page_base_addr);
-    auto rd = containing_region(addr);
-    if ( rd != nullptr )
-      m_buffer->process_page_event(rd, addr, false, rd);
-  }*/
+  for (int i = 0; i < npages; ++i)
+  {
+    m_uffd->process_page(false, (char*)(page_array[i].page_base_addr));
+  }
 }
 
 RegionManager::RegionManager()

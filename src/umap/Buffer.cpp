@@ -342,7 +342,11 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
       bool iswrite = iswrites[p];
       PageDescriptor* pd = rd->find(paddr);
 
-      //if ( pd != nullptr ) UMAP_LOG(Info, "paddr " <<(void*)paddr << " iswrite=" << iswrite << pd);
+      /*if( pd != nullptr ) {
+        UMAP_LOG(Info, "paddr " <<(void*)paddr << " iswrite=" << iswrite << pd);
+      } else {
+        UMAP_LOG(Info, "paddr " <<(void*)paddr << " iswrite=" << iswrite);
+      } */
       //
       // Most likely case
       //

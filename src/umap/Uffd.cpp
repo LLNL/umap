@@ -157,14 +157,22 @@ Uffd::uffd_handler( void )
   UMAP_LOG(Debug, "Good bye");
 }
 
-/*void
-Uffd::process_page( bool iswrite, char* addr )
+void
+Uffd::process_page( bool iswrite, char* paddr )
 {
-  auto rd = m_rm.containing_region(addr);
+  auto rd = m_rm.containing_region(paddr);
 
-  if ( rd != nullptr )
-    m_buffer->process_page_event(addr, iswrite, rd);
-}*/
+  if ( rd != nullptr ){
+
+    uint64_t page_size = rd->page_size();
+    uint64_t rd_start = (uint64_t) rd->start();
+    uint64_t addr = (uint64_t) paddr;
+    addr = addr - (addr - rd_start) % page_size;
+    char* addrs[1]    = {(char*)addr};
+    bool  iswrites[1] = {iswrite};
+    m_buffer->process_page_events(rd, addrs, iswrites, 1);
+  }
+}
 
 void
 Uffd::ThreadEntry()
