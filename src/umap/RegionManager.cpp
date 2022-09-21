@@ -219,6 +219,11 @@ RegionManager::RegionManager()
   else
     m_monitor_freq = 0;
 
+  if ( (read_env_var("UMAP_MONITOR_ADAPT", &env_value)) != nullptr )
+    m_monitor_adapt = env_value;
+  else
+    m_monitor_adapt = 0;
+
   max_page_size = m_umap_page_size * 8;
 
   m_buffer = new Buffer(*this);
@@ -245,7 +250,7 @@ RegionManager::~RegionManager()
 uint64_t
 RegionManager::get_max_pages_in_memory( void )
 {
-  static uint64_t total_mem_kb = 0;
+  uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
   const uint64_t percent = 90;  // 90% of available memory (with 5GB excluded for others)
 
@@ -254,7 +259,7 @@ RegionManager::get_max_pages_in_memory( void )
     std::string token;
     std::ifstream file("/proc/meminfo");
     while (file >> token) {
-      if (token == "MemFree:") {
+      if (token == "MemAvailable:") {
         unsigned long mem;
         if (file >> mem) {
           total_mem_kb = mem;

@@ -65,6 +65,7 @@ class RegionManager {
     long     get_system_page_size( void ) { return m_system_page_size; }
     uint64_t get_max_pages_in_buffer( void ) { return m_max_pages_in_buffer; }
     int      get_monitor_freq( void ) { return m_monitor_freq; }
+    int      get_monitor_adapt( void ) { return m_monitor_adapt; }
     uint64_t get_umap_page_size( void ) { return m_umap_page_size; }
     uint64_t get_num_fillers( void ) { return m_num_fillers; }
     uint64_t get_num_evictors( void ) { return m_num_evictors; }
@@ -80,11 +81,13 @@ class RegionManager {
     RegionDescriptor* containing_region( char* vaddr );
     uint64_t get_num_active_regions( void ) { return (uint64_t)m_active_regions.size(); }
     uint64_t get_max_page_size( void ) { return max_page_size; }
+    uint64_t        get_max_pages_in_memory( void );
 
   private:
     Version  m_version;
     uint64_t m_max_pages_in_buffer;
     int      m_monitor_freq;
+    int      m_monitor_adapt;
     long     m_umap_page_size;
     long     max_page_size;
     uint64_t m_system_page_size;
@@ -107,7 +110,6 @@ class RegionManager {
     ~RegionManager( void );
 
     uint64_t* read_env_var( const char* env, uint64_t* val);
-    uint64_t        get_max_pages_in_memory( void );
     void set_max_fault_events( uint64_t max_events );
     void set_max_pages_in_buffer( uint64_t max_pages );
     void set_umap_page_size( uint64_t page_size );

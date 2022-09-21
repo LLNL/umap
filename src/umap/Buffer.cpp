@@ -54,7 +54,7 @@ void Buffer::mark_page_as_free( PageDescriptor* pd )
     UMAP_ERROR("pthread_mutex_lock m_free_pages_secondary failed: " << strerror(err));
 
   m_free_pages_secondary.push_back(pd);
-  m_free_page_secondary_size.store(m_free_page_secondary_size.load() + page_ratio);
+  m_free_page_secondary_size.fetch_add(page_ratio);
 
   //if ( m_waits_for_free_state_change )
     //pthread_cond_broadcast( &m_free_state_change_cond );
@@ -557,20 +557,86 @@ void Buffer::wait_for_page_present_state( PageDescriptor* pd)
 void Buffer::monitor(void)
 {
   const int monitor_interval = m_rm.get_monitor_freq();
+  const int m_monitor_adapt  = m_rm.get_monitor_adapt();
   UMAP_LOG(Info, "every " << monitor_interval << " seconds");
 
   /* start the monitoring loop */
   while( is_monitor_on ){
+    uint64_t max_pages_in_memory = m_rm.get_max_pages_in_memory();
 
-    UMAP_LOG(Info, "Maximum pages in buffer = " << (m_free_page_size+m_free_page_secondary_size+m_busy_page_size)
-	     << ", num_busy_pages = " << m_busy_pages.size()
-	     << ", num_free_pages = " << m_free_pages.size()
+    UMAP_LOG(Debug, "Maximum "<< max_pages_in_memory <<" pages (" << m_psize << ") in memory "
+	     << ", num_busy_pages = " << m_busy_page_size
 	     << ", m_free_page_size = " << m_free_page_size 
        << ", m_free_page_secondary_size = " << m_free_page_secondary_size );
 
-    sleep(monitor_interval);
+    if( m_monitor_adapt==1 ){
+      /* reduce free pages if the buffer is nearly exhausted 
+         and free memory is reduced. 
+      */
+     if( (max_pages_in_memory+8192)<(m_free_page_size+m_free_page_secondary_size) ){
+    UMAP_LOG(Info, "Maximum "<< max_pages_in_memory <<" pages (" << m_psize << ") in memory "
+	     << ", num_busy_pages = " << m_busy_page_size
+	     << ", m_free_page_size = " << m_free_page_size 
+       << ", m_free_page_secondary_size = " << m_free_page_secondary_size );      
+        lock();
+        pthread_mutex_lock(&m_free_pages_secondary_mutex);
+        uint64_t diff = (m_free_page_size+m_free_page_secondary_size) - max_pages_in_memory;
+        if(m_free_page_secondary_size>diff){
+          m_free_page_secondary_size.fetch_sub(diff);
+        }else{
+          diff -= m_free_page_secondary_size;
+          m_free_page_secondary_size = 0;
+          m_free_page_size -= diff;
+        }
+        adjust_hi_lo_watermark();
+        pthread_mutex_unlock(&m_free_pages_secondary_mutex);
 
-    if(adapt_evictors){
+        // Kick the eviction daemon if the high water mark has been reached
+        // Need to kick this before releasing the lock
+        if ( m_busy_page_size >= m_evict_high_water) {
+          WorkItem w;
+          w.type = Umap::WorkItem::WorkType::THRESHOLD;
+          w.page_desc = nullptr;
+          m_rm.get_evict_manager()->send_work(w);
+        }
+
+        UMAP_LOG(Info, "Reduce to num_busy_pages = " << m_busy_page_size
+          << ", num_free_pages = " << m_free_page_size
+          << ", num_free_pages_secondary = " << m_free_page_secondary_size
+          << ", low_watermark = " << m_evict_low_water
+          << ", high_watermark = " << m_evict_high_water);
+
+        unlock();
+     }else if( max_pages_in_memory>(m_free_page_size+m_free_page_secondary_size+8192)*110/100 ){
+        UMAP_LOG(Info, "Maximum "<< max_pages_in_memory <<" pages (" << m_psize << ") in memory "
+          << ", num_busy_pages = " << m_busy_page_size
+          << ", m_free_page_size = " << m_free_page_size 
+          << ", m_free_page_secondary_size = " << m_free_page_secondary_size );
+
+        uint64_t diff = max_pages_in_memory - (m_free_page_size+m_free_page_secondary_size);
+        PageDescriptor *m_array_new = (PageDescriptor *)calloc(diff, sizeof(PageDescriptor));
+        if ( m_array_new == nullptr ){
+          //do nothing 
+          UMAP_LOG(Info, "Failed to allocate additional " << diff << " page descriptors");
+        }else{
+          lock();
+          pthread_mutex_lock(&m_free_pages_secondary_mutex);
+          for ( int i = 0; i < diff; ++i )
+            m_free_pages_secondary.push_back(&m_array_new[i]);
+          m_free_page_secondary_size.fetch_add(diff);
+          adjust_hi_lo_watermark();
+          pthread_mutex_unlock(&m_free_pages_secondary_mutex);
+          UMAP_LOG(Info, "Increase to num_busy_pages = " << m_busy_page_size
+            << ", num_free_pages = " << m_free_page_size
+            << ", num_free_pages_secondary = " << m_free_page_secondary_size
+            << ", low_watermark = " << m_evict_low_water
+            << ", high_watermark = " << m_evict_high_water);
+          unlock();
+        }
+     }
+    }
+
+    if( m_monitor_adapt==2 && adapt_evictors ){
         
       // trick the low water mark to stop eviction manager
       uint64_t m_size = m_free_page_size + m_free_page_secondary_size + m_busy_page_size;
@@ -597,6 +663,7 @@ void Buffer::monitor(void)
       adapt_evictors = false;
     }
 
+    sleep(monitor_interval);
   }//End of loop
 
 }
