@@ -1,11 +1,11 @@
 #ifndef mt_PROFILER_H
 #define mt_PROFILER_H
 
-#include <boost/thread/shared_mutex.hpp>
+//#include <boost/thread/shared_mutex.hpp>
 #include <numa.h>
 #include <atomic>
 #include "mem_struct.hh"
-#include "perf_wrap.hh"
+//#include "perf_wrap.hh"
 
 struct perf_sample
 {

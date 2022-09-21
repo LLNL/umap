@@ -27,9 +27,6 @@ namespace Umap {
     std::size_t max_page_size = (std::size_t) m_rm.get_max_page_size();
     int t_id = t_id_g;
     t_id_g ++;
-#ifdef PROF  
-    UMAP_LOG(Info, "FillWorker "<<t_id<<" started ");
-#endif
 
     if (posix_memalign((void**)&copyin_buf, 4096, max_page_size)) {
       UMAP_ERROR("posix_memalign failed to allocated "
@@ -50,7 +47,7 @@ namespace Umap {
       #ifdef PROF
       auto t0 = std::chrono::steady_clock::now();
       UMAP_LOG(Info, "from send till get_work \t" << (std::chrono::duration_cast<std::chrono::nanoseconds>(t0-w.timing).count()) );
-      UMAP_LOG(Info, "t_id "<<t_id<<" : " << w );
+      UMAP_LOG(Info, "t_id "<<t_id<<" : " << w << " buffer: " << m_buffer);
       #endif
 
       RegionDescriptor *rd = w.page_desc->region;

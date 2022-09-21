@@ -425,9 +425,9 @@ main(int argc, char *argv[])
 
 	}
 
-	uunmap(a,0);
-	uunmap(b,0);
-	uunmap(c,0);
+	//uunmap(a,0);
+	//uunmap(b,0);
+	//uunmap(c,0);
 
     return 0;
 }

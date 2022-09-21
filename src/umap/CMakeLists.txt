@@ -92,9 +92,6 @@ else(USE_ZFP)
 endif(USE_ZFP)
 
 
-if (USE_ZFP)
-endif(USE_ZFP)
-
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 #add_definitions(-DPROF)

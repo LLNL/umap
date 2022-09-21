@@ -31,10 +31,10 @@ void EvictManager::EvictMgr( void ) {
     }
   }
 }
-/*void EvictManager::WaitAll( void )
+void EvictManager::WaitAll( void )
 {
   m_evict_workers->wait_for_idle();
-}*/
+}
   
 void EvictManager::EvictAll( void )
 {
@@ -60,6 +60,15 @@ void EvictManager::schedule_flush(PageDescriptor* pd)
   WorkItem work = { .page_desc = pd, .type = Umap::WorkItem::WorkType::FLUSH };
 
   m_evict_workers->send_work(work);
+}
+
+void EvictManager::adapt_evict_workers(int max_workers)
+{
+  m_evict_workers->wait_for_idle();
+  delete m_evict_workers;
+  m_rm.set_num_evictors(max_workers);
+  m_evict_workers = new EvictWorkers(  m_rm.get_num_evictors()
+                                     , m_buffer, m_rm.get_uffd_h());
 }
 
 EvictManager::EvictManager( RegionManager& rm ) :

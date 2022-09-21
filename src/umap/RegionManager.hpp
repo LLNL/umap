@@ -68,6 +68,7 @@ class RegionManager {
     uint64_t get_umap_page_size( void ) { return m_umap_page_size; }
     uint64_t get_num_fillers( void ) { return m_num_fillers; }
     uint64_t get_num_evictors( void ) { return m_num_evictors; }
+    void     set_num_evictors( uint64_t num_evictors );
     int get_evict_low_water_threshold( void ) { return m_evict_low_water_threshold; }
     int get_evict_high_water_threshold( void ) { return m_evict_high_water_threshold; }
     uint64_t get_max_fault_events( void ) { return m_max_fault_events; }
@@ -111,7 +112,6 @@ class RegionManager {
     void set_max_pages_in_buffer( uint64_t max_pages );
     void set_umap_page_size( uint64_t page_size );
     void set_num_fillers( uint64_t num_fillers );
-    void set_num_evictors( uint64_t num_evictors );
     void set_evict_low_water_threshold( int percent );
     void set_evict_high_water_threshold( int percent );
 };

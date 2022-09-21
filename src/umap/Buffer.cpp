@@ -19,6 +19,7 @@
 namespace Umap {
 
   int WorkerPool::queue_id_g = 0;
+  bool adapt_evictors = false;
   
 //
 // Called after data has been placed into the page
@@ -372,9 +373,11 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
 
 void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswrites, int num_pages)
 {
-  lock();
   uint64_t region_page_size  = rd->page_size();
   int      region_page_ratio = region_page_size/m_psize;
+  //UMAP_LOG(Info, "processing " << num_pages << " events");
+
+  lock();
 
   int remaining_pages = num_pages;
   while( remaining_pages>0 ){
@@ -396,7 +399,7 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
         
         //pd = get_page_descriptor(paddr, rd); // may stall, waiting for free_pages
         {
-          if ( m_free_page_size < region_page_ratio ){
+          if ( m_free_page_size <= region_page_ratio ){
             if( m_rm.get_evict_manager()->wq_is_empty() ){
               WorkItem w;
               w.type = Umap::WorkItem::WorkType::THRESHOLD;
@@ -405,8 +408,7 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
             }
             unlock(); //release control to EvictMgr to modify busy_list
             
-            int t = m_free_page_secondary_size.load();
-            //while( (t+m_free_page_size) < region_page_ratio ){t = m_free_page_secondary_size.load();}
+            uint64_t t = m_free_page_secondary_size.load();
             if( (t+m_free_page_size) >= region_page_ratio ){
               pthread_mutex_lock(&m_free_pages_secondary_mutex);
               lock(); //take control back from EvictMgr to modify free_list
@@ -414,7 +416,7 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
               for(auto it : m_free_pages_secondary)
                 m_free_pages.push_back(it);
               m_free_page_size += m_free_page_secondary_size.load();
-              m_free_pages_secondary.clear();
+              m_free_pages_secondary.resize(0);
               m_free_page_secondary_size.store(0);
 
               pthread_mutex_unlock(&m_free_pages_secondary_mutex);//give control back to EvictWorkers to modify free_secondary_list
@@ -422,6 +424,7 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
               paddrs[pivot] = paddr;
               iswrites[pivot] = iswrite;
               pivot ++;
+              adapt_evictors = true;
               lock();
               continue;
             }
@@ -485,7 +488,6 @@ void Buffer::process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswr
 
   unlock();
 
-  UMAP_LOG(Debug, "finish processing " << num_pages << " events");
 
   // Kick the eviction daemon if the high water mark has been reached
   //
@@ -563,9 +565,37 @@ void Buffer::monitor(void)
     UMAP_LOG(Info, "Maximum pages in buffer = " << (m_free_page_size+m_free_page_secondary_size+m_busy_page_size)
 	     << ", num_busy_pages = " << m_busy_pages.size()
 	     << ", num_free_pages = " << m_free_pages.size()
-	     << ", events_processed = " << m_stats.events_processed );
+	     << ", m_free_page_size = " << m_free_page_size 
+       << ", m_free_page_secondary_size = " << m_free_page_secondary_size );
 
     sleep(monitor_interval);
+
+    if(adapt_evictors){
+        
+      // trick the low water mark to stop eviction manager
+      uint64_t m_size = m_free_page_size + m_free_page_secondary_size + m_busy_page_size;
+      m_evict_low_water  = m_size;
+      m_rm.get_evict_manager()->WaitAll();
+      
+      //printf("m_busy_page_size=%ld m_evict_low_water=%ld\n",m_busy_page_size, m_evict_low_water);
+
+      lock();
+      int num_evictors = m_rm.get_num_evictors();
+      if(num_evictors<=8) num_evictors += 2;
+      else if(num_evictors>16){
+        num_evictors /= 2;
+      }else{
+        num_evictors += 1;
+      }
+      UMAP_LOG(Info, "Adapting num_evictors from "<<m_rm.get_num_evictors()<<" to "<<num_evictors<<" \n");
+      m_rm.get_evict_manager()->adapt_evict_workers(num_evictors);
+
+      //put the water mark back to normal
+      adjust_hi_lo_watermark();
+      unlock();
+      
+      adapt_evictors = false;
+    }
 
   }//End of loop
 

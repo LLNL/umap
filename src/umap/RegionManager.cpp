@@ -89,7 +89,7 @@ RegionManager::removeRegion( char* region )
   if (it == m_active_regions.end())
     UMAP_ERROR("umap fault monitor not found for: " << (void*)region);
 
-  UMAP_LOG(Debug,
+  UMAP_LOG(Info,
       "region: " << (void*)(it->second->start()) << " - " << (void*)(it->second->end())
       << ", region_size: " << it->second->size()
       << ", number of regions: " << m_active_regions.size()
@@ -230,6 +230,12 @@ RegionManager::RegionManager()
 
 RegionManager::~RegionManager()
 {
+  auto it = m_active_regions.begin();
+  while(it != m_active_regions.end() ){
+    UMAP_LOG(Info, "removing region " << it->first);
+    removeRegion((char*)it->first);
+    it = m_active_regions.begin();
+  }
   delete m_fill_workers; m_fill_workers = nullptr;
   delete m_evict_manager; m_evict_manager = nullptr;
   delete m_uffd; m_uffd = nullptr;
@@ -241,7 +247,7 @@ RegionManager::get_max_pages_in_memory( void )
 {
   static uint64_t total_mem_kb = 0;
   const uint64_t oneK = 1024;
-  const uint64_t percent = 90;  // 90% of available memory
+  const uint64_t percent = 90;  // 90% of available memory (with 5GB excluded for others)
 
   // Lazily set total_mem_kb global
   if ( ! total_mem_kb ) {
@@ -260,7 +266,8 @@ RegionManager::get_max_pages_in_memory( void )
       file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
   }
-  return ( ((total_mem_kb / (get_umap_page_size() / oneK)) * percent) / 100 );
+  if( total_mem_kb<5242880UL ) return 0;
+  return ( (((total_mem_kb-5242880UL) / (get_umap_page_size() / oneK)) * percent) / 100 );
 }
 
 void

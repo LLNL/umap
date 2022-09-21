@@ -41,7 +41,7 @@ namespace Umap {
       void mark_page_as_present(PageDescriptor* pd);
       void mark_page_as_free( PageDescriptor* pd );
 
-      inline bool low_threshold_reached( void ) {return (m_busy_page_size <= m_evict_low_water) ;}
+      inline bool low_threshold_reached( void ) {return (m_busy_page_size < m_evict_low_water) ;}
       void process_page_events(RegionDescriptor* rd, char** paddrs, bool *iswrites, int num_pages);
 
 
@@ -66,7 +66,7 @@ namespace Umap {
       std::vector<PageDescriptor*> m_free_pages_secondary; // evictors append to this to avoid lock on the free_list
       std::deque<PageDescriptor*>  m_busy_pages;
       uint64_t m_free_page_size;  // the number of free pages in the unit of umap psize
-      std::atomic<int> m_free_page_secondary_size;
+      std::atomic<uint64_t> m_free_page_secondary_size;
       uint64_t m_busy_page_size;  // the number of busy pages in the unit of umap psize
 
       uint64_t m_evict_low_water;   // % to stop  evicting

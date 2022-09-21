@@ -23,8 +23,9 @@ namespace Umap {
       ~EvictManager( void );
       void schedule_eviction(PageDescriptor* pd);
       void schedule_flush(PageDescriptor* pd);
+      void adapt_evict_workers(int max_workers);
       void EvictAll( void );
-      //void WaitAll( void );
+      void WaitAll( void );
       EvictWorkers* get_fill_workers() {return m_evict_workers;};
 
     private:

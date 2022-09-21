@@ -25,8 +25,10 @@ void EvictWorkers::EvictWorker( void )
 
   while ( 1 ) {
     auto w = get_work(t_id);
-    if ( w.type == Umap::WorkItem::WorkType::EXIT )
+    if ( w.type == Umap::WorkItem::WorkType::EXIT ){
+      if(t_id==0) tid_g=0; //reset thread ids
       break;    // Time to leave
+    }
 
     auto pd = w.page_desc;
     RegionDescriptor *rd = pd->region;

@@ -29,7 +29,7 @@ namespace Umap {
     std::string print_state( void ) const;
 
     inline void set_state_free( void ) {
-      if ( state != LEAVING && state != FREE )
+      if ( state != LEAVING )
         UMAP_ERROR("Invalid state transition from: " << print_state() << " " << this);
       state = FREE;
     }
