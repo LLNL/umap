@@ -271,8 +271,9 @@ RegionManager::get_max_pages_in_memory( void )
       file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
   }
-  if( total_mem_kb<5242880UL ) return 0;
-  return ( (((total_mem_kb-5242880UL) / (get_umap_page_size() / oneK)) * percent) / 100 );
+  const uint64_t mem_margin = 1048576UL;
+  if( total_mem_kb<mem_margin ) return 0;
+  return ( (((total_mem_kb-mem_margin) / (get_umap_page_size() / oneK)) * percent) / 100 );
 }
 
 void

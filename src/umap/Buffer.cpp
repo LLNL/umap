@@ -238,7 +238,7 @@ void *FetchFunc(void *arg)
       if( rd->store()->read_from_store(copyin_buf, psize, offset) == -1)
         UMAP_ERROR("failed to read_from_store at offset="<<offset);
     
-      m_uffd->copy_in_page(copyin_buf, region_st + offset , psize );
+      m_uffd->copy_in_page_and_write_protect(copyin_buf, region_st + offset , psize );
       pd->data_present = true;
       pd->set_state_present();
     }
@@ -275,10 +275,10 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
 
   /* get aligned fetch size */
   uint64_t offset_st = rd->store_offset( paddr );
-  uint64_t offset_end = rd->store_offset( pend );
+  uint64_t offset_end = rd->store_offset( pend - 1 );
   size = pend - paddr;
   
-  /* Check free memory */
+  /* Check available memory
   uint64_t mem_avail_kb = 0;
   unsigned long mem;
   std::string token;
@@ -295,35 +295,34 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
     file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
   }
 
-  const uint64_t mem_margin_kb = 16777216;
+  const uint64_t mem_margin_kb = 5242880UL;
   mem_avail_kb = (mem_avail_kb > mem_margin_kb) ?(mem_avail_kb-mem_margin_kb) : 0;
-
-  size_t  num_free_pages = m_free_page_size + m_free_page_secondary_size;
-  uint64_t free_page_mem = m_psize * num_free_pages;
   uint64_t     mem_avail = (mem_avail_kb*1024/m_psize) * m_psize;
+  UMAP_LOG(Info, " MemAvailable = " << mem/1024/1024
+	   << " Mem Usable = " << mem_avail/1024/1024/1024
+	   << " fetch_and_pin = " << size/1024/1024/1024
+	   << " free_page_mem = " << free_page_mem/1024/1024/1024 << " (" << num_free_pages <<" x " << m_psize <<" )");
+  
+  */
+  
+  size_t  num_free_pages = m_free_page_size;// + m_free_page_secondary_size;
+  uint64_t free_page_mem = m_psize * num_free_pages;
 
-  UMAP_LOG(Info, " MemAvailable = " << mem
-	   << " Mem Usable = " << mem_avail
-	   << " fetch_and_pin = " << size
-	   << " free_page_mem = " << free_page_mem << " (" << num_free_pages <<" x " << m_psize <<" )");
-
-  /* Reduce the number of free pages if avail mem is insufficient */
-  if( ( free_page_mem + size) >= mem_avail ){
-
-    uint64_t reduced_mem = ( free_page_mem + size) - mem_avail;
-    if( reduced_mem < free_page_mem){
-      size_t new_num_free_pages = (free_page_mem - reduced_mem)/m_psize;
-      m_free_pages.resize(new_num_free_pages);
-      
-      adjust_hi_lo_watermark();          
-
-    }else{
-      /* TODO: evict current pages? */
-      UMAP_ERROR("Currently, no support for pinning a region larger than free pages\n");
-    }
+  /* Reduce the number of free pages */
+  if( free_page_mem <= size ){
+    /* TODO: evict current pages? */
+    UMAP_ERROR("Currently, no support for pinning a region larger than free pages\n");
   }
 
-    
+  uint64_t reduced_mem = size; //(free_page_mem + size) - mem_avail;
+  //if( reduced_mem < free_page_mem){
+    size_t new_num_free_pages = (free_page_mem - reduced_mem)/m_psize;
+    m_free_pages.resize(new_num_free_pages);
+    m_free_page_size = new_num_free_pages;
+    UMAP_LOG(Info, "m_evict_low_water = " << m_evict_low_water << " m_evict_high_water = " << m_evict_high_water );
+    adjust_hi_lo_watermark();
+    UMAP_LOG(Info, "m_evict_low_water = " << m_evict_low_water << " m_evict_high_water = " << m_evict_high_water );
+  //}  
 
   /* get page aligned offset */
   Uffd* m_uffd = m_rm.get_uffd_h();
@@ -353,7 +352,7 @@ void Buffer::fetch_and_pin(char* paddr, uint64_t size)
         pd->page = paddr;
         pd->region = rd;
         pd->set_state_filling();
-        pd->dirty = true;
+        pd->dirty = false;
         pd->data_present = false;
         rd->insert_page_descriptor(pd);
       }
