@@ -227,9 +227,17 @@ void *FetchFunc(void *arg)
   uint64_t offset_st = params->offset_st;
   uint64_t offset_end= params->offset_end;
 
-  char* copyin_buf = (char*) malloc(psize);
-  if ( !copyin_buf )
-    UMAP_ERROR("Failed to allocate copyin_buf");
+  // O_DIRECT file requires aligned buffer
+  char* copyin_buf;
+  if (posix_memalign((void**)&copyin_buf, 512, psize)) {
+    UMAP_ERROR("posix_memalign failed to allocate "
+        << psize << " bytes of memory");
+  }
+
+  if (copyin_buf == nullptr) {
+    UMAP_ERROR("posix_memalign failed to allocate "
+        << psize << " bytes of memory");
+  }
   
   for(uint64_t offset = offset_st; offset < offset_end; offset+=psize){
     char* paddr = region_st + offset;
