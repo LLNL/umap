@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <string.h>
+#include <cmath>
 
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
@@ -84,12 +85,12 @@ namespace Umap {
     size_t block_st  = page_id * blocks_per_page;
     size_t block_end = block_st + blocks_per_page;    
 
-    #if ZFP_THREAD_BARRIER
+#if ZFP_THREAD_BARRIER
     std::lock_guard<std::mutex> lk(mutRand); 
-    #else
+#else
     /* open bit stream  */
-    size_t bit_offset = block_st*elements_per_block*rate;
-    assert( bit_offset%8 ==0 );
+    size_t bit_offset = block_st * elements_per_block * rate;
+    assert( bit_offset%8 == 0 );
     bitstream* stream = stream_open(compressed_buffer + bit_offset/8, rate * nb/sizeof(double)/8);
   
     /* allocate meta data for a compressed stream */
@@ -98,7 +99,7 @@ namespace Umap {
     // Fixed-rate
     zfp_stream_set_rate(zfp, rate, zfp_type_double, dim, zfp_true);
     zfp_stream_rewind(zfp);
-    #endif
+#endif
 
     double *ptr = (double*)buf;
     //stream_rseek(stream, offsets[block_st]);
@@ -110,11 +111,11 @@ namespace Umap {
       //printf("%dDblock #%u decoded offsets[%zu] bits=%4u\n",dim, i, i*elements_per_block*rate, bits);
     }
 
-    #ifndef ZFP_THREAD_BARRIER
+#ifndef ZFP_THREAD_BARRIER
     /* clean up */
     zfp_stream_close(zfp);
     stream_close(stream);
-    #endif
+#endif
 
     return 0;
   }
@@ -126,9 +127,9 @@ namespace Umap {
     size_t block_st  = page_id * blocks_per_page;
     size_t block_end = block_st + blocks_per_page;    
 
-    #if ZFP_THREAD_BARRIER
+#if ZFP_THREAD_BARRIER
     std::lock_guard<std::mutex> lk(mutRand);
-    #else
+#else
     /* open bit stream  */
     size_t bit_offset = block_st*elements_per_block*rate;
     assert( bit_offset%8 ==0 );
@@ -140,7 +141,7 @@ namespace Umap {
     // Fixed-rate
     zfp_stream_set_rate(zfp, rate, zfp_type_double, dim, zfp_true);
     zfp_stream_rewind(zfp);
-    #endif
+#endif
 
     double *ptr = (double*)buf;
     //stream_rseek(stream, offsets[block_st]);
@@ -152,11 +153,11 @@ namespace Umap {
     }
     stream_flush(stream);
 
-    #ifndef ZFP_THREAD_BARRIER
+#ifndef ZFP_THREAD_BARRIER
     /* clean up */
     zfp_stream_close(zfp);
     stream_close(stream);
-    #endif
+#endif
 
     return 0;
   }

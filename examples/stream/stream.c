@@ -223,7 +223,7 @@ main(int argc, char *argv[])
 	array_size = (size_t) STREAM_ARRAY_SIZE;
 	if(argc>1) array_size = atol(argv[1]);
 	if(argc>2) is_init = atoi(argv[2]);
-	printf("array_length = %ld is_init=%ld\n", array_size, is_init);
+	printf("array_length = %ld is_init=%d\n", array_size, is_init);
 
 	size_t umap_region_length = sizeof(STREAM_TYPE) * array_size;
 	size_t umap_psize = umapcfg_get_umap_page_size();
@@ -234,18 +234,18 @@ main(int argc, char *argv[])
 	int fd2 = open_prealloc_file( "stream_c", umap_region_length);
 
 	if( fd0>0 && fd1>0 && fd2>0 ){
-		//a = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
-		a = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0, 4096);
+		a = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
+		//a = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0, 4096);
 		if ( a == UMAP_FAILED ) {
 			printf("failed to umap a %s \n", strerror(errno));
 		}
-		//b = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0);
-		b = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0, 8192);
+		b = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0);
+		//b = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0, 8192);
 		if ( b == UMAP_FAILED ) {
 			printf("failed to umap b %s \n", strerror(errno));
 		}
-		//c = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0);
-		c = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0, 16384);
+		c = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0);
+		//c = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0, 16384);
 		if ( c == UMAP_FAILED ) {
 			printf("failed to umap c %s \n", strerror(errno));
 		}
@@ -339,9 +339,9 @@ main(int argc, char *argv[])
 
 		#pragma omp parallel for
 		for (j = 0; j < array_size; j++){
-			if( a[j] != 1.0 ) {printf("\t a[%d] = %f \n", j, a[j]); exit(13);}
-			if( b[j] != 2.0 ) {printf("\t b[%d] = %f \n", j, b[j]); exit(13);}
-			if( c[j] != 0.0 ) {printf("\t c[%d] = %f \n", j, c[j]); exit(13);}	
+			if( a[j] != 1.0 ) {printf("\t a[%ld] = %f \n", j, a[j]); exit(13);}
+			if( b[j] != 2.0 ) {printf("\t b[%ld] = %f \n", j, b[j]); exit(13);}
+			if( c[j] != 0.0 ) {printf("\t c[%ld] = %f \n", j, c[j]); exit(13);}	
 		}
 		printf("Init is done\n");
 
@@ -425,9 +425,9 @@ main(int argc, char *argv[])
 
 	}
 
-	//uunmap(a,0);
-	//uunmap(b,0);
-	//uunmap(c,0);
+	munmap(a,0);
+	munmap(b,0);
+	munmap(c,0);
 
     return 0;
 }
@@ -493,7 +493,7 @@ int open_prealloc_file( const char* fname, size_t totalbytes)
 		int eno = errno;
 		if ( status!=0 && eno != ENOENT ) {
 			strerror(eno);
-			printf("Failed to unlink %s: %s Errno=%d\n", fname, eno);
+			printf("Failed to unlink %s: Errno=%d\n", fname, eno);
 			return -1;
 		}
 	}

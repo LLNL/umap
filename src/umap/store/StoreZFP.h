@@ -10,11 +10,7 @@
 #include "umap/store/Store.hpp"
 #include "umap/umap.h"
 
-#include "zfparray.h"
-#include "zfpcodec.h"
-#include "zfp/store2.h"
-#include "zfp/store3.h"
-#include "zfpindex.h"
+#include "zfp.h"
 
 namespace Umap {
 

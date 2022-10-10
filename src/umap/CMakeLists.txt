@@ -51,13 +51,14 @@ if (USE_ZFP)
    # build ZFP from the official github
 
    ExternalProject_Add(ZFP
-	PREFIX ${CMAKE_BINARY_DIR}/zfp
-      	GIT_REPOSITORY https://github.com/LLNL/ZFP.git
-	GIT_TAG e1ac5e4ee9a42d676746db916603ccf2b956d1be
-	DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp/src
-      	BUILD_COMMAND make -j
-	BUILD_ALWAYS 1
-      	INSTALL_COMMAND make DESTDIR=${CMAKE_BINARY_DIR}/zfp install
+	   PREFIX ${CMAKE_BINARY_DIR}/zfp
+      GIT_REPOSITORY https://github.com/LLNL/ZFP.git
+   	GIT_TAG 1.0.0
+      #DOWNLOAD_COMMAND      ""
+   	DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp
+      BUILD_COMMAND cp ${CMAKE_SOURCE_DIR}/examples/zfp/array3umap.hpp ${CMAKE_BINARY_DIR}/zfp/src/ZFP/include/zfp && make -j
+   	BUILD_ALWAYS 1
+      INSTALL_COMMAND ""
    )
 
    set(zfpheaders
@@ -74,14 +75,11 @@ if (USE_ZFP)
    add_dependencies( umap ZFP )
    add_dependencies( umap-static ZFP )
    
-   ExternalProject_Get_Property(ZFP install_dir)
-   message(${install_dir})
-   include_directories(${install_dir}/usr/local/include)
-   include_directories(${install_dir}/usr/local/array)
+   include_directories("${CMAKE_BINARY_DIR}/zfp/src/ZFP/include")
 
    set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
-   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${install_dir}/usr/local/lib64/libzfp.so)
-
+   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_BINARY_DIR}/zfp/src/ZFP-build/lib/libzfp.so)
+   
 else(USE_ZFP)
 
    add_library(umap SHARED ${umapsrc} )
