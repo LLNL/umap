@@ -229,25 +229,36 @@ main(int argc, char *argv[])
 	size_t umap_psize = umapcfg_get_umap_page_size();
 	umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
 
-	int fd0 = open_prealloc_file( "stream_a", umap_region_length);
-	int fd1 = open_prealloc_file( "stream_b", umap_region_length);
-	int fd2 = open_prealloc_file( "stream_c", umap_region_length);
+	int fd0 = open_prealloc_file( "/mnt/ssd/ip/stream_a", umap_region_length);
+	int fd1 = open_prealloc_file( "/mnt/ssd/ip/stream_b", umap_region_length);
+	int fd2 = open_prealloc_file( "/mnt/ssd/ip/stream_c", umap_region_length);
 
 	if( fd0>0 && fd1>0 && fd2>0 ){
-		a = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
-		//a = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0, 4096);
+		#ifdef USE_UMAP
+		a = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd0, 0);
+		#else
+		a = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, MAP_SHARED, fd0, 0);
+		#endif
 		if ( a == UMAP_FAILED ) {
-			printf("failed to umap a %s \n", strerror(errno));
+			printf("failed to map a %s \n", strerror(errno));
 		}
-		b = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0);
-		//b = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0, 8192);
+
+		#ifdef USE_UMAP
+		b = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd1, 0);
+		#else
+		b = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, MAP_SHARED, fd1, 0);
+		#endif
 		if ( b == UMAP_FAILED ) {
-			printf("failed to umap b %s \n", strerror(errno));
+			printf("failed to map b %s \n", strerror(errno));
 		}
-		c = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0);
-		//c = (STREAM_TYPE*) umap_variable(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0, 16384);
+
+		#ifdef USE_UMAP
+		c = (STREAM_TYPE*) umap(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, fd2, 0);
+		#else
+		c = (STREAM_TYPE*) mmap(NULL, umap_region_length, PROT_READ|PROT_WRITE, MAP_SHARED, fd2, 0);
+		#endif
 		if ( c == UMAP_FAILED ) {
-			printf("failed to umap c %s \n", strerror(errno));
+			printf("failed to map c %s \n", strerror(errno));
 		}
 	}
 	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
@@ -425,9 +436,15 @@ main(int argc, char *argv[])
 
 	}
 
+#ifdef USE_UMAP
+	uunmap(a,0);
+	uunmap(b,0);
+	uunmap(c,0);
+#else
 	munmap(a,0);
 	munmap(b,0);
 	munmap(c,0);
+#endif
 
     return 0;
 }
@@ -498,7 +515,7 @@ int open_prealloc_file( const char* fname, size_t totalbytes)
 		}
 	}
 
-	int fd = open(fname, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	int fd = open(fname, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
 	if ( fd == -1 ) {
 		int eno = errno;
 		printf("Failed to create %s: %s Errno=%d\n", fname, strerror(eno), eno);

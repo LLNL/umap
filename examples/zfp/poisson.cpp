@@ -6,8 +6,8 @@
 #include <chrono>
 
 #include "zfp.h"
-#include "zfp/array3.hpp"
-#include "zfp/array3umap.hpp"
+#include "array3.hpp"
+#include "array3umap.hpp"
 #include <sstream>
 #include <iostream>
 
@@ -43,9 +43,9 @@
     #error "unsupported POSIT_PREC"
   #endif
 #elif defined(ZFP_RATE) // zfp rate in bits/value when defined
-  #include "zfp/array3.hpp"
+  #include "array3.hpp"
 #elif defined(ZFP_TOLERANCE) // zfp absolute error tolerance when defined
-  #include "varray3.h"
+  #include "zfpvarray3.h"
 #else
   #error "no number representation specified"
 #endif
@@ -402,8 +402,8 @@ iterate(array& u, size_t iterations, const char* path = 0)
 
 int main(int argc, char* argv[])
 {
-  size_t n = 128; // number of grid cells per dimension
-  size_t iterations = 10000; // number of iterations
+  size_t n = 512; // number of grid cells per dimension
+  size_t iterations = 3; //10000; // number of iterations
   char* path = 0;
 
   // Usage: poisson [iterations [grid-size [output-file]]]

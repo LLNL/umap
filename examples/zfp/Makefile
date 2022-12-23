@@ -26,31 +26,28 @@ REP = -DIEEE_PREC=64
 #REP = -DZFP_TOLERANCE=1e-10
 
 # --- Paths
-ifndef ZFP_INC
-$(error ZFP_INC is not set)
-endif
-ifndef ZFP_LIB
-$(error ZFP_LIB is not set)
-endif
 
-ifndef UMAP_ROOT
-$(error UMAP_ROOT is not set)
-endif
+ZFP_INC_DIR=/home/peng8/umap_multitier/umap_new/build_zfp/zfp/src/ZFP/include
+ZFP_LIB_DIR=/home/peng8/umap_multitier/umap_new/build_zfp/zfp/src/ZFP-build
+UMAP_DIR= /home/peng8/umap_multitier/umap_new/build_zfp
 
 # --- Compiler and options
+#ZFP_INC=-I${ZFP_DIR}/zfp/include -I${ZFP_DIR}/zfp/include/zfp -I${ZFP_DIR}/zfp/include/zfp/internal/array -I${ZFP_DIR}/zfp/include/zfp/codec
+ZFP_INC=-I$(ZFP_INC_DIR) -I$(ZFP_INC_DIR)/zfp
+
 CXX = g++
 #CXXFLAGS = -ansi -pedantic -Wall -Wextra -O3 -I$(NUMREP_DIR) -I$(ZFP_DIR)/include -I$(ZFP_DIR)/array -DORDER=$(ORDER) $(JACOBI)
-CXXFLAGS = -fopenmp -std=c++11 -Wall -Wextra -O3 -g -I$(UMAP_ROOT)/include -I${ZFP_INC} -DORDER=$(ORDER) $(JACOBI) 
-LIBS = -L$(UMAP_ROOT)/lib -lumap  -L$(ZFP_LIB) -lzfp
+CXXFLAGS = -fopenmp -std=c++11 -Wall -Wextra -O3 -I$(UMAP_DIR)/include ${ZFP_INC} -DORDER=$(ORDER) $(JACOBI) 
+LIBS = -L$(UMAP_DIR)/lib -lumap  -L$(ZFP_LIB_DIR)/lib -lzfp
 
 
 # --- Targets
 
-TARGETS = poisson-zfp32 #poisson-double poisson-float poisson-half \
+TARGETS = poisson-double poisson-float poisson-half \
 	  poisson-posit32 poisson-posit16 \
 	  poisson-zfp32 poisson-zfp16
 
-all: poisson-zfp16-original poisson-zfp16-umap  #$(TARGETS)
+all: poisson-double poisson-zfp16-original poisson-zfp16-umap  #$(TARGETS)
 
 poisson: poisson.cpp
 	$(CXX) $(CXXFLAGS) $(REP) $< -o $@
