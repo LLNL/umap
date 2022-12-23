@@ -85,7 +85,7 @@ void validate_file( const char* filename , size_t bytes ){
 
   for(size_t i=0; i < array_length; i++) {
     if( a[i] != i * 1.0) {
-      printf("\t a[%d] = %f \n", i, a[i]); 
+      printf("\t a[%ld] = %f \n", i, a[i]); 
     } 
   }
 
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
   #pragma omp parallel for
   for (size_t i = 0; i<array_length; i++){
     if( a[i] != i * 1.0) {
-      printf("\t a[%d] = %f \n", i, a[i]); 
+      printf("\t a[%ld] = %f \n", i, a[i]); 
       exit(1);
     }
   }

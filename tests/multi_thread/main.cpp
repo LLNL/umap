@@ -122,7 +122,7 @@ int num_threads = 0;
 
     for(size_t i=0; i < array_length; i++) {
       if( a[i] != (i * 1.0 + tid * 0.000001) ) {
-        printf("\t Thread %d: a[%d] = %.6f \n", tid, i, a[i]);
+        printf("\t Thread %d: a[%ld] = %.6f \n", tid, i, a[i]);
         break;
         exit(1);        
       } 

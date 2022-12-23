@@ -12,13 +12,15 @@
 #include <iostream>
 
 // use Jacobi (when defined) or Gauss-Seidel update (set via Makefile)
-//#define JACOBI 1
+#define JACOBI 1
 
 // finite-difference order (set via Makefile)
-//#define ORDER 2
+#define ORDER 2
 //#define ORDER 4
 //#define ORDER 6
 //#define ORDER 8
+
+#define ZFP_RATE 16
 
 // number representation to use (set via Makefile)
 #if defined(IEEE_PREC) // IEEE-754 precision in bits/value when defined

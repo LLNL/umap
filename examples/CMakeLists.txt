@@ -7,3 +7,6 @@
 add_subdirectory(stream)
 add_subdirectory(umapsort)
 add_subdirectory(bfs)
+if (UMAP_ENABLE_ZFP)
+   add_subdirectory(zfp)
+endif(UMAP_ENABLE_ZFP)

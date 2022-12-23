@@ -114,7 +114,7 @@ main(int argc, char **argv)
   bool is_validated = true;
   for(size_t i=0; i < array_size; i++) {
     if( arr_in[i] != (uint64_t) i ) {
-      printf("\t arr_in[%d] = %f \n", i, arr_in[i]);
+      printf("\t arr_in[%ld] = %ld \n", i, arr_in[i]);
       is_validated = false;
     } 
   }

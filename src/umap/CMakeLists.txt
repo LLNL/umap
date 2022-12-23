@@ -45,27 +45,27 @@ set(umapsrc
 find_package(Threads REQUIRED)
 
 
-include(ExternalProject)
-if (USE_ZFP)
-
+if (UMAP_ENABLE_ZFP)
+   include(ExternalProject)
    # build ZFP from the official github
-
    ExternalProject_Add(ZFP
-	   PREFIX ${CMAKE_BINARY_DIR}/zfp
-      GIT_REPOSITORY https://github.com/LLNL/ZFP.git
-   	GIT_TAG 1.0.0
-      #DOWNLOAD_COMMAND      ""
-   	DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp
-      BUILD_COMMAND cp ${CMAKE_SOURCE_DIR}/examples/zfp/array3umap.hpp ${CMAKE_BINARY_DIR}/zfp/src/ZFP/include/zfp && make -j
-   	BUILD_ALWAYS 1
-      INSTALL_COMMAND ""
+     PREFIX ${CMAKE_BINARY_DIR}/zfp
+     GIT_REPOSITORY https://github.com/LLNL/ZFP.git
+     GIT_TAG 1.0.0
+     #DOWNLOAD_COMMAND      ""
+     DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp
+     CONFIGURE_COMMAND ""
+     BUILD_COMMAND cp ${CMAKE_SOURCE_DIR}/examples/zfp/array3umap.hpp ${CMAKE_BINARY_DIR}/zfp/src/ZFP/include/zfp && cd ${CMAKE_BINARY_DIR}/zfp/src/ZFP && make -j
+     #BUILD_COMMAND cd ${CMAKE_BINARY_DIR}/zfp/src/ZFP && make -j
+     BUILD_ALWAYS 1
+     INSTALL_COMMAND ""
    )
 
    set(zfpheaders
-	store/StoreZFP.h
+     store/StoreZFP.h
    )	 
    set(zfpsrcs
-    store/StoreZFP.cpp
+     store/StoreZFP.cpp
    )
 
    list(APPEND umapheaders ${zfpheaders})
@@ -78,16 +78,14 @@ if (USE_ZFP)
    include_directories("${CMAKE_BINARY_DIR}/zfp/src/ZFP/include")
 
    set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
-   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_BINARY_DIR}/zfp/src/ZFP-build/lib/libzfp.so)
-   
-else(USE_ZFP)
-
+   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_BINARY_DIR}/zfp/src/ZFP/lib/libzfp.a)
+else(UMAP_ENABLE_ZFP)
    add_library(umap SHARED ${umapsrc} )
    add_library(umap-static STATIC ${umapsrc} )
    set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
    target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
 
-endif(USE_ZFP)
+endif(UMAP_ENABLE_ZFP)
 
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
