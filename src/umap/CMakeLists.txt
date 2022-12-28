@@ -54,11 +54,14 @@ if (UMAP_ENABLE_ZFP)
      GIT_TAG 1.0.0
      #DOWNLOAD_COMMAND      ""
      DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp
+     PATCH_COMMAND cp ${CMAKE_SOURCE_DIR}/examples/zfp/array3umap.hpp ${CMAKE_BINARY_DIR}/zfp/src/ZFP/include/zfp
+     UPDATE_COMMAND ""
      CONFIGURE_COMMAND ""
-     BUILD_COMMAND cp ${CMAKE_SOURCE_DIR}/examples/zfp/array3umap.hpp ${CMAKE_BINARY_DIR}/zfp/src/ZFP/include/zfp && cd ${CMAKE_BINARY_DIR}/zfp/src/ZFP && make -j
-     #BUILD_COMMAND cd ${CMAKE_BINARY_DIR}/zfp/src/ZFP && make -j
-     BUILD_ALWAYS 1
+     BUILD_COMMAND cd ${CMAKE_BINARY_DIR}/zfp/src/ZFP && make -j
+     BUILD_ALWAYS FALSE
      INSTALL_COMMAND ""
+     TEST_COMMAND ""
+     
    )
 
    set(zfpheaders
