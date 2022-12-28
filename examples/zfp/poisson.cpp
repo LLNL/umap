@@ -21,6 +21,7 @@
 //#define ORDER 8
 
 #define ZFP_RATE 16
+#define USE_UMAP 1
 
 // number representation to use (set via Makefile)
 #if defined(IEEE_PREC) // IEEE-754 precision in bits/value when defined

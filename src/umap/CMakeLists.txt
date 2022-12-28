@@ -52,7 +52,7 @@ if (UMAP_ENABLE_ZFP)
      PREFIX ${CMAKE_BINARY_DIR}/zfp
      GIT_REPOSITORY https://github.com/LLNL/ZFP.git
      GIT_TAG 1.0.0
-     #DOWNLOAD_COMMAND      ""
+#     DOWNLOAD_COMMAND      ""
      DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp
      PATCH_COMMAND cp ${CMAKE_SOURCE_DIR}/examples/zfp/array3umap.hpp ${CMAKE_BINARY_DIR}/zfp/src/ZFP/include/zfp
      UPDATE_COMMAND ""
