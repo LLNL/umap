@@ -45,11 +45,13 @@ namespace Umap {
     dim = (_nz==1) ? 2 : 3;
     size_t num_elements = nx*ny*nz;
     region_size = num_elements * sizeof(double);
-    if( region_size< psize ){
+    if( region_size < psize ){
       size_t scale = (psize+region_size-1)/region_size;
       ny *= scale;
       num_elements = nx*ny*nz;
       region_size = num_elements * sizeof(double);
+    }else if( region_size % psize ){
+      region_size += psize - (region_size % psize);
     }
     assert( region_size % psize == 0 );
 
@@ -165,6 +167,7 @@ namespace Umap {
   //TODO
   template <>
   StoreZFP<double>::~StoreZFP(){
+    UMAP_LOG(Info, "nx="<<nx<<", ny="<<ny<<", region_size="<<region_size);
     /* get pointer to compressed data for read or write access
     void* compressed_buf = zfp_store3->compressed_data();
     size_t buffer_size = zfp_store3->buffer_size();

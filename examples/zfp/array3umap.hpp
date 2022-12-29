@@ -148,7 +148,6 @@ public:
   virtual ~array3umap() {
     if(umap_store) {
       uunmap(umap_uncompressed_base_ptr, umap_store->get_region_size());
-      delete umap_store;
     }
   }
 

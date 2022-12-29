@@ -84,6 +84,8 @@ void
 RegionManager::removeRegion( char* region )
 {
   std::lock_guard<std::mutex> lock(m_mutex);
+  if( m_active_regions.size() == 0 ) return;
+
   auto it = m_active_regions.find(region);
 
   if (it == m_active_regions.end())
@@ -235,11 +237,14 @@ RegionManager::RegionManager()
 
 RegionManager::~RegionManager()
 {
-  auto it = m_active_regions.begin();
-  while(it != m_active_regions.end() ){
-    UMAP_LOG(Info, "removing region " << it->first);
-    removeRegion((char*)it->first);
-    it = m_active_regions.begin();
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if( m_active_regions.size()>0 ){
+    auto it = m_active_regions.begin();
+    while(it != m_active_regions.end() ){
+      UMAP_LOG(Info, "removing region " << it->first);
+      removeRegion((char*)it->first);
+      it = m_active_regions.begin();
+    }
   }
   delete m_fill_workers; m_fill_workers = nullptr;
   delete m_evict_manager; m_evict_manager = nullptr;
