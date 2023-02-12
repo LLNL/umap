@@ -14,6 +14,7 @@ OPTION (ENABLE_TESTS "Selects whether tests are built." On)
 OPTION (ENABLE_LOGGING "Build umap with Logging enabled" On)
 OPTION (ENABLE_DISPLAY_STATS "Display umap statistics when closing" Off)
 OPTION (ENABLE_TESTS_LINK_STATIC_UMAP "Build tests statically linked to umap" Off)
+OPTION (UMAP_ENABLE_ZFP "Selects whether ZFP compressor backed data store is built." Off)
 
 include(cmake/BuildEnv.cmake)
 include(cmake/BuildType.cmake)
