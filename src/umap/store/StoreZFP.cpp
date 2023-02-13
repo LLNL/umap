@@ -36,7 +36,7 @@ namespace Umap {
     if ( (read_env_var("UMAP_PAGESIZE", &psize)) == nullptr )
       psize = sysconf(_SC_PAGESIZE);
 
-    assert( _rate>1.0 );
+    assert( _rate>=1.0 );
 
     rate = (int)_rate;
     nx = (_nx+3)/4 * 4;
@@ -87,6 +87,8 @@ namespace Umap {
     size_t block_st  = page_id * blocks_per_page;
     size_t block_end = block_st + blocks_per_page;    
 
+    //UMAP_LOG(Info, "page_id="<<page_id<<", block_st="<<block_st<<", block_end="<<block_end<<", rate="<<rate);
+ 
 #if ZFP_THREAD_BARRIER
     std::lock_guard<std::mutex> lk(mutRand); 
 #else
@@ -110,7 +112,7 @@ namespace Umap {
       int bits = decodefunc(zfp, ptr);
       //assert( bits/8==elements_per_block);
       ptr += elements_per_block;
-      //printf("%dDblock #%u decoded offsets[%zu] bits=%4u\n",dim, i, i*elements_per_block*rate, bits);
+      //printf("Read %dDblock #%uth block (rate%d) decoded offsets[%zu] bits=%4u\n",dim, i, rate, i*elements_per_block*rate, bits);
     }
 
 #ifndef ZFP_THREAD_BARRIER
@@ -151,7 +153,7 @@ namespace Umap {
     for (size_t i = block_st; i < block_end; i++) {
       int bits = encodefunc(zfp, ptr);
       ptr += elements_per_block;
-      //printf("%dDblock #%u encoded offsets[%zu] bits=%4u\n",dim, i, i*elements_per_block*rate, bits);
+      //printf("Write %dDblock #%uth block (rate%d) encoded offsets[%zu] bits=%4u\n",dim, i, rate, i*elements_per_block*rate, bits);
     }
     stream_flush(stream);
 
