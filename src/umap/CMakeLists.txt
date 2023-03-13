@@ -43,10 +43,21 @@ set(umapsrc
     ${umapheaders})
 
 find_package(Threads REQUIRED)
+
 add_library(umap SHARED ${umapsrc} )
 add_library(umap-static STATIC ${umapsrc} )
 set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
 target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+
+if (caliper_DIR)
+   find_package(caliper REQUIRED)
+   message(STATUS "Found caliper_INCLUDE_DIR ${caliper_INCLUDE_DIR}" )
+   target_include_directories(umap PUBLIC ${caliper_INCLUDE_DIR})
+   target_include_directories(umap-static PUBLIC ${caliper_INCLUDE_DIR})
+   target_link_libraries(umap caliper)
+   target_link_libraries(umap-static caliper)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
+endif()
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 

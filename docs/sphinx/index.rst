@@ -30,7 +30,8 @@ Any questions? File an issue on GitHub.
   advanced_configuration
   environment_variables
   sparse_store
-
+  caliper
+  
 .. toctree::
   :maxdepth: 2
   :caption: Contributing
