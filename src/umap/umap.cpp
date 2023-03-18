@@ -144,7 +144,6 @@ umap_ex(
   auto umap_psize = rm.get_umap_page_size();
 
   if (region_size == 0){
-#warning "Building Abhik version"	  
     errno = -EINVAL;
     return (void *)-1;
   }
