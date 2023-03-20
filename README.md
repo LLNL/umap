@@ -33,10 +33,36 @@ would like to build an optimized (-O3) version, simply run
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<install-dir> ..
 ```
 
+### Docker Container
+There is a `Dockerfile` included in the repository to make it easier to build a container image with a basic Umap development environment.
+
+A few caveats:
+The [runtime requirements](#runtime-requirements) of the Docker container are the same as the non-containerized Umap. Additionally, it's important to note that Umap checks the kernel headers present in the build-time environment to decide whether or not WP mode should be enabled. The included `Dockerfile` will always build Umap with WP support enabled because the Ubuntu 22.04 kernel headers included in the the container indicate that WP is supported, even if the host kernel doesn't actually support that feature. Umap will return an error at runtime if it's built with WP enabled but run on a kernel without WP support.
+
+Docker, as a security measure, uses a `seccomp` profile to restrict the syscalls allowed to be made by an application running inside a container to a minimal subset. Umap relies on being able to make host kernel syscalls that are otherwise blocked by Docker's default `seccomp` profile. Specifically, Umap relies on the `userfaultfd` syscall. See [here](https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile]) for more information about which syscalls are blocked by Docker's default `seccomp` profile.
+
+#### Example: Building and running the Umap Docker container
+```bash
+docker build -t umap .
+docker run --security-opt seccomp=unconfined -it umap bash
+```
+
+#### Example: Running the Umap container with a `seccomp` whitelist
+It's also possible to run the container with a `seccomp` whitelist rather than disabling confinement entirely.
+First, create a `userfaultfd.json` file:
+```json
+{"names": ["userfaultfd"], "action": "SCMP_ACT_ALLOW"}
+```
+
+When running the container:
+```bash
+docker run --security-opt seccomp=userfaultfd.json -it umap bash
+```
+
 ## Build Requirements
 Building Umap requires a C++ compiler, CMake >= 3.5.1, as well as the Linux kernel headers.
 
-Additionally, Umap will automatically enable read/write mode *at library compile time* if it detects that the installed kernel supports it by looking at the defined symbols in the kernel headers. Some Linux distributions, such as Ubuntu 20.04.2, provide a 5.8 kernel that supports read/write mode but don't ship with headers that define these symbols. 
+Additionally, Umap will automatically enable read/write mode *at library compile time* if it detects that the installed kernel supports it by looking at the defined symbols in the kernel headers. Some Linux distributions, such as Ubuntu 20.04.2, provide a 5.8 kernel that supports read/write mode but don't ship with headers that define these symbols.
 
 Read-only mode: Linux kernel >= 4.3
 
