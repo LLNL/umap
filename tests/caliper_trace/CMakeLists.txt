@@ -6,30 +6,38 @@
 #############################################################################
 project(caliper_trace)
 
-FIND_PACKAGE( OpenMP REQUIRED )
-if(OPENMP_FOUND)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-  set(CMAKE_EXE_LINKER_FLAGS 
-    "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-  add_executable(caliper_trace caliper_trace.cpp)
+find_package(caliper REQUIRED PATHS "${caliper_DIR}")
+if(caliper_FOUND)
+  message(STATUS "Found caliper_INCLUDE_DIR ${caliper_INCLUDE_DIR}" )
 
-  if(STATIC_UMAP_LINK)
-     set(umap-lib "umap-static")
+  FIND_PACKAGE( OpenMP REQUIRED )
+  if(OPENMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS 
+      "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+    add_executable(caliper_trace caliper_trace.cpp)
+    
+    if(STATIC_UMAP_LINK)
+      set(umap-lib "umap-static")
+    else()
+      set(umap-lib "umap")
+    endif()
+  
+    add_dependencies(caliper_trace ${umap-lib})
+    target_link_libraries(caliper_trace ${umap-lib} caliper) 
+    include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} ${caliper_INCLUDE_DIR})
+
+    install(TARGETS caliper_trace
+      LIBRARY DESTINATION lib
+      ARCHIVE DESTINATION lib/static
+      RUNTIME DESTINATION bin )
+    
   else()
-     set(umap-lib "umap")
+    message("Skipping caliper_trace, OpenMP required")
   endif()
-  
-  add_dependencies(caliper_trace ${umap-lib})
-  target_link_libraries(caliper_trace ${umap-lib}) 
-  
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${UMAPINCLUDEDIRS} )
 
-  install(TARGETS caliper_trace
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib/static
-    RUNTIME DESTINATION bin )
 else()
-  message("Skipping caliper_trace, OpenMP required")
+  message("Skipping caliper_trace, Caliper package not found")
 endif()
 
