@@ -82,7 +82,8 @@ if (UMAP_ENABLE_ZFP)
 
    set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
    target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_BINARY_DIR}/zfp/src/ZFP/lib/libzfp.a)
-else(UMAP_ENABLE_ZFP)
+
+ else(UMAP_ENABLE_ZFP)
    add_library(umap SHARED ${umapsrc} )
    add_library(umap-static STATIC ${umapsrc} )
    set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
@@ -90,6 +91,16 @@ else(UMAP_ENABLE_ZFP)
 
 endif(UMAP_ENABLE_ZFP)
 
+
+if (caliper_DIR)
+   find_package(caliper REQUIRED)
+   message(STATUS "Found caliper_INCLUDE_DIR ${caliper_INCLUDE_DIR}" )
+   target_include_directories(umap PUBLIC ${caliper_INCLUDE_DIR})
+   target_include_directories(umap-static PUBLIC ${caliper_INCLUDE_DIR})
+   target_link_libraries(umap caliper)
+   target_link_libraries(umap-static caliper)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
+endif()
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 

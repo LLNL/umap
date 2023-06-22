@@ -143,6 +143,11 @@ umap_ex(
   auto& rm = RegionManager::getInstance();
   auto umap_psize = rm.get_umap_page_size();
 
+  if (region_size == 0){
+    errno = -EINVAL;
+    return (void *)-1;
+  }
+
   UMAP_LOG(Info, 
       "region_addr: " << region_addr
       << ", region_size: " << region_size
