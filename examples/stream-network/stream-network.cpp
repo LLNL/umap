@@ -10,6 +10,7 @@
 # include "errno.h"
 # include <sys/time.h>
 # include "umap/umap.h"
+# include "umap/store/StoreNetwork.h"
 #include <stdlib.h>
 
 #define STREAM_ARRAY_SIZE	1024000
@@ -51,7 +52,7 @@ int main(int argc, char *argv[])
 	// If Server
 	if(is_server){
 		server_name = NULL;
-		umap::NetworkServer server();
+		Umap::NetworkServer server;
 		server.wait_till_disconnect();
 		server.close_ib_connection();
 		return 0;
@@ -59,7 +60,7 @@ int main(int argc, char *argv[])
 	
 	// If a Client
 	server_name = strdup(argv[2]);
-	umap::NetworkClient client(server_name);
+	Umap::NetworkClient *client = new Umap::NetworkClient(server_name);
 
 	array_size = (size_t) STREAM_ARRAY_SIZE;
 	if(argc>3) array_size = atol(argv[3]);
@@ -68,7 +69,7 @@ int main(int argc, char *argv[])
 	size_t umap_psize = umapcfg_get_umap_page_size();
 	umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
 
-	Umap::Store*  store_a = new Umap::StoreNetwork("stream_a", umap_region_length, umap_psize);
+	Umap::Store*  store_a = new Umap::StoreNetwork("stream_a", umap_region_length, umap_psize, client);
 	a = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_a);
 	if ( a == UMAP_FAILED ) {
 		printf("failed to map a %s \n", strerror(errno));
@@ -96,7 +97,7 @@ int main(int argc, char *argv[])
 	BytesPerWord);
     printf(HLINE);
 
-    printf("Array size = %llu (elements), Offset = %d (elements)\n" , (unsigned long long) array_size, OFFSET);
+    printf("Array size = %llu (elements), Offset = %d (elements)\n" , (unsigned long long) array_size, 0);
     printf("Memory per array = %.1f MiB (= %.1f GiB).\n", 
 	BytesPerWord * ( (double) array_size / 1024.0/1024.0),
 	BytesPerWord * ( (double) array_size / 1024.0/1024.0/1024.0));
@@ -213,7 +214,8 @@ int main(int argc, char *argv[])
 	uunmap(b,0);
 	uunmap(c,0);
 	
-	client.close_ib_connection();
+	client->close_ib_connection();
+	free(client);
     return 0;
 }
 
@@ -269,7 +271,7 @@ double mysecond()
    create a file of a defined size
  */
 
-int open_prealloc_file( const char* fname, size_t totalbytes)
+int open_prealloc_file( const char* fname, size_t totalbytes, int is_init)
 {
 	if(is_init){
 		// delete the file

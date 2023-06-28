@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <cassert>
 
 #include "StoreNetwork.h"
 #include "umap/store/Store.hpp"
@@ -27,7 +28,7 @@ namespace Umap {
 
   NetworkEndpoint::NetworkEndpoint(){}
 
-  void NetworkEndpoint::setup_ib_common()
+  int NetworkEndpoint::setup_ib_common()
   {
     struct ibv_device **dev_list, *ib_dev;
 
@@ -508,7 +509,7 @@ namespace Umap {
     return 0;
   }
 
-  StoreNetwork::StoreNetwork(void* _region_, size_t _rsize_, size_t _alignsize_, NetworkEndpoint* _endpoint_)
+  StoreNetwork::StoreNetwork(const void* _region_, size_t _rsize_, size_t _alignsize_, NetworkEndpoint* _endpoint_)
     : region{_region_}, rsize{_rsize_}, alignsize{_alignsize_}, fd{0}
   {
     UMAP_LOG(Info, "region: " << region << " rsize: " << rsize
@@ -540,12 +541,12 @@ namespace Umap {
 
   void StoreNetwork::create_local_region(char* buf, size_t nb)
   {
-    ibv_mr *mr = ibv_reg_mr(endpoint->pd, buf, nb,
-                    IBV_ACCESS_LOCAL_READ | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    ibv_mr *mr = ibv_reg_mr(endpoint->get_pd(), buf, nb,
+                    IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!mr)
     {
       perror("Couldn't register Memory Region for buffer\n");
-      return 1;
+      return;
     }else{
       printf("Registered buffer%p in read_from_store\n", buf);
       local_mrs_map[(uint64_t)buf] = mr;
@@ -554,35 +555,35 @@ namespace Umap {
 
   ssize_t StoreNetwork::read_from_store(char* buf, size_t nb, off_t off)
   {
-    assert( off % _alignsize_ == 0);
-    assert( nb == _alignsize_);
+    assert( off % alignsize == 0);
+    assert( nb == alignsize);
 
     if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
     {
         create_local_region( buf, nb);
     }
-    ibv_mr *local_mr = local_mrs_map.find((uint64_t)buf);
+    ibv_mr *local_mr = local_mrs_map[(uint64_t)buf];
 
-    int page_id = off / _alignsize_;
+    int page_id = off / alignsize;
 
     struct ibv_sge list = {
       .addr	= (uint64_t)buf,
-      .length = nb,
+      .length = (uint32_t) nb,
       .lkey	  = local_mr->lkey
     };
 
-    struct ibv_send_wr *bad_wr, wr = {
+    struct ibv_send_wr *bad_wr, wr_read = {
       .wr_id	    = READ_WRID,
       .sg_list    = &list,
       .num_sge    = 1,
       .opcode     = IBV_WR_RDMA_READ,
       .send_flags = IBV_SEND_SIGNALED,
-      .wr.rdma.remote_addr = remote_mrs[page_id].remote_addr,
-      .wr.rdma.rkey = remote_mrs[page_id].rkey,
+      .wr.rdma.remote_addr = (uint64_t) remote_mrs[page_id]->addr,
+      .wr.rdma.rkey = remote_mrs[page_id]->rkey,
       .next       = NULL
     };
 
-    endpoint->ibv_post_send(remote_mrs[page_id].qp, &wr, &bad_wr);
+    ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
     size_t rval = endpoint->wait_completions(READ_WRID);
 
     return rval;
@@ -590,35 +591,35 @@ namespace Umap {
 
   ssize_t  StoreNetwork::write_to_store(char* buf, size_t nb, off_t off)
   {
-    assert( off % _alignsize_ == 0);
-    assert( nb == _alignsize_);
+    assert( off % alignsize == 0);
+    assert( nb == alignsize);
 
     if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
     {
         create_local_region( buf, nb);
     }
-    ibv_mr *local_mr = local_mrs_map.find((uint64_t)buf);
+    ibv_mr *local_mr = local_mrs_map[(uint64_t)buf];
 
-    int page_id = off / _alignsize_;
+    int page_id = off / alignsize;
 
     struct ibv_sge list = {
       .addr	= (uint64_t)buf,
-      .length = nb,
+      .length = (uint32_t) nb,
       .lkey	= local_mr->lkey
     };
 
-    struct ibv_send_wr *bad_wr, wr = {
+    struct ibv_send_wr *bad_wr, wr_write = {
       .wr_id	    = WRITE_WRID,
       .sg_list    = &list,
       .num_sge    = 1,
       .opcode     = IBV_WR_RDMA_WRITE,
       .send_flags = IBV_SEND_SIGNALED,
-      .wr.rdma.remote_addr = remote_mrs[page_id].remote_addr,
-      .wr.rdma.rkey = remote_mrs[page_id].rkey,
-      .next       = NULL
+      .wr.rdma.remote_addr = remote_mrs[page_id]->addr,
+      .wr.rdma.rkey = remote_mrs[page_id]->rkey,
+      .next         = NULL
     };
 
-    size_t rval = endpoint->ibv_post_send(remote_mrs[page_id].qp, &wr, &bad_wr);
+    size_t rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
     rval = endpoint->wait_completions(WRITE_WRID);
 
     return rval;

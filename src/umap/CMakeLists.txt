@@ -22,6 +22,7 @@ set(umapheaders
       store/StoreFile.h
       store/SparseStore.h
       store/Store.hpp
+      store/StoreNetwork.h
       util/Exception.hpp
       util/Logger.hpp
       util/Macros.hpp)
@@ -38,6 +39,7 @@ set(umapsrc
     store/Store.cpp
     store/StoreFile.cpp
     store/SparseStore.cpp
+    store/StoreNetwork.cpp
     util/Exception.cpp
     util/Logger.cpp
     ${umapheaders})
@@ -71,3 +73,6 @@ install(FILES umap.h DESTINATION include/umap)
 install(FILES store/Store.hpp DESTINATION include/umap/store )
 
 install(FILES store/SparseStore.h DESTINATION include/umap/store)
+
+install(FILES store/SparseNetwork.h DESTINATION include/umap/store)
+
