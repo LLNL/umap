@@ -52,12 +52,12 @@ namespace Umap {
 
 
     metabuf_size = IB_METABUFFER_SIZE;
-    metabuf = malloc(roundup(IB_METABUFFER_SIZE, sysconf(_SC_PAGESIZE)));
-    if (!metabuf) {
-        perror("Couldn't allocate metabuf.\n");
+    ib_buf = malloc(roundup(IB_METABUFFER_SIZE, sysconf(_SC_PAGESIZE)));
+    if (!ib_buf) {
+        perror("Couldn't allocate ib_buf.\n");
         return 1;
     }
-    memset(metabuf, 0, IB_METABUFFER_SIZE);
+    memset(ib_buf, 0, IB_METABUFFER_SIZE);
 
     // Open an IB device context:
     ctx = ibv_open_device(*dev_list);
@@ -96,7 +96,7 @@ namespace Umap {
     }
 
     // Register a Memory Region for communicating metadata
-    mr = ibv_reg_mr(pd, metabuf, metabuf_size,
+    mr = ibv_reg_mr(pd, ib_buf, metabuf_size,
                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!mr)
     {
@@ -159,6 +159,7 @@ namespace Umap {
     // Set PSN:
     local_dest.psn = lrand48() & 0xffffff;
 
+    return 0;
   }
 
   int NetworkEndpoint::connect_between_qps()
@@ -228,9 +229,9 @@ namespace Umap {
         ibv_close_device(ctx);
     }
 
-    if (metabuf)
+    if (ib_buf)
     {
-        free(metabuf);
+        free(ib_buf);
     }
 
   } 
@@ -238,7 +239,7 @@ namespace Umap {
   int  NetworkEndpoint::post_recv(int size)
   {
     struct ibv_sge list = {
-      .addr	= (uint64_t)metabuf,
+      .addr	= (uint64_t)ib_buf,
       .length = size,
       .lkey	= mr->lkey
     };
@@ -257,7 +258,7 @@ namespace Umap {
   int  NetworkEndpoint::post_send(int size)
   {
     struct ibv_sge list = {
-      .addr	= (uint64_t)metabuf,
+      .addr	= (uint64_t)ib_buf,
       .length = size,
       .lkey	  = mr->lkey
     };
@@ -383,7 +384,7 @@ namespace Umap {
       post_recv(sizeof(int));
       wait_completions(RECV_WRID);
       int num_pages;
-      memcpy(&num_pages, metabuf, sizeof(int));
+      memcpy(&num_pages, ib_buf, sizeof(int));
       printf("Received num_pages=%d\n", num_pages);
 
       //Check if it is the signal for closing IB connection
@@ -394,7 +395,7 @@ namespace Umap {
 
       //struct ibv_mr **mrs = (struct ibv_mr **)malloc( sizeof(struct ibv_mr *)*num_pages );
       //struct RemoteMR *remote_mrs = (struct RemoteMR *) malloc(sizeof(struct RemoteMR)*num_pages ); 
-      struct RemoteMR *remote_mrs = (struct RemoteMR *) metabuf;
+      struct RemoteMR *remote_mrs = (struct RemoteMR *) ib_buf;
       //todo: need to check buffer size
       size_t size = num_pages * 4096;
 
@@ -404,28 +405,26 @@ namespace Umap {
       printf("Allocated %zu\n", size);   
 
       //Register remote region one by one for each page
-      char* p_addr = buf;
+      char* p_addr = (char* ) buf;
       for(int i=0; i<num_pages; i++)
       {
           struct ibv_mr *mr = ibv_reg_mr(pd, p_addr, 4096,
                           IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
           
-          if (!mrs[i])
+          if (!mr)
           {
               perror("Couldn't register Memory Region\n");
-              return 1;
+              return;
           }
 
           printf("Registered Page %zu\n", i);
-          remote_mrs.push_back(mr);
-          remote_mrs[i].remote_addr = (uint64_t)p_addr;
-          remote_mrs[i].rkey = mr->rkey;
+          mem_regions.push_back(mr);
           p_addr += 4096;
       }
       printf("Finished registering %zu pages\n", num_pages);      
 
       // Send remote address and rkey
-      //memcpy(metabuf, remote_mrs, sizeof(struct RemoteMR)*num_pages );
+      //memcpy(ib_buf, remote_mrs, sizeof(struct RemoteMR)*num_pages );
       post_send(sizeof(struct RemoteMR)*num_pages);
       wait_completions(SEND_WRID);
       printf("Finished sending %d remote regions to client\n", num_pages);
@@ -434,7 +433,6 @@ namespace Umap {
     //TODO
     //add free up.
 
-    return 0;
   }
 
   NetworkClient::NetworkClient( const char* _server_name_ ){
@@ -443,7 +441,7 @@ namespace Umap {
     strcpy(server_name, _server_name_);
 
     setup_ib_common();
-    get_server_dest( server_name );
+    get_server_dest();
     connect_between_qps();
   }
 
@@ -510,18 +508,18 @@ namespace Umap {
   }
 
   StoreNetwork::StoreNetwork(const void* _region_, size_t _rsize_, size_t _alignsize_, NetworkEndpoint* _endpoint_)
-    : region{_region_}, rsize{_rsize_}, alignsize{_alignsize_}, fd{0}
+    : rsize{_rsize_}, alignsize{_alignsize_}
   {
     UMAP_LOG(Info, "region: " << region << " rsize: " << rsize
-              << " alignsize: " << alignsize << " fd: " << fd);
+              << " alignsize: " << alignsize );
 
     endpoint = _endpoint_;
 
     // Notify the server the number of pages to allocate
-    assert( _alignsize_==4096 );
-    assert( _rsize_ % _alignsize_ == 0 );
-    int num_pages = _rsize_ / _alignsize;
-    memcpy(metabuf, &num_pages, sizeof(int));
+    assert( alignsize==4096 );
+    assert( _rsize_ % alignsize == 0 );
+    int num_pages = _rsize_ / alignsize;
+    memcpy(endpoint->get_buf(), &num_pages, sizeof(int));
     endpoint->post_send(sizeof(int)); 
     endpoint->wait_completions(SEND_WRID);
 
@@ -529,13 +527,13 @@ namespace Umap {
     //remote_mrs = (struct RemoteMR *) malloc(sizeof(struct RemoteMR)*num_pages ); 
     endpoint->post_recv(sizeof(struct RemoteMR)*num_pages);
     endpoint->wait_completions(RECV_WRID);
-    //memcpy(remote_mrs, metabuf, sizeof(struct RemoteMR)*num_pages);
-    struct RemoteMR *remote_mrs = (struct RemoteMR *) metabuf;
+    //memcpy(remote_mrs, ib_buf, sizeof(struct RemoteMR)*num_pages);
+    struct RemoteMR *remote_mr_ptr = (struct RemoteMR *) endpoint->get_buf();
     printf("Client received RemoteMR for %d pages\n", num_pages);
 
     for(int i=0; i<num_pages; i++ ){
-      remote_mrs.push_back(remote_mrs);
-      remote_mrs ++;
+      remote_mrs.push_back(*remote_mr_ptr);
+      remote_mr_ptr ++;
     }    
   }
 
@@ -572,16 +570,17 @@ namespace Umap {
       .lkey	  = local_mr->lkey
     };
 
-    struct ibv_send_wr *bad_wr, wr_read = {
-      .wr_id	    = READ_WRID,
-      .sg_list    = &list,
-      .num_sge    = 1,
-      .opcode     = IBV_WR_RDMA_READ,
-      .send_flags = IBV_SEND_SIGNALED,
-      .wr.rdma.remote_addr = (uint64_t) remote_mrs[page_id]->addr,
-      .wr.rdma.rkey = remote_mrs[page_id]->rkey,
-      .next       = NULL
-    };
+    struct ibv_send_wr *bad_wr;
+    struct ibv_send_wr wr_read;
+    memset(&wr_read, 0, sizeof(wr_read));
+    wr_read.wr_id	= READ_WRID;
+    wr_read.sg_list    = &list;
+    wr_read.num_sge    = 1;
+    wr_read.opcode     = IBV_WR_RDMA_READ;
+    wr_read.send_flags = IBV_SEND_SIGNALED;
+    wr_read.wr.rdma.remote_addr =  remote_mrs[page_id].remote_addr;
+    wr_read.wr.rdma.rkey = remote_mrs[page_id].rkey;
+    wr_read.next       = NULL;
 
     ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
     size_t rval = endpoint->wait_completions(READ_WRID);
@@ -608,16 +607,16 @@ namespace Umap {
       .lkey	= local_mr->lkey
     };
 
-    struct ibv_send_wr *bad_wr, wr_write = {
-      .wr_id	    = WRITE_WRID,
-      .sg_list    = &list,
-      .num_sge    = 1,
-      .opcode     = IBV_WR_RDMA_WRITE,
-      .send_flags = IBV_SEND_SIGNALED,
-      .wr.rdma.remote_addr = remote_mrs[page_id]->addr,
-      .wr.rdma.rkey = remote_mrs[page_id]->rkey,
-      .next         = NULL
-    };
+    struct ibv_send_wr *bad_wr;
+    struct ibv_send_wr wr_write;
+    wr_write.wr_id	    = WRITE_WRID;
+    wr_write.sg_list    = &list;
+    wr_write.num_sge    = 1;
+    wr_write.opcode     = IBV_WR_RDMA_WRITE;
+    wr_write.send_flags = IBV_SEND_SIGNALED;
+    wr_write.wr.rdma.remote_addr = remote_mrs[page_id].remote_addr;
+    wr_write.wr.rdma.rkey = remote_mrs[page_id].rkey;
+    wr_write.next         = NULL;
 
     size_t rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
     rval = endpoint->wait_completions(WRITE_WRID);

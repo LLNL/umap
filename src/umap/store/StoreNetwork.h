@@ -29,6 +29,11 @@ enum {
   WRITE_WRID = 8,
 };
 
+struct RemoteMR {
+  uint64_t remote_addr;
+  uint32_t rkey;
+};
+
 namespace Umap {
   class NetworkEndpoint{
       /*
@@ -42,11 +47,7 @@ namespace Umap {
         uint32_t		rkey;
       };
       */
-      struct RemoteMR {
-        uint64_t remote_addr;
-        uint32_t rkey;
-      };
-      
+
       struct IBRes {
         struct ibv_context *ctx;
         struct ibv_pd *pd;
@@ -71,25 +72,22 @@ namespace Umap {
         int wait_completions(int wr_id);
         struct ibv_qp* get_qp(){return qp;}
         struct ibv_pd* get_pd(){return pd;}
-
-    protected:
-        int setup_ib_common();
-        int connect_between_qps();
-
+        void*  get_buf(){return ib_buf;}
         int post_recv(int size);
         int post_send(int size);
 
-    private:
+    protected:
         struct IBDest local_dest;
-        struct IBDest remote_dest;
-
+        struct IBDest remote_dest;    
+        int setup_ib_common();
+        int connect_between_qps();
         struct ibv_context *ctx;
         struct ibv_pd *pd;
         struct ibv_mr *mr;
         struct ibv_cq *cq;
         struct ibv_qp *qp;
         struct ibv_port_attr port_info;
-        void       *metabuf;
+        void       *ib_buf;
         size_t metabuf_size;
 
   };
@@ -107,7 +105,7 @@ namespace Umap {
 
   class NetworkClient: public NetworkEndpoint{
     public:
-      NetworkClient( char* _server_name_  );
+      NetworkClient( const char* _server_name_  );
     private:
       int get_server_dest();
       char server_name[64];
@@ -126,8 +124,8 @@ namespace Umap {
       size_t rsize;
       size_t alignsize;
       NetworkEndpoint* endpoint;
-      std::vector<struct ibv_mr *> remote_mrs;
-      std::map<uint64_t, ibv_mr *> local_mrs_map;
+      std::vector<struct RemoteMR> remote_mrs;   //only significant on Client 
+      std::map<uint64_t, ibv_mr*> local_mrs_map; 
       void create_local_region(char* buf, size_t nb)
   };
 }
