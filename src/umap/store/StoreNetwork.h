@@ -115,9 +115,9 @@ namespace Umap {
 
     public:
       StoreNetwork(const void* _region_, size_t _rsize_, size_t _alignsize_, NetworkEndpoint* _endpoint_);
-
       ssize_t read_from_store(char* buf, size_t nb, off_t off);
       ssize_t  write_to_store(char* buf, size_t nb, off_t off);
+      
     private:
       void* region;
       void* alignment_buffer;
@@ -126,7 +126,7 @@ namespace Umap {
       NetworkEndpoint* endpoint;
       std::vector<struct RemoteMR> remote_mrs;   //only significant on Client 
       std::map<uint64_t, ibv_mr*> local_mrs_map; 
-      void create_local_region(char* buf, size_t nb)
+      void create_local_region(char* buf, size_t nb);
   };
 }
 #endif

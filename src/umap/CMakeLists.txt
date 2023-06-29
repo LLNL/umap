@@ -61,7 +61,7 @@ if (caliper_DIR)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
 endif()
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set (CMAKE_CXX_FLAGS "-g ${CMAKE_CXX_FLAGS} -libverbs")
 
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib
@@ -74,5 +74,5 @@ install(FILES store/Store.hpp DESTINATION include/umap/store )
 
 install(FILES store/SparseStore.h DESTINATION include/umap/store)
 
-install(FILES store/SparseNetwork.h DESTINATION include/umap/store)
+install(FILES store/StoreNetwork.h DESTINATION include/umap/store)
 

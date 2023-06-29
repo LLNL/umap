@@ -132,12 +132,12 @@ namespace Umap {
             return 1;
         }
 
-        struct ibv_qp_attr qp_attr = {
-                .qp_state        = IBV_QPS_INIT,
-                .pkey_index      = 0,
-                .port_num        = IB_PORT,
-                .qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
-        };
+        struct ibv_qp_attr qp_attr;
+        memset(&qp_attr, 0, sizeof(qp_attr));
+        qp_attr.qp_state        = IBV_QPS_INIT;
+        qp_attr.pkey_index      = 0;
+        qp_attr.port_num        = IB_PORT;
+        qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
 
         if (ibv_modify_qp(qp, &qp_attr, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
             perror("Failed to modify QP to INIT.\n");
@@ -164,21 +164,20 @@ namespace Umap {
 
   int NetworkEndpoint::connect_between_qps()
   {
-    struct ibv_qp_attr qp_attr = {
-      .qp_state		= IBV_QPS_RTR,
-      .path_mtu		= MTU,
-      .dest_qp_num	= remote_dest.qpn,
-      .rq_psn			  = remote_dest.psn,
-      .max_dest_rd_atomic	= 1,
-      .min_rnr_timer		  = 12,
-      .ah_attr = {
-                  .is_global	= 0,
-                  .dlid		= remote_dest.lid,
-                  .sl		= 0,
-                  .src_path_bits	= 0,
-                  .port_num	= IB_PORT
-                }
-    };
+    struct ibv_qp_attr qp_attr;
+    memset(&qp_attr, 0, sizeof(qp_attr));
+    qp_attr.qp_state		= IBV_QPS_RTR;
+    qp_attr.path_mtu		= MTU;
+    qp_attr.dest_qp_num	= remote_dest.qpn;
+    qp_attr.rq_psn			= remote_dest.psn;
+    qp_attr.max_dest_rd_atomic	= 1;
+    qp_attr.min_rnr_timer		    = 12;
+    qp_attr.ah_attr.is_global	  = 0;
+    qp_attr.ah_attr.dlid  = remote_dest.lid;
+    qp_attr.ah_attr.sl		= 0;
+    qp_attr.ah_attr.src_path_bits	= 0;
+    qp_attr.ah_attr.port_num	= IB_PORT;
+
 
     if (ibv_modify_qp(qp, &qp_attr, IBV_QP_STATE | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
                                     IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER | IBV_QP_AV)) {
@@ -238,39 +237,43 @@ namespace Umap {
 
   int  NetworkEndpoint::post_recv(int size)
   {
+    memset(ib_buf, 0, IB_METABUFFER_SIZE);
     struct ibv_sge list = {
-      .addr	= (uint64_t)ib_buf,
-      .length = size,
+      .addr	  = (uint64_t)ib_buf,
+      .length = (uint32_t)size,
       .lkey	= mr->lkey
     };
 
-    struct ibv_recv_wr *bad_wr, wr = {
-      .wr_id	    = RECV_WRID,
-      .sg_list    = &list,
-      .num_sge    = 1,
-      .next       = NULL
-    };
+    struct ibv_recv_wr *bad_wr;
+    struct ibv_recv_wr wr;
+    memset(&wr, 0, sizeof(wr));
+    wr.wr_id	    = RECV_WRID;
+    wr.sg_list    = &list;
+    wr.num_sge    = 1;
+    wr.next       = NULL;
 
-    ibv_post_recv(qp, &wr, &bad_wr);
+    int res = ibv_post_recv(qp, &wr, &bad_wr);
+    return res;
 
   }
 
   int  NetworkEndpoint::post_send(int size)
   {
     struct ibv_sge list = {
-      .addr	= (uint64_t)ib_buf,
-      .length = size,
+      .addr	  = (uint64_t)ib_buf,
+      .length = (uint32_t) size,
       .lkey	  = mr->lkey
     };
 
-    struct ibv_send_wr *bad_wr, wr = {
-      .wr_id	    = SEND_WRID,
-      .sg_list    = &list,
-      .num_sge    = 1,
-      .opcode     = IBV_WR_SEND,
-      .send_flags = IBV_SEND_SIGNALED,
-      .next       = NULL
-    };
+    struct ibv_send_wr *bad_wr;
+    struct ibv_send_wr wr;
+    memset(&wr, 0, sizeof(wr));
+    wr.wr_id	    = SEND_WRID;
+    wr.sg_list    = &list;
+    wr.num_sge    = 1;
+    wr.opcode     = IBV_WR_SEND;
+    wr.send_flags = IBV_SEND_SIGNALED;
+    wr.next       = NULL;
 
     return ibv_post_send(qp, &wr, &bad_wr);
 
@@ -310,14 +313,17 @@ namespace Umap {
   }
 
   NetworkServer::NetworkServer(){
+    UMAP_LOG(Info, "before setup_ib_common");
     setup_ib_common();
+    UMAP_LOG(Info, "before get_client_dest");
     get_client_dest();
+    UMAP_LOG(Info, "before connect_between_qps");
     connect_between_qps();
   }
 
   int NetworkServer::get_client_dest()
   {
-    int sockfd, connfd, len;
+    int sockfd, connfd;
     struct sockaddr_in server_address, client_address;
 
     // Start connection:
@@ -345,7 +351,7 @@ namespace Umap {
       return 1;
     }
 
-    len = sizeof(client_address);
+    socklen_t len = (socklen_t) sizeof(client_address);
 
     connfd = accept(sockfd, (struct sockaddr*)&client_address, &len);
     if(connfd < 0)
@@ -405,7 +411,7 @@ namespace Umap {
       printf("Allocated %zu\n", size);   
 
       //Register remote region one by one for each page
-      char* p_addr = (char* ) buf;
+      char* p_addr = (char* ) buf;p_addr[0]='a';p_addr[1]='b';p_addr[2]='c';p_addr[3]='\0';
       for(int i=0; i<num_pages; i++)
       {
           struct ibv_mr *mr = ibv_reg_mr(pd, p_addr, 4096,
@@ -439,9 +445,11 @@ namespace Umap {
   
     memset(server_name, '\0', sizeof(server_name));
     strcpy(server_name, _server_name_);
-
+    UMAP_LOG(Info, "before setup_ib_common with "<<server_name);
     setup_ib_common();
+    UMAP_LOG(Info, "before get_server_dest");
     get_server_dest();
+    UMAP_LOG(Info, "before connect_between_qps");
     connect_between_qps();
   }
 
@@ -582,8 +590,12 @@ namespace Umap {
     wr_read.wr.rdma.rkey = remote_mrs[page_id].rkey;
     wr_read.next       = NULL;
 
+    UMAP_LOG(Info, " before ibv_post_send " );
     ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
+    UMAP_LOG(Info, " after ibv_post_send " );
     size_t rval = endpoint->wait_completions(READ_WRID);
+
+    UMAP_LOG(Info, " : " << buf );
 
     return rval;
   }

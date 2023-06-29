@@ -12,8 +12,9 @@
 # include "umap/umap.h"
 # include "umap/store/StoreNetwork.h"
 #include <stdlib.h>
+#include <omp.h>
 
-#define STREAM_ARRAY_SIZE	1024000
+#define STREAM_ARRAY_SIZE	1
 #define NTIMES	3
 
 # define HLINE "-------------------------------------------------------------\n"
@@ -75,7 +76,8 @@ int main(int argc, char *argv[])
 		printf("failed to map a %s \n", strerror(errno));
 	}
 	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
-
+	a[0]=1234.5678;
+#if false
 	bytes[0] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[1] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[2] = 3 * sizeof(STREAM_TYPE) * array_size;
@@ -149,8 +151,7 @@ int main(int argc, char *argv[])
 		quantum = 1;
 	}
 	printf("Init is done\n");
-
-#if false		
+		
 	/*	--- MAIN LOOP --- repeat test cases NTIMES times --- */
 	scalar = 3.0;
 	for (k=0; k<NTIMES; k++)
