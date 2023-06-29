@@ -68,7 +68,6 @@ namespace Umap {
 
     public:
         NetworkEndpoint();
-        void close_ib_connection();
         int wait_completions(int wr_id);
         struct ibv_qp* get_qp(){return qp;}
         struct ibv_pd* get_pd(){return pd;}
@@ -89,6 +88,7 @@ namespace Umap {
         struct ibv_port_attr port_info;
         void       *ib_buf;
         size_t metabuf_size;
+        void close_ib_connection();
 
   };
 
@@ -106,6 +106,7 @@ namespace Umap {
   class NetworkClient: public NetworkEndpoint{
     public:
       NetworkClient( const char* _server_name_  );
+      ~NetworkClient();
     private:
       int get_server_dest();
       char server_name[64];
@@ -126,7 +127,8 @@ namespace Umap {
       NetworkEndpoint* endpoint;
       std::vector<struct RemoteMR> remote_mrs;   //only significant on Client 
       std::map<uint64_t, ibv_mr*> local_mrs_map; 
-      void create_local_region(char* buf, size_t nb);
+      struct ibv_mr *local_send_mr;
+      int create_local_region(char* buf, size_t nb, int mode);
   };
 }
 #endif

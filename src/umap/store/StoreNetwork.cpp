@@ -314,7 +314,9 @@ namespace Umap {
 
   NetworkServer::NetworkServer(){
     UMAP_LOG(Info, "before setup_ib_common");
-    setup_ib_common();
+    int res = setup_ib_common();
+    if( res ) UMAP_ERROR("NetworkServer failed to setup IB");
+    
     UMAP_LOG(Info, "before get_client_dest");
     get_client_dest();
     UMAP_LOG(Info, "before connect_between_qps");
@@ -425,7 +427,10 @@ namespace Umap {
 
           printf("Registered Page %zu\n", i);
           mem_regions.push_back(mr);
+          remote_mrs->remote_addr = (uint64_t) p_addr;
+          remote_mrs->rkey = mr->rkey;
           p_addr += 4096;
+          remote_mrs ++;
       }
       printf("Finished registering %zu pages\n", num_pages);      
 
@@ -437,8 +442,25 @@ namespace Umap {
     }
 
     //TODO
-    //add free up.
-
+    //add free up
+    //deregistering all MRs
+    UMAP_LOG(Info, "Server de-registering memory regions");
+    size_t num_memory_regions = mem_regions.size();
+    for(int i=0; i<num_memory_regions; i++)
+    {
+      if (ibv_dereg_mr(mem_regions[i])) {
+        fprintf(stderr, "Error, ibv_dereg_mr() failed for %d-th region\n", i);
+      }
+    }
+    UMAP_LOG(Info, "Server close IB connection");
+    double* buf = (double*) mem_regions[0]->addr;
+    printf("Server local buffer %f \n", buf[0]);
+    buf = (double*) mem_regions[1]->addr;
+    printf("Server local buffer %f \n", buf[0]);
+    buf = (double*) mem_regions[2]->addr;
+    printf("Server local buffer %f \n", buf[0]);
+    close_ib_connection();
+    UMAP_LOG(Info, "Server shutdown");
   }
 
   NetworkClient::NetworkClient( const char* _server_name_ ){
@@ -453,6 +475,18 @@ namespace Umap {
     connect_between_qps();
   }
 
+  
+  NetworkClient::~NetworkClient(){
+    UMAP_LOG(Info, "destroying Client");
+    // inform the server to shut down
+    int signal_end = 0;
+    memcpy(ib_buf, &signal_end, sizeof(int));
+    post_send(sizeof(int)); 
+    wait_completions(SEND_WRID);
+
+    close_ib_connection();
+  }
+  
   int NetworkClient::get_server_dest()
   {
     int sockfd;
@@ -542,21 +576,35 @@ namespace Umap {
     for(int i=0; i<num_pages; i++ ){
       remote_mrs.push_back(*remote_mr_ptr);
       remote_mr_ptr ++;
-    }    
+      printf("remote address %lu, rkey = %zu\n", remote_mrs.back().remote_addr, remote_mrs.back().rkey);
+    }
+    void*   local_send_ptr = malloc(alignsize);
+    local_send_mr  = ibv_reg_mr(endpoint->get_pd(), local_send_ptr, alignsize, IBV_ACCESS_LOCAL_WRITE);
+    if (!local_send_mr)
+    {
+        UMAP_ERROR("Could not register local_send_mr");
+    }
   }
 
-  void StoreNetwork::create_local_region(char* buf, size_t nb)
+  int StoreNetwork::create_local_region(char* buf, size_t nb, int mode)
   {
-    ibv_mr *mr = ibv_reg_mr(endpoint->get_pd(), buf, nb,
-                    IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    ibv_mr *mr;
+    if( mode == 0 )
+      mr = ibv_reg_mr(endpoint->get_pd(), buf, nb,
+                    IBV_ACCESS_LOCAL_WRITE); // | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
+    else
+      mr = ibv_reg_mr(endpoint->get_pd(), buf, nb,
+                    IBV_ACCESS_LOCAL_WRITE);
+
     if (!mr)
     {
-      perror("Couldn't register Memory Region for buffer\n");
-      return;
+      printf("Couldn't register Memory Region for buffer %p\n", buf);
+      return 1;
     }else{
-      printf("Registered buffer%p in read_from_store\n", buf);
+      printf("Registered buffer %p in create_local_region\n", buf);
       local_mrs_map[(uint64_t)buf] = mr;
     }
+    return 0;
   }
 
   ssize_t StoreNetwork::read_from_store(char* buf, size_t nb, off_t off)
@@ -564,16 +612,20 @@ namespace Umap {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
 
+    int rval = 0;
+
     if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
     {
-        create_local_region( buf, nb);
+        rval = create_local_region( buf, nb, 0);
+        if( rval ) 
+          UMAP_ERROR("Failed to create local region for buffer " << (uint64_t)buf );
     }
     ibv_mr *local_mr = local_mrs_map[(uint64_t)buf];
 
     int page_id = off / alignsize;
 
     struct ibv_sge list = {
-      .addr	= (uint64_t)buf,
+      .addr	  = (uint64_t)buf,
       .length = (uint32_t) nb,
       .lkey	  = local_mr->lkey
     };
@@ -581,19 +633,20 @@ namespace Umap {
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_read;
     memset(&wr_read, 0, sizeof(wr_read));
-    wr_read.wr_id	= READ_WRID;
+    wr_read.wr_id	     = READ_WRID;
     wr_read.sg_list    = &list;
     wr_read.num_sge    = 1;
     wr_read.opcode     = IBV_WR_RDMA_READ;
     wr_read.send_flags = IBV_SEND_SIGNALED;
     wr_read.wr.rdma.remote_addr =  remote_mrs[page_id].remote_addr;
     wr_read.wr.rdma.rkey = remote_mrs[page_id].rkey;
-    wr_read.next       = NULL;
+    wr_read.next         = NULL;
 
     UMAP_LOG(Info, " before ibv_post_send " );
     ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
     UMAP_LOG(Info, " after ibv_post_send " );
-    size_t rval = endpoint->wait_completions(READ_WRID);
+
+    rval = endpoint->wait_completions(READ_WRID);
 
     UMAP_LOG(Info, " : " << buf );
 
@@ -605,18 +658,15 @@ namespace Umap {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
 
-    if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
-    {
-        create_local_region( buf, nb);
-    }
-    ibv_mr *local_mr = local_mrs_map[(uint64_t)buf];
+    int rval = 0;
+    memcpy(local_send_mr->addr, buf, nb);
 
     int page_id = off / alignsize;
 
     struct ibv_sge list = {
-      .addr	= (uint64_t)buf,
+      .addr	  = (uint64_t) local_send_mr->addr,
       .length = (uint32_t) nb,
-      .lkey	= local_mr->lkey
+      .lkey	  = local_send_mr->lkey
     };
 
     struct ibv_send_wr *bad_wr;
@@ -630,8 +680,13 @@ namespace Umap {
     wr_write.wr.rdma.rkey = remote_mrs[page_id].rkey;
     wr_write.next         = NULL;
 
-    size_t rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
+    rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
+    if( rval ) 
+      UMAP_ERROR("Failed to ibv_post_send " << (uint64_t)buf );
+
     rval = endpoint->wait_completions(WRITE_WRID);
+    if( rval ) 
+      UMAP_ERROR("Failed to wait_completions WRITE_WRID " << WRITE_WRID);
 
     return rval;
   }

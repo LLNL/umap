@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <omp.h>
 
-#define STREAM_ARRAY_SIZE	1
+#define STREAM_ARRAY_SIZE	512
 #define NTIMES	3
 
 # define HLINE "-------------------------------------------------------------\n"
@@ -55,7 +55,6 @@ int main(int argc, char *argv[])
 		server_name = NULL;
 		Umap::NetworkServer server;
 		server.wait_till_disconnect();
-		server.close_ib_connection();
 		return 0;
 	}
 	
@@ -69,14 +68,29 @@ int main(int argc, char *argv[])
 	size_t umap_region_length = sizeof(STREAM_TYPE) * array_size;
 	size_t umap_psize = umapcfg_get_umap_page_size();
 	umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
+	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
 
 	Umap::Store*  store_a = new Umap::StoreNetwork("stream_a", umap_region_length, umap_psize, client);
 	a = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_a);
 	if ( a == UMAP_FAILED ) {
 		printf("failed to map a %s \n", strerror(errno));
 	}
-	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
 	a[0]=1234.5678;
+
+	Umap::Store*  store_b = new Umap::StoreNetwork("stream_b", umap_region_length, umap_psize, client);
+	b = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_b);
+	if ( b == UMAP_FAILED ) {
+		printf("failed to map b %s \n", strerror(errno));
+	}
+	b[0]=4321.8765;
+
+	Umap::Store*  store_c = new Umap::StoreNetwork("stream_b", umap_region_length, umap_psize, client);
+	c = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_c);
+	if ( c == UMAP_FAILED ) {
+		printf("failed to map c %s \n", strerror(errno));
+	}
+	c[0]=5678.1234;
+
 #if false
 	bytes[0] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[1] = 2 * sizeof(STREAM_TYPE) * array_size;
@@ -215,8 +229,7 @@ int main(int argc, char *argv[])
 	uunmap(b,0);
 	uunmap(c,0);
 	
-	client->close_ib_connection();
-	free(client);
+	delete(client);
     return 0;
 }
 
