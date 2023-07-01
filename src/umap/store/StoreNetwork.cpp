@@ -389,10 +389,11 @@ namespace Umap {
   {
     bool done = false;
     while( !done ){
-      post_recv(sizeof(int));
+      post_recv(sizeof(int)*2);
       wait_completions(RECV_WRID);
-      int num_pages;
-      memcpy(&num_pages, ib_buf, sizeof(int));
+      int *buf = (int*)ib_buf;
+      int num_pages = buf[0];
+      //memcpy(&num_pages, ib_buf, sizeof(int));
       printf("Received num_pages=%d\n", num_pages);
 
       //Check if it is the signal for closing IB connection
@@ -401,40 +402,41 @@ namespace Umap {
         break;        
       }
 
+      int page_size = buf[1];
+      printf("Received page_size=%d\n", page_size);
+
       //struct ibv_mr **mrs = (struct ibv_mr **)malloc( sizeof(struct ibv_mr *)*num_pages );
       //struct RemoteMR *remote_mrs = (struct RemoteMR *) malloc(sizeof(struct RemoteMR)*num_pages ); 
       struct RemoteMR *remote_mrs = (struct RemoteMR *) ib_buf;
       //todo: need to check buffer size
-      size_t size = num_pages * 4096;
+      size_t size = num_pages * page_size;
 
       //Option 1: allocate memory
-      void   *buf = malloc(size);
+      buf = (int*) malloc(size);
       memset(buf, 0, size);
       printf("Allocated %zu\n", size);   
 
       //Register remote region one by one for each page
-      char* p_addr = (char* ) buf;p_addr[0]='a';p_addr[1]='b';p_addr[2]='c';p_addr[3]='\0';
+      char* p_addr = (char* ) buf;
       for(int i=0; i<num_pages; i++)
       {
-          struct ibv_mr *mr = ibv_reg_mr(pd, p_addr, 4096,
-                          IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
-          
+          struct ibv_mr *mr = ibv_reg_mr(pd, p_addr, page_size,
+                          IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);          
           if (!mr)
           {
               perror("Couldn't register Memory Region\n");
               return;
           }
-
           printf("Registered Page %zu\n", i);
           mem_regions.push_back(mr);
           remote_mrs->remote_addr = (uint64_t) p_addr;
           remote_mrs->rkey = mr->rkey;
-          p_addr += 4096;
+          p_addr += page_size;
           remote_mrs ++;
       }
       printf("Finished registering %zu pages\n", num_pages);      
 
-      // Send remote address and rkey
+      //Send remote address and rkey
       //memcpy(ib_buf, remote_mrs, sizeof(struct RemoteMR)*num_pages );
       post_send(sizeof(struct RemoteMR)*num_pages);
       wait_completions(SEND_WRID);
@@ -474,7 +476,6 @@ namespace Umap {
     UMAP_LOG(Info, "before connect_between_qps");
     connect_between_qps();
   }
-
   
   NetworkClient::~NetworkClient(){
     UMAP_LOG(Info, "destroying Client");
@@ -549,8 +550,8 @@ namespace Umap {
     return 0;
   }
 
-  StoreNetwork::StoreNetwork(const void* _region_, size_t _rsize_, size_t _alignsize_, NetworkEndpoint* _endpoint_)
-    : rsize{_rsize_}, alignsize{_alignsize_}
+  StoreNetwork::StoreNetwork(const void* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_)
+    : rsize{_rsize_}, alignsize{Umap::RegionManager::getInstance().get_umap_page_size()}
   {
     UMAP_LOG(Info, "region: " << region << " rsize: " << rsize
               << " alignsize: " << alignsize );
@@ -558,11 +559,14 @@ namespace Umap {
     endpoint = _endpoint_;
 
     // Notify the server the number of pages to allocate
-    assert( alignsize==4096 );
-    assert( _rsize_ % alignsize == 0 );
-    int num_pages = _rsize_ / alignsize;
-    memcpy(endpoint->get_buf(), &num_pages, sizeof(int));
-    endpoint->post_send(sizeof(int)); 
+    if( rsize % alignsize != 0 )
+      UMAP_ERROR(" region size " << rsize << " is not divisible by " << alignsize );
+    int *buf = (int*) endpoint->get_buf();
+    int num_pages = rsize/alignsize;
+    buf[0] = num_pages;
+    buf[1] = alignsize;
+    //memcpy(endpoint->get_buf(), &num_pages, sizeof(int));
+    endpoint->post_send(sizeof(int)*2); 
     endpoint->wait_completions(SEND_WRID);
 
     // Get Server's remote address and rkey

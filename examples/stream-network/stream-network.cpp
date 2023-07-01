@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <omp.h>
 
-#define STREAM_ARRAY_SIZE	512
+#define STREAM_ARRAY_SIZE	2048
 #define NTIMES	3
 
 # define HLINE "-------------------------------------------------------------\n"
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 	umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
 	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
 
-	Umap::Store*  store_a = new Umap::StoreNetwork("stream_a", umap_region_length, umap_psize, client);
+	Umap::Store*  store_a = new Umap::StoreNetwork("stream_a", umap_region_length, client);
 	a = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_a);
 	if ( a == UMAP_FAILED ) {
 		printf("failed to map a %s \n", strerror(errno));
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 	}
 	c[0]=5678.1234;
 
-#if false
+
 	bytes[0] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[1] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[2] = 3 * sizeof(STREAM_TYPE) * array_size;
@@ -165,7 +165,8 @@ int main(int argc, char *argv[])
 		quantum = 1;
 	}
 	printf("Init is done\n");
-		
+
+
 	/*	--- MAIN LOOP --- repeat test cases NTIMES times --- */
 	scalar = 3.0;
 	for (k=0; k<NTIMES; k++)
@@ -222,7 +223,7 @@ int main(int argc, char *argv[])
 	/* --- Check Results --- */
 	checkSTREAMresults();
 	printf(HLINE);
-#endif
+
 
 	/* --- Free up --- */
 	uunmap(a,0);
@@ -335,7 +336,7 @@ void checkSTREAMresults ()
 	bj = 2.0;
 	cj = 0.0;
     /* a[] is modified during timing check */
-	aj = 2.0E0 * aj;
+	//aj = 2.0E0 * aj;
     /* now execute timing loop */
 	scalar = 3.0;
 	for (k=0; k<NTIMES; k++)
@@ -354,7 +355,7 @@ void checkSTREAMresults ()
 		aSumErr += abs(a[j] - aj);
 		bSumErr += abs(b[j] - bj);
 		cSumErr += abs(c[j] - cj);
-		// if (j == 417) printf("Index 417: c[j]: %f, cj: %f\n",c[j],cj);	// MCCALPIN
+		//if (j %16==0) printf("Index %d: c[j]: %f, cj: %f\n", j, c[j],cj);	// MCCALPIN
 	}
 	aAvgErr = aSumErr / (STREAM_TYPE) array_size;
 	bAvgErr = bSumErr / (STREAM_TYPE) array_size;

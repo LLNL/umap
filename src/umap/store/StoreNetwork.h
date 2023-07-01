@@ -115,7 +115,7 @@ namespace Umap {
   class StoreNetwork : public Store {
 
     public:
-      StoreNetwork(const void* _region_, size_t _rsize_, size_t _alignsize_, NetworkEndpoint* _endpoint_);
+      StoreNetwork(const void* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_);
       ssize_t read_from_store(char* buf, size_t nb, off_t off);
       ssize_t  write_to_store(char* buf, size_t nb, off_t off);
       
