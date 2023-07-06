@@ -23,6 +23,7 @@
 #include "StoreNetwork.h"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
+#include "umap/RegionManager.hpp"
 
 namespace Umap {
 
@@ -49,7 +50,6 @@ namespace Umap {
         perror("No IB devices found.\n");
         return 1;
     }
-
 
     metabuf_size = IB_METABUFFER_SIZE;
     ib_buf = malloc(roundup(IB_METABUFFER_SIZE, sysconf(_SC_PAGESIZE)));
@@ -104,8 +104,8 @@ namespace Umap {
         return 1;
     }
 
-    // Creates a Completion Queue:
-    cq = ibv_create_cq(ctx, 2 * COUNT, NULL, NULL, 0);
+    // Creates a Completion Queue
+    cq = ibv_create_cq(ctx, COUNT, NULL, NULL, 0);
     if (!cq)
     {
       perror("Couldn't create Completion Queue.\n");
@@ -114,35 +114,35 @@ namespace Umap {
 
     // Creates a Queue Pair:
     {
-        struct ibv_qp_init_attr qp_init_attr = {
-                .send_cq = cq,
-                .recv_cq = cq,
-                .cap = {
-                        .max_send_wr = COUNT,
-                        .max_recv_wr = COUNT,
-                        .max_send_sge = 1,
-                        .max_recv_sge = 1,
-                },
-                .qp_type = IBV_QPT_RC,
-        };
+      struct ibv_qp_init_attr qp_init_attr = {
+              .send_cq = cq,
+              .recv_cq = cq,
+              .cap = {
+                      .max_send_wr = COUNT,
+                      .max_recv_wr = COUNT,
+                      .max_send_sge = 1,
+                      .max_recv_sge = 1,
+              },
+              .qp_type = IBV_QPT_RC,
+      };
 
-        qp = ibv_create_qp(pd, &qp_init_attr);
-        if (!qp) {
-            perror("Couldn't create Queue Pair.\n");
-            return 1;
-        }
+      qp = ibv_create_qp(pd, &qp_init_attr);
+      if (!qp) {
+          perror("Couldn't create Queue Pair.\n");
+          return 1;
+      }
 
-        struct ibv_qp_attr qp_attr;
-        memset(&qp_attr, 0, sizeof(qp_attr));
-        qp_attr.qp_state        = IBV_QPS_INIT;
-        qp_attr.pkey_index      = 0;
-        qp_attr.port_num        = IB_PORT;
-        qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+      struct ibv_qp_attr qp_attr;
+      memset(&qp_attr, 0, sizeof(qp_attr));
+      qp_attr.qp_state        = IBV_QPS_INIT;
+      qp_attr.pkey_index      = 0;
+      qp_attr.port_num        = IB_PORT;
+      qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
 
-        if (ibv_modify_qp(qp, &qp_attr, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
-            perror("Failed to modify QP to INIT.\n");
-            return 1;
-        }
+      if (ibv_modify_qp(qp, &qp_attr, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
+          perror("Failed to modify QP to INIT.\n");
+          return 1;
+      }
     }
 
     // Get LID:
@@ -261,7 +261,7 @@ namespace Umap {
   {
     struct ibv_sge list = {
       .addr	  = (uint64_t)ib_buf,
-      .length = (uint32_t) size,
+      .length = (uint32_t)size,
       .lkey	  = mr->lkey
     };
 
@@ -276,11 +276,13 @@ namespace Umap {
     wr.next       = NULL;
 
     return ibv_post_send(qp, &wr, &bad_wr);
-
   }
 
-  int  NetworkEndpoint::wait_completions(int wr_id)
-  {
+  int  NetworkEndpoint::wait_completions(uint64_t wr_id){return 0;}
+
+  int  NetworkServer::wait_completions(uint64_t wr_id)
+  { // only one thread (the server) will call this
+    UMAP_LOG(Info, "wr_id:"<<wr_id);
     int finished = 0, count = 1;
     while (finished < count)
     {
@@ -308,19 +310,59 @@ namespace Umap {
           finished++;
       }
     }
-
+    UMAP_LOG(Info, "wr_id:"<<wr_id);
     return 0;
   }
 
+  int  NetworkClient::wait_completions(uint64_t wr_id)
+  { // multiple filler and evictor may call this concurrently
+    UMAP_LOG(Info, "wr_id:"<<wr_id);
+    int finished = 0, count = 1;
+    while (finished < count)
+    {
+      struct ibv_wc wc[WC_BATCH];
+      int n;
+      do {
+          n = ibv_poll_cq(cq, WC_BATCH, wc);
+          if (n < 0)
+          {
+              fprintf(stderr, "Poll CQ failed %d\n", n);
+              return 1;
+          }
+      } while (n < 1);
+
+      for (int i = 0; i < n; i++)
+      {
+        if (wc[i].status != IBV_WC_SUCCESS)
+        {
+          fprintf(stderr, "Failed status %s (%d) for wr_id %d\n",
+                  ibv_wc_status_str(wc[i].status), wc[i].status, (int)wc[i].wr_id);
+          return 1;
+        }
+        UMAP_LOG(Info, "wc["<<i<<"].wr_id"<<wc[i].wr_id);
+        if(wc[i].wr_id == wr_id)
+          finished++;
+      }
+    }
+
+    UMAP_LOG(Info, "wr_id:"<<wr_id);
+    return 0;
+  }
+
+  NetworkServer::~NetworkServer(){
+    //todo
+  }
   NetworkServer::NetworkServer(){
-    UMAP_LOG(Info, "before setup_ib_common");
+
     int res = setup_ib_common();
-    if( res ) UMAP_ERROR("NetworkServer failed to setup IB");
+    if( res ) UMAP_ERROR(" failed to setup IB");
     
-    UMAP_LOG(Info, "before get_client_dest");
-    get_client_dest();
-    UMAP_LOG(Info, "before connect_between_qps");
-    connect_between_qps();
+    res = get_client_dest();
+    if( res ) UMAP_ERROR(" failed to get_client_dest");
+
+    res = connect_between_qps();
+    if( res ) UMAP_ERROR(" failed to connect_between_qps");
+    
   }
 
   int NetworkServer::get_client_dest()
@@ -421,7 +463,7 @@ namespace Umap {
       for(int i=0; i<num_pages; i++)
       {
           struct ibv_mr *mr = ibv_reg_mr(pd, p_addr, page_size,
-                          IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);          
+                          IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE); // need IBV_ACCESS_LOCAL_WRITE or it fails      
           if (!mr)
           {
               perror("Couldn't register Memory Region\n");
@@ -469,12 +511,14 @@ namespace Umap {
   
     memset(server_name, '\0', sizeof(server_name));
     strcpy(server_name, _server_name_);
-    UMAP_LOG(Info, "before setup_ib_common with "<<server_name);
-    setup_ib_common();
-    UMAP_LOG(Info, "before get_server_dest");
-    get_server_dest();
-    UMAP_LOG(Info, "before connect_between_qps");
-    connect_between_qps();
+    int res = setup_ib_common();
+    if( res ) UMAP_ERROR(" failed to setup IB");
+
+    res = get_server_dest();
+    if( res ) UMAP_ERROR(" failed to get_server_dest");
+    
+    res = connect_between_qps();
+    if( res ) UMAP_ERROR(" failed to connect_between_qps");
   }
   
   NetworkClient::~NetworkClient(){
@@ -550,13 +594,14 @@ namespace Umap {
     return 0;
   }
 
-  StoreNetwork::StoreNetwork(const void* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_)
+  StoreNetwork::StoreNetwork(const char* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_)
     : rsize{_rsize_}, alignsize{Umap::RegionManager::getInstance().get_umap_page_size()}
   {
-    UMAP_LOG(Info, "region: " << region << " rsize: " << rsize
+    region_name = std::string(_region_);
+    UMAP_LOG(Info, "region_name: " << region_name << " rsize: " << rsize
               << " alignsize: " << alignsize );
 
-    endpoint = _endpoint_;
+    endpoint = dynamic_cast<NetworkClient*>(_endpoint_);
 
     // Notify the server the number of pages to allocate
     if( rsize % alignsize != 0 )
@@ -615,6 +660,7 @@ namespace Umap {
   {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
+    UMAP_LOG(Info, region_name << " off " << off);
 
     int rval = 0;
 
@@ -637,7 +683,8 @@ namespace Umap {
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_read;
     memset(&wr_read, 0, sizeof(wr_read));
-    wr_read.wr_id	     = READ_WRID;
+    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    wr_read.wr_id	     = wr_id;
     wr_read.sg_list    = &list;
     wr_read.num_sge    = 1;
     wr_read.opcode     = IBV_WR_RDMA_READ;
@@ -646,13 +693,13 @@ namespace Umap {
     wr_read.wr.rdma.rkey = remote_mrs[page_id].rkey;
     wr_read.next         = NULL;
 
-    UMAP_LOG(Info, " before ibv_post_send " );
-    ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
-    UMAP_LOG(Info, " after ibv_post_send " );
+    rval = ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
+    if( rval ) 
+          UMAP_ERROR("Failed to send request request " );
 
-    rval = endpoint->wait_completions(READ_WRID);
-
-    UMAP_LOG(Info, " : " << buf );
+    rval = endpoint->wait_completions(wr_id);
+    if( rval ) 
+          UMAP_ERROR("Failed to wait_completions ");    
 
     return rval;
   }
@@ -661,6 +708,7 @@ namespace Umap {
   {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
+    UMAP_LOG(Info, region_name << " off " << off);
 
     int rval = 0;
     memcpy(local_send_mr->addr, buf, nb);
@@ -675,7 +723,9 @@ namespace Umap {
 
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_write;
-    wr_write.wr_id	    = WRITE_WRID;
+    memset(&wr_write, 0, sizeof(wr_write));
+    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    wr_write.wr_id	    = wr_id;
     wr_write.sg_list    = &list;
     wr_write.num_sge    = 1;
     wr_write.opcode     = IBV_WR_RDMA_WRITE;
@@ -688,9 +738,9 @@ namespace Umap {
     if( rval ) 
       UMAP_ERROR("Failed to ibv_post_send " << (uint64_t)buf );
 
-    rval = endpoint->wait_completions(WRITE_WRID);
+    rval = endpoint->wait_completions(wr_id);
     if( rval ) 
-      UMAP_ERROR("Failed to wait_completions WRITE_WRID " << WRITE_WRID);
+      UMAP_ERROR("Failed to wait_completions WRITE_WRID " << wr_id);
 
     return rval;
   }

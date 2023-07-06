@@ -68,12 +68,12 @@ namespace Umap {
 
     public:
         NetworkEndpoint();
-        int wait_completions(int wr_id);
         struct ibv_qp* get_qp(){return qp;}
         struct ibv_pd* get_pd(){return pd;}
         void*  get_buf(){return ib_buf;}
         int post_recv(int size);
         int post_send(int size);
+        virtual int wait_completions(uint64_t wr_id)=0;
 
     protected:
         struct IBDest local_dest;
@@ -95,7 +95,9 @@ namespace Umap {
   class NetworkServer: public NetworkEndpoint{
     public:
       NetworkServer();
+      ~NetworkServer();
       void wait_till_disconnect();
+      int wait_completions(uint64_t wr_id);
 
     private:
       int get_client_dest();
@@ -107,6 +109,8 @@ namespace Umap {
     public:
       NetworkClient( const char* _server_name_  );
       ~NetworkClient();
+      int wait_completions(uint64_t wr_id);
+
     private:
       int get_server_dest();
       char server_name[64];
@@ -115,16 +119,16 @@ namespace Umap {
   class StoreNetwork : public Store {
 
     public:
-      StoreNetwork(const void* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_);
+      StoreNetwork(const char* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_);
       ssize_t read_from_store(char* buf, size_t nb, off_t off);
       ssize_t  write_to_store(char* buf, size_t nb, off_t off);
       
     private:
-      void* region;
+      std::string region_name;
       void* alignment_buffer;
       size_t rsize;
       size_t alignsize;
-      NetworkEndpoint* endpoint;
+      NetworkClient* endpoint;
       std::vector<struct RemoteMR> remote_mrs;   //only significant on Client 
       std::map<uint64_t, ibv_mr*> local_mrs_map; 
       struct ibv_mr *local_send_mr;

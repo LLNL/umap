@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <omp.h>
 
-#define STREAM_ARRAY_SIZE	2048
+#define STREAM_ARRAY_SIZE	1024000
 #define NTIMES	3
 
 # define HLINE "-------------------------------------------------------------\n"
@@ -77,14 +77,14 @@ int main(int argc, char *argv[])
 	}
 	a[0]=1234.5678;
 
-	Umap::Store*  store_b = new Umap::StoreNetwork("stream_b", umap_region_length, umap_psize, client);
+	Umap::Store*  store_b = new Umap::StoreNetwork("stream_b", umap_region_length, client);
 	b = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_b);
 	if ( b == UMAP_FAILED ) {
 		printf("failed to map b %s \n", strerror(errno));
 	}
 	b[0]=4321.8765;
 
-	Umap::Store*  store_c = new Umap::StoreNetwork("stream_b", umap_region_length, umap_psize, client);
+	Umap::Store*  store_c = new Umap::StoreNetwork("stream_b", umap_region_length, client);
 	c = (STREAM_TYPE*) umap_ex(NULL, umap_region_length, PROT_READ|PROT_WRITE, UMAP_PRIVATE, 0, 0, store_c);
 	if ( c == UMAP_FAILED ) {
 		printf("failed to map c %s \n", strerror(errno));
