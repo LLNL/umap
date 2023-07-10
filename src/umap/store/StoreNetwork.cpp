@@ -143,6 +143,11 @@ namespace Umap {
           perror("Failed to modify QP to INIT.\n");
           return 1;
       }
+      
+      ibv_query_qp(qp, &qp_attr, IBV_QP_CAP, &qp_init_attr);
+      max_inline_data = qp_init_attr.cap.max_inline_data;
+      printf("The maximum inline data = %d\n", max_inline_data);
+
     }
 
     // Get LID:
@@ -278,7 +283,11 @@ namespace Umap {
     return ibv_post_send(qp, &wr, &bad_wr);
   }
 
-  int  NetworkEndpoint::wait_completions(uint64_t wr_id){return 0;}
+  int  NetworkEndpoint::wait_completions(uint64_t wr_id)
+  {
+    UMAP_ERROR(" virtual function ");
+    return 0;
+  }
 
   int  NetworkServer::wait_completions(uint64_t wr_id)
   { // only one thread (the server) will call this
@@ -292,8 +301,8 @@ namespace Umap {
           n = ibv_poll_cq(cq, WC_BATCH, wc);
           if (n < 0)
           {
-              fprintf(stderr, "Poll CQ failed %d\n", n);
-              return 1;
+            fprintf(stderr, "Poll CQ failed %d\n", n);
+            return 1;
           }
       } while (n < 1);
 
@@ -633,6 +642,16 @@ namespace Umap {
     {
         UMAP_ERROR("Could not register local_send_mr");
     }
+
+    if( alignsize >= (size_t) endpoint->get_max_inline_data())
+    {
+      func_read = &Umap::StoreNetwork::read_from_store_rdma;
+      func_write = &Umap::StoreNetwork::write_to_store_rdma;
+    }else{
+      func_read = &Umap::StoreNetwork::read_from_store_inline;
+      func_write = &Umap::StoreNetwork::write_to_store_inline;
+    }
+
   }
 
   int StoreNetwork::create_local_region(char* buf, size_t nb, int mode)
@@ -657,6 +676,18 @@ namespace Umap {
   }
 
   ssize_t StoreNetwork::read_from_store(char* buf, size_t nb, off_t off)
+  {
+    return (this->*func_read)(buf, nb, off);
+  }
+
+
+  ssize_t StoreNetwork::write_to_store(char* buf, size_t nb, off_t off)
+  {
+    return (this->*func_write)(buf, nb, off);
+  }
+
+
+  ssize_t StoreNetwork::read_from_store_rdma(char* buf, size_t nb, off_t off)
   {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
@@ -704,7 +735,7 @@ namespace Umap {
     return rval;
   }
 
-  ssize_t  StoreNetwork::write_to_store(char* buf, size_t nb, off_t off)
+  ssize_t  StoreNetwork::write_to_store_rdma(char* buf, size_t nb, off_t off)
   {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
@@ -741,6 +772,100 @@ namespace Umap {
     rval = endpoint->wait_completions(wr_id);
     if( rval ) 
       UMAP_ERROR("Failed to wait_completions WRITE_WRID " << wr_id);
+
+    return rval;
+  }
+
+  ssize_t StoreNetwork::read_from_store_inline(char* buf, size_t nb, off_t off)
+  {
+    assert( off % alignsize == 0);
+    assert( nb == alignsize);
+    UMAP_LOG(Info, region_name << " off " << off);
+
+    int rval = 0;
+
+    if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
+    {
+        rval = create_local_region( buf, nb, 0);
+        if( rval ) 
+          UMAP_ERROR("Failed to create local region for buffer " << (uint64_t)buf );
+    }
+    ibv_mr *local_mr = local_mrs_map[(uint64_t)buf];
+
+    int page_id = off / alignsize;
+
+    struct ibv_sge list = {
+      .addr	  = (uint64_t)buf,
+      .length = (uint32_t) nb,
+      .lkey	  = local_mr->lkey
+    };
+
+    struct ibv_send_wr *bad_wr;
+    struct ibv_send_wr wr_read;
+    memset(&wr_read, 0, sizeof(wr_read));
+    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    wr_read.wr_id	     = wr_id;
+    wr_read.sg_list    = &list;
+    wr_read.num_sge    = 1;
+    wr_read.opcode     = IBV_WR_RDMA_READ;
+    wr_read.send_flags = IBV_SEND_SIGNALED;
+    wr_read.wr.rdma.remote_addr =  remote_mrs[page_id].remote_addr;
+    wr_read.wr.rdma.rkey = remote_mrs[page_id].rkey;
+    wr_read.next         = NULL;
+
+    rval = ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
+    if( rval ) 
+          UMAP_ERROR("Failed to send request request " );
+
+    rval = endpoint->wait_completions(wr_id);
+    if( rval ) 
+          UMAP_ERROR("Failed to wait_completions ");    
+
+    return rval;
+  }
+
+  ssize_t  StoreNetwork::write_to_store_inline(char* buf, size_t nb, off_t off)
+  {
+    assert( off % alignsize == 0);
+    assert( nb == alignsize);
+    UMAP_LOG(Info, region_name << " off " << off);
+
+    int rval = 0;
+    memcpy(local_send_mr->addr, buf, nb);
+
+    int page_id = off / alignsize;
+
+    struct ibv_sge list = {
+      .addr	  = (uint64_t) local_send_mr->addr,
+      .length = (uint32_t) nb,
+      .lkey	  = 0
+    };
+
+    struct ibv_send_wr *bad_wr;
+    struct ibv_send_wr wr_write;
+    memset(&wr_write, 0, sizeof(wr_write));
+    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    wr_write.wr_id	    = wr_id;
+    wr_write.sg_list    = &list;
+    wr_write.num_sge    = 1;
+    wr_write.opcode     = IBV_WR_RDMA_WRITE;
+    wr_write.send_flags = IBV_SEND_INLINE;
+    wr_write.wr.rdma.remote_addr = remote_mrs[page_id].remote_addr;
+    wr_write.wr.rdma.rkey = remote_mrs[page_id].rkey;
+    wr_write.next         = NULL;
+
+    rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
+    if( rval ) {
+      if(rval == EINVAL) printf("Invalid value provided in wr\n");
+      if(rval == ENOMEM) printf("Send Queue is full or not enough resources to complete this operation\n");
+      if(rval == EFAULT) printf("Invalid value provided in qp\n");
+      UMAP_ERROR("Failed to ibv_post_send_inline " << region_name << " offset " << (uint64_t)off << " errno: " << strerror(errno) );
+    }
+    UMAP_LOG(Info, " finished write_to_store_inline " << region_name << " offset " << (uint64_t)off );
+
+    //rval = endpoint->wait_completions(wr_id);
+    //if( rval ) 
+      //UMAP_ERROR("Failed to wait_completions WRITE_WRID " << wr_id);
 
     return rval;
   }

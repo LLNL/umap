@@ -71,6 +71,7 @@ namespace Umap {
         struct ibv_qp* get_qp(){return qp;}
         struct ibv_pd* get_pd(){return pd;}
         void*  get_buf(){return ib_buf;}
+        uint32_t get_max_inline_data(){return max_inline_data;}
         int post_recv(int size);
         int post_send(int size);
         virtual int wait_completions(uint64_t wr_id)=0;
@@ -88,6 +89,7 @@ namespace Umap {
         struct ibv_port_attr port_info;
         void       *ib_buf;
         size_t metabuf_size;
+        uint32_t max_inline_data;
         void close_ib_connection();
 
   };
@@ -122,6 +124,7 @@ namespace Umap {
       StoreNetwork(const char* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_);
       ssize_t read_from_store(char* buf, size_t nb, off_t off);
       ssize_t  write_to_store(char* buf, size_t nb, off_t off);
+
       
     private:
       std::string region_name;
@@ -133,6 +136,12 @@ namespace Umap {
       std::map<uint64_t, ibv_mr*> local_mrs_map; 
       struct ibv_mr *local_send_mr;
       int create_local_region(char* buf, size_t nb, int mode);
+      ssize_t read_from_store_rdma(char* buf, size_t nb, off_t off);
+      ssize_t  write_to_store_rdma(char* buf, size_t nb, off_t off);
+      ssize_t read_from_store_inline(char* buf, size_t nb, off_t off);
+      ssize_t  write_to_store_inline(char* buf, size_t nb, off_t off);
+      ssize_t (Umap::StoreNetwork::*func_read)(char* buf, size_t nb, off_t off);
+      ssize_t (Umap::StoreNetwork::*func_write)(char* buf, size_t nb, off_t off);
   };
 }
 #endif
