@@ -63,11 +63,10 @@ int main(int argc, char *argv[])
 	Umap::NetworkClient *client = new Umap::NetworkClient(server_name);
 
 	array_size = (size_t) STREAM_ARRAY_SIZE;
-	if(argc>3) array_size = atol(argv[3]);
+	if(argc>3) array_size = atoll(argv[3]);
 
 	size_t umap_region_length = sizeof(STREAM_TYPE) * array_size;
 	size_t umap_psize = umapcfg_get_umap_page_size();
-	umap_region_length = (umap_region_length + umap_psize - 1)/umap_psize * umap_psize;
 	printf("Global umap psize = %zu, each array has %ld elements and %zu bytes\n", umap_psize, array_size, umap_region_length);
 
 	Umap::Store*  store_a = new Umap::StoreNetwork("stream_a", umap_region_length, client);
@@ -99,8 +98,6 @@ int main(int argc, char *argv[])
 
     int			quantum, checktick();
     int			BytesPerWord;
-    int			k;
-    ssize_t		j;
     STREAM_TYPE		scalar;
     double		t, times[4][NTIMES];
 
@@ -130,14 +127,13 @@ int main(int argc, char *argv[])
     {
 #pragma omp master
 	{
-	    k = omp_get_num_threads();
-	    printf ("Number of Threads requested = %i\n",k);
+	    printf ("Number of Threads requested = %i\n",omp_get_num_threads());
         }
     }
 #endif
 
+	int k = 0;
 #ifdef _OPENMP
-	k = 0;
 #pragma omp parallel
 #pragma omp atomic 
 		k++;
@@ -147,7 +143,7 @@ int main(int argc, char *argv[])
     /* Get initial value for system clock. */
 	double t00 =  mysecond();
 	#pragma omp parallel for
-	for (j=0; j<array_size; j++) {
+	for (size_t j=0; j<array_size; j++) {
 		a[j] = 1.0;
 		b[j] = 2.0;
 		c[j] = 0.0;
@@ -169,29 +165,29 @@ int main(int argc, char *argv[])
 
 	/*	--- MAIN LOOP --- repeat test cases NTIMES times --- */
 	scalar = 3.0;
-	for (k=0; k<NTIMES; k++)
+	for (int k=0; k<NTIMES; k++)
 	{
 		times[0][k] = mysecond();
 #pragma omp parallel for
-		for (j=0; j<array_size; j++)
+		for (size_t j=0; j<array_size; j++)
 			c[j] = a[j];
 		times[0][k] = mysecond() - times[0][k];
 	
 		times[1][k] = mysecond();
 #pragma omp parallel for
-		for (j=0; j<array_size; j++)
+		for (size_t j=0; j<array_size; j++)
 			b[j] = scalar*c[j];
 		times[1][k] = mysecond() - times[1][k];
 	
 		times[2][k] = mysecond();
 #pragma omp parallel for
-		for (j=0; j<array_size; j++)
+		for (size_t j=0; j<array_size; j++)
 			c[j] = a[j]+b[j];
 		times[2][k] = mysecond() - times[2][k];
 	
 		times[3][k] = mysecond();
 #pragma omp parallel for
-		for (j=0; j<array_size; j++)
+		for (size_t j=0; j<array_size; j++)
 			a[j] = b[j]+scalar*c[j];
 		times[3][k] = mysecond() - times[3][k];
 	}
@@ -200,7 +196,7 @@ int main(int argc, char *argv[])
 
 	for (k=1; k<NTIMES; k++) /* note -- skip first iteration */
 	{
-		for (j=0; j<4; j++)
+		for (size_t j=0; j<4; j++)
 		{
 			avgtime[j] = avgtime[j] + times[j][k];
 			mintime[j] = MIN(mintime[j], times[j][k]);
@@ -209,7 +205,7 @@ int main(int argc, char *argv[])
 	}
 	
 	printf("Function    Best Rate MB/s  Avg time     Min time     Max time\n");
-	for (j=0; j<4; j++) {
+	for (size_t j=0; j<4; j++) {
 		avgtime[j] = avgtime[j]/(double)(NTIMES-1);
 
 		printf("%s%12.1f  %11.6f  %11.6f  %11.6f\n", label[j],
@@ -328,7 +324,7 @@ void checkSTREAMresults ()
 	STREAM_TYPE aSumErr,bSumErr,cSumErr;
 	STREAM_TYPE aAvgErr,bAvgErr,cAvgErr;
 	double epsilon;
-	ssize_t	j;
+	size_t	j;
 	int	k,ierr,err;
 
     /* reproduce initialization */

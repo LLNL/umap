@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2023 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -19,11 +19,15 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <cassert>
+#include <mutex>
 
 #include "StoreNetwork.h"
 #include "umap/store/Store.hpp"
 #include "umap/util/Macros.hpp"
 #include "umap/RegionManager.hpp"
+
+std::map<uint64_t, int> g_cq;
+std::mutex g_cq_mutex;
 
 namespace Umap {
 
@@ -283,13 +287,13 @@ namespace Umap {
     return ibv_post_send(qp, &wr, &bad_wr);
   }
 
-  int  NetworkEndpoint::wait_completions(uint64_t wr_id)
+  int  NetworkEndpoint::wait_completions(uint64_t wr_id, int is_write)
   {
     UMAP_ERROR(" virtual function ");
     return 0;
   }
 
-  int  NetworkServer::wait_completions(uint64_t wr_id)
+  int  NetworkServer::wait_completions(uint64_t wr_id, int is_write)
   { // only one thread (the server) will call this
     UMAP_LOG(Info, "wr_id:"<<wr_id);
     int finished = 0, count = 1;
@@ -323,38 +327,50 @@ namespace Umap {
     return 0;
   }
 
-  int  NetworkClient::wait_completions(uint64_t wr_id)
-  { // multiple filler and evictor may call this concurrently
-    UMAP_LOG(Info, "wr_id:"<<wr_id);
-    int finished = 0, count = 1;
-    while (finished < count)
-    {
-      struct ibv_wc wc[WC_BATCH];
-      int n;
-      do {
-          n = ibv_poll_cq(cq, WC_BATCH, wc);
+  int  NetworkClient::wait_completions(uint64_t wr_id, int is_write)
+  {
+    bool done = false;
+    while(!done){
+      
+      //UMAP_LOG(Info, "wr_id = " << wr_id << " is_write = "<<is_write);
+
+      if(g_cq.find(wr_id)!=g_cq.end() && g_cq[wr_id] == 1){
+        //UMAP_LOG(Info, "g_cq[wr_id]=" << g_cq[wr_id]);
+        g_cq_mutex.lock();
+        g_cq[wr_id] = 0;
+        g_cq_mutex.unlock();
+        return 0;
+      }else{
+        //g_cq_mutex.lock();
+        if(g_cq_mutex.try_lock())
+        {
+          struct ibv_wc wc[WC_BATCH];
+          int n = ibv_poll_cq(cq, WC_BATCH, wc);
           if (n < 0)
           {
               fprintf(stderr, "Poll CQ failed %d\n", n);
               return 1;
+          }          
+          for (int i = 0; i < n; i++)
+          {
+            if (wc[i].status != IBV_WC_SUCCESS)
+            {
+              fprintf(stderr, "Failed status %s (%d) for wr_id %d\n",
+                      ibv_wc_status_str(wc[i].status), wc[i].status, (int)wc[i].wr_id);
+              return 1;
+            }
+            if(wc[i].wr_id==wr_id)
+              done = true;//bypass lock/update map if this is the wr_id
+            else
+              g_cq[wc[i].wr_id] = 1;
+            //UMAP_LOG(Info, wc[i].wr_id << " finished");
           }
-      } while (n < 1);
-
-      for (int i = 0; i < n; i++)
-      {
-        if (wc[i].status != IBV_WC_SUCCESS)
-        {
-          fprintf(stderr, "Failed status %s (%d) for wr_id %d\n",
-                  ibv_wc_status_str(wc[i].status), wc[i].status, (int)wc[i].wr_id);
-          return 1;
+          g_cq_mutex.unlock();
         }
-        UMAP_LOG(Info, "wc["<<i<<"].wr_id"<<wc[i].wr_id);
-        if(wc[i].wr_id == wr_id)
-          finished++;
+        
       }
     }
 
-    UMAP_LOG(Info, "wr_id:"<<wr_id);
     return 0;
   }
 
@@ -440,12 +456,11 @@ namespace Umap {
   {
     bool done = false;
     while( !done ){
-      post_recv(sizeof(int)*2);
+      post_recv(sizeof(uint64_t)*2);
       wait_completions(RECV_WRID);
-      int *buf = (int*)ib_buf;
-      int num_pages = buf[0];
-      //memcpy(&num_pages, ib_buf, sizeof(int));
-      printf("Received num_pages=%d\n", num_pages);
+      uint64_t *buf = (uint64_t*)ib_buf;
+      uint64_t num_pages = buf[0];
+      printf("Received num_pages=%zu\n", num_pages);
 
       //Check if it is the signal for closing IB connection
       if(num_pages == 0){
@@ -453,8 +468,8 @@ namespace Umap {
         break;        
       }
 
-      int page_size = buf[1];
-      printf("Received page_size=%d\n", page_size);
+      uint64_t page_size = buf[1];
+      printf("Received page_size=%zu\n", page_size);
 
       //struct ibv_mr **mrs = (struct ibv_mr **)malloc( sizeof(struct ibv_mr *)*num_pages );
       //struct RemoteMR *remote_mrs = (struct RemoteMR *) malloc(sizeof(struct RemoteMR)*num_pages ); 
@@ -463,7 +478,7 @@ namespace Umap {
       size_t size = num_pages * page_size;
 
       //Option 1: allocate memory
-      buf = (int*) malloc(size);
+      buf = (uint64_t*) malloc(size);
       memset(buf, 0, size);
       printf("Allocated %zu\n", size);   
 
@@ -528,6 +543,27 @@ namespace Umap {
     
     res = connect_between_qps();
     if( res ) UMAP_ERROR(" failed to connect_between_qps");
+
+
+
+    uint64_t num_evictors = Umap::RegionManager::getInstance().get_num_evictors();
+    uint64_t umap_psize = Umap::RegionManager::getInstance().get_umap_page_size();
+    char* send_buf_ptr = (char*) malloc(umap_psize * num_evictors);
+    send_res = (struct SendRes*) malloc( sizeof(struct SendRes) * num_evictors);
+    send_res_size = num_evictors;
+
+    for(uint64_t i=0; i<send_res_size; i++){
+      ibv_mr *local_send_mr  = ibv_reg_mr(pd, send_buf_ptr, umap_psize, IBV_ACCESS_LOCAL_WRITE);
+      if (!local_send_mr)
+      {
+          UMAP_ERROR("Could not register local_send_mr");
+      }
+      send_res[i].send_mr = local_send_mr;
+      send_res[i].in_use  = 0;
+      send_buf_ptr += umap_psize;
+    }
+    UMAP_LOG(Info, "Created send_res of " << num_evictors << " x umap_psize: "<< umap_psize);
+
   }
   
   NetworkClient::~NetworkClient(){
@@ -603,6 +639,22 @@ namespace Umap {
     return 0;
   }
 
+  size_t NetworkClient::get_send_res_id()
+  {
+    send_res_mutex.lock();
+    //There are exactly send_res_size=num_evictor threads, so there must be one empty slot
+    for(size_t i=0; i<send_res_size; i++)
+    {
+      if( send_res[i].in_use==0 ){
+        send_res[i].in_use = 1;
+        send_res_mutex.unlock();
+        return i;
+      }
+    }
+    UMAP_ERROR("Could not find available send_mr");
+    return 0;
+  }
+
   StoreNetwork::StoreNetwork(const char* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_)
     : rsize{_rsize_}, alignsize{Umap::RegionManager::getInstance().get_umap_page_size()}
   {
@@ -615,32 +667,23 @@ namespace Umap {
     // Notify the server the number of pages to allocate
     if( rsize % alignsize != 0 )
       UMAP_ERROR(" region size " << rsize << " is not divisible by " << alignsize );
-    int *buf = (int*) endpoint->get_buf();
-    int num_pages = rsize/alignsize;
+    uint64_t *buf = (uint64_t*) endpoint->get_buf();
+    uint64_t num_pages = (uint64_t)rsize/alignsize;
     buf[0] = num_pages;
     buf[1] = alignsize;
-    //memcpy(endpoint->get_buf(), &num_pages, sizeof(int));
-    endpoint->post_send(sizeof(int)*2); 
+    endpoint->post_send(sizeof(uint64_t)*2); 
     endpoint->wait_completions(SEND_WRID);
 
     // Get Server's remote address and rkey
-    //remote_mrs = (struct RemoteMR *) malloc(sizeof(struct RemoteMR)*num_pages ); 
     endpoint->post_recv(sizeof(struct RemoteMR)*num_pages);
     endpoint->wait_completions(RECV_WRID);
-    //memcpy(remote_mrs, ib_buf, sizeof(struct RemoteMR)*num_pages);
     struct RemoteMR *remote_mr_ptr = (struct RemoteMR *) endpoint->get_buf();
-    printf("Client received RemoteMR for %d pages\n", num_pages);
+    printf("Client received RemoteMR for %zu pages\n", num_pages);
 
-    for(int i=0; i<num_pages; i++ ){
+    for(uint64_t i=0; i<num_pages; i++ ){
       remote_mrs.push_back(*remote_mr_ptr);
       remote_mr_ptr ++;
       printf("remote address %lu, rkey = %zu\n", remote_mrs.back().remote_addr, remote_mrs.back().rkey);
-    }
-    void*   local_send_ptr = malloc(alignsize);
-    local_send_mr  = ibv_reg_mr(endpoint->get_pd(), local_send_ptr, alignsize, IBV_ACCESS_LOCAL_WRITE);
-    if (!local_send_mr)
-    {
-        UMAP_ERROR("Could not register local_send_mr");
     }
 
     if( alignsize >= (size_t) endpoint->get_max_inline_data())
@@ -666,10 +709,9 @@ namespace Umap {
 
     if (!mr)
     {
-      printf("Couldn't register Memory Region for buffer %p\n", buf);
+      UMAP_ERROR("Couldn't register Memory Region for buffer "<<buf);
       return 1;
     }else{
-      printf("Registered buffer %p in create_local_region\n", buf);
       local_mrs_map[(uint64_t)buf] = mr;
     }
     return 0;
@@ -680,18 +722,16 @@ namespace Umap {
     return (this->*func_read)(buf, nb, off);
   }
 
-
   ssize_t StoreNetwork::write_to_store(char* buf, size_t nb, off_t off)
   {
     return (this->*func_write)(buf, nb, off);
   }
 
-
   ssize_t StoreNetwork::read_from_store_rdma(char* buf, size_t nb, off_t off)
   {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
-    UMAP_LOG(Info, region_name << " off " << off);
+    //UMAP_LOG(Info, region_name << " off " << off);
 
     int rval = 0;
 
@@ -714,7 +754,7 @@ namespace Umap {
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_read;
     memset(&wr_read, 0, sizeof(wr_read));
-    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    uint64_t wr_id      = remote_mrs[page_id].rkey;
     wr_read.wr_id	     = wr_id;
     wr_read.sg_list    = &list;
     wr_read.num_sge    = 1;
@@ -739,9 +779,10 @@ namespace Umap {
   {
     assert( off % alignsize == 0);
     assert( nb == alignsize);
-    UMAP_LOG(Info, region_name << " off " << off);
+    //UMAP_LOG(Info, region_name << " off " << off);
 
-    int rval = 0;
+    int send_res_id = endpoint->get_send_res_id();
+    struct ibv_mr *local_send_mr = endpoint->get_send_mr(send_res_id);    
     memcpy(local_send_mr->addr, buf, nb);
 
     int page_id = off / alignsize;
@@ -755,7 +796,7 @@ namespace Umap {
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_write;
     memset(&wr_write, 0, sizeof(wr_write));
-    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    uint64_t wr_id      = remote_mrs[page_id].rkey;
     wr_write.wr_id	    = wr_id;
     wr_write.sg_list    = &list;
     wr_write.num_sge    = 1;
@@ -765,13 +806,16 @@ namespace Umap {
     wr_write.wr.rdma.rkey = remote_mrs[page_id].rkey;
     wr_write.next         = NULL;
 
-    rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
+    int rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
     if( rval ) 
       UMAP_ERROR("Failed to ibv_post_send " << (uint64_t)buf );
 
-    rval = endpoint->wait_completions(wr_id);
+    rval = endpoint->wait_completions(wr_id, 1);
     if( rval ) 
       UMAP_ERROR("Failed to wait_completions WRITE_WRID " << wr_id);
+
+    //only the owner thread will call this
+    endpoint->reset_send_res(send_res_id);
 
     return rval;
   }
@@ -803,7 +847,7 @@ namespace Umap {
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_read;
     memset(&wr_read, 0, sizeof(wr_read));
-    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    uint64_t wr_id      = remote_mrs[page_id].rkey;
     wr_read.wr_id	     = wr_id;
     wr_read.sg_list    = &list;
     wr_read.num_sge    = 1;
@@ -830,7 +874,8 @@ namespace Umap {
     assert( nb == alignsize);
     UMAP_LOG(Info, region_name << " off " << off);
 
-    int rval = 0;
+    int send_res_id = endpoint->get_send_res_id();
+    struct ibv_mr *local_send_mr = endpoint->get_send_mr(send_res_id);    
     memcpy(local_send_mr->addr, buf, nb);
 
     int page_id = off / alignsize;
@@ -844,17 +889,17 @@ namespace Umap {
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_write;
     memset(&wr_write, 0, sizeof(wr_write));
-    uint64_t wr_id      = remote_mrs[page_id].remote_addr + (uint64_t)off;
+    uint64_t wr_id      = remote_mrs[page_id].rkey;
     wr_write.wr_id	    = wr_id;
     wr_write.sg_list    = &list;
     wr_write.num_sge    = 1;
     wr_write.opcode     = IBV_WR_RDMA_WRITE;
-    wr_write.send_flags = IBV_SEND_INLINE;
+    wr_write.send_flags = IBV_SEND_INLINE; //inline request can be reused immediately
     wr_write.wr.rdma.remote_addr = remote_mrs[page_id].remote_addr;
     wr_write.wr.rdma.rkey = remote_mrs[page_id].rkey;
     wr_write.next         = NULL;
 
-    rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
+    int rval = ibv_post_send(endpoint->get_qp(), &wr_write, &bad_wr);
     if( rval ) {
       if(rval == EINVAL) printf("Invalid value provided in wr\n");
       if(rval == ENOMEM) printf("Send Queue is full or not enough resources to complete this operation\n");
@@ -863,9 +908,8 @@ namespace Umap {
     }
     UMAP_LOG(Info, " finished write_to_store_inline " << region_name << " offset " << (uint64_t)off );
 
-    //rval = endpoint->wait_completions(wr_id);
-    //if( rval ) 
-      //UMAP_ERROR("Failed to wait_completions WRITE_WRID " << wr_id);
+    //only the owner thread will call this
+    endpoint->reset_send_res(send_res_id);
 
     return rval;
   }

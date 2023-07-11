@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////
-// Copyright 2017-2020 Lawrence Livermore National Security, LLC and other
+// Copyright 2017-2023 Lawrence Livermore National Security, LLC and other
 // UMAP Project Developers. See the top-level LICENSE file for details.
 //
 // SPDX-License-Identifier: LGPL-2.1-only
@@ -48,16 +48,9 @@ namespace Umap {
       };
       */
 
-      struct IBRes {
-        struct ibv_context *ctx;
-        struct ibv_pd *pd;
-        struct ibv_mr *mr;
-        struct ibv_cq *cq;
-        struct ibv_qp *qp;
-        struct ibv_port_attr port_info;
-
-        void *buf;
-        size_t size;
+      struct SendRes {
+        struct ibv_mr *send_mr;
+        int in_use;
       };
 
       struct IBDest {
@@ -74,7 +67,7 @@ namespace Umap {
         uint32_t get_max_inline_data(){return max_inline_data;}
         int post_recv(int size);
         int post_send(int size);
-        virtual int wait_completions(uint64_t wr_id)=0;
+        virtual int wait_completions(uint64_t wr_id, int is_write=0)=0;
 
     protected:
         struct IBDest local_dest;
@@ -99,7 +92,7 @@ namespace Umap {
       NetworkServer();
       ~NetworkServer();
       void wait_till_disconnect();
-      int wait_completions(uint64_t wr_id);
+      int wait_completions(uint64_t wr_id, int is_write=0);
 
     private:
       int get_client_dest();
@@ -109,13 +102,19 @@ namespace Umap {
 
   class NetworkClient: public NetworkEndpoint{
     public:
-      NetworkClient( const char* _server_name_  );
+      NetworkClient( const char* _server_name_ );
       ~NetworkClient();
-      int wait_completions(uint64_t wr_id);
+      int wait_completions(uint64_t wr_id, int is_write=0);
+      size_t get_send_res_id();
+      struct ibv_mr* get_send_mr(size_t id){return send_res[id].send_mr;}
+      void reset_send_res(size_t id){ send_res[id].in_use = 0;}
 
     private:
       int get_server_dest();
       char server_name[64];
+      struct SendRes *send_res;
+      int send_res_size;
+      std::mutex send_res_mutex;
   };
 
   class StoreNetwork : public Store {
@@ -133,8 +132,7 @@ namespace Umap {
       size_t alignsize;
       NetworkClient* endpoint;
       std::vector<struct RemoteMR> remote_mrs;   //only significant on Client 
-      std::map<uint64_t, ibv_mr*> local_mrs_map; 
-      struct ibv_mr *local_send_mr;
+      std::map<uint64_t, ibv_mr*> local_mrs_map;
       int create_local_region(char* buf, size_t nb, int mode);
       ssize_t read_from_store_rdma(char* buf, size_t nb, off_t off);
       ssize_t  write_to_store_rdma(char* buf, size_t nb, off_t off);
