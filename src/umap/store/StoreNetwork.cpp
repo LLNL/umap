@@ -93,11 +93,12 @@ namespace Umap {
     {
         perror("Failed to query IB device information.\n");
         return 1;
-    }else{
+    }
+    /*else{
         printf("The maximum number of QP = %d\n", device_attr.max_qp);
         printf("Largest contiguous block that can be registered %llu\n", device_attr.max_mr_size);
         printf("Maximum number of outstanding WR = %d\n", device_attr.max_qp_wr);
-    }
+    }*/
 
     // Register a Memory Region for communicating metadata
     mr = ibv_reg_mr(pd, ib_buf, metabuf_size,
@@ -150,7 +151,7 @@ namespace Umap {
       
       ibv_query_qp(qp, &qp_attr, IBV_QP_CAP, &qp_init_attr);
       max_inline_data = qp_init_attr.cap.max_inline_data;
-      printf("The maximum inline data = %d\n", max_inline_data);
+      //printf("The maximum inline data = %d\n", max_inline_data);
 
     }
 
@@ -329,11 +330,9 @@ namespace Umap {
 
   int  NetworkClient::wait_completions(uint64_t wr_id, int is_write)
   {
+    //UMAP_LOG(Info, "wr_id = " << wr_id << " is_write = "<<is_write);
     bool done = false;
     while(!done){
-      
-      //UMAP_LOG(Info, "wr_id = " << wr_id << " is_write = "<<is_write);
-
       if(g_cq.find(wr_id)!=g_cq.end() && g_cq[wr_id] == 1){
         //UMAP_LOG(Info, "g_cq[wr_id]=" << g_cq[wr_id]);
         g_cq_mutex.lock();
@@ -460,7 +459,6 @@ namespace Umap {
       wait_completions(RECV_WRID);
       uint64_t *buf = (uint64_t*)ib_buf;
       uint64_t num_pages = buf[0];
-      printf("Received num_pages=%zu\n", num_pages);
 
       //Check if it is the signal for closing IB connection
       if(num_pages == 0){
@@ -469,7 +467,6 @@ namespace Umap {
       }
 
       uint64_t page_size = buf[1];
-      printf("Received page_size=%zu\n", page_size);
 
       //struct ibv_mr **mrs = (struct ibv_mr **)malloc( sizeof(struct ibv_mr *)*num_pages );
       //struct RemoteMR *remote_mrs = (struct RemoteMR *) malloc(sizeof(struct RemoteMR)*num_pages ); 
@@ -478,9 +475,8 @@ namespace Umap {
       size_t size = num_pages * page_size;
 
       //Option 1: allocate memory
-      buf = (uint64_t*) malloc(size);
-      memset(buf, 0, size);
-      printf("Allocated %zu\n", size);   
+      buf = (uint64_t*) calloc(size, 1);
+      UMAP_LOG(Info, "Received num_pages="<<num_pages<<", page_size="<<page_size<<", allocated "<<size )
 
       //Register remote region one by one for each page
       char* p_addr = (char* ) buf;
@@ -493,14 +489,12 @@ namespace Umap {
               perror("Couldn't register Memory Region\n");
               return;
           }
-          printf("Registered Page %zu\n", i);
           mem_regions.push_back(mr);
           remote_mrs->remote_addr = (uint64_t) p_addr;
           remote_mrs->rkey = mr->rkey;
           p_addr += page_size;
           remote_mrs ++;
       }
-      printf("Finished registering %zu pages\n", num_pages);      
 
       //Send remote address and rkey
       //memcpy(ib_buf, remote_mrs, sizeof(struct RemoteMR)*num_pages );
@@ -512,7 +506,7 @@ namespace Umap {
     //TODO
     //add free up
     //deregistering all MRs
-    UMAP_LOG(Info, "Server de-registering memory regions");
+    UMAP_LOG(Info, "de-registering memory regions");
     size_t num_memory_regions = mem_regions.size();
     for(int i=0; i<num_memory_regions; i++)
     {
@@ -520,6 +514,7 @@ namespace Umap {
         fprintf(stderr, "Error, ibv_dereg_mr() failed for %d-th region\n", i);
       }
     }
+    /*
     UMAP_LOG(Info, "Server close IB connection");
     double* buf = (double*) mem_regions[0]->addr;
     printf("Server local buffer %f \n", buf[0]);
@@ -527,8 +522,9 @@ namespace Umap {
     printf("Server local buffer %f \n", buf[0]);
     buf = (double*) mem_regions[2]->addr;
     printf("Server local buffer %f \n", buf[0]);
+    */
     close_ib_connection();
-    UMAP_LOG(Info, "Server shutdown");
+    UMAP_LOG(Info, "shutdown");
   }
 
   NetworkClient::NetworkClient( const char* _server_name_ ){
@@ -678,12 +674,12 @@ namespace Umap {
     endpoint->post_recv(sizeof(struct RemoteMR)*num_pages);
     endpoint->wait_completions(RECV_WRID);
     struct RemoteMR *remote_mr_ptr = (struct RemoteMR *) endpoint->get_buf();
-    printf("Client received RemoteMR for %zu pages\n", num_pages);
+    UMAP_LOG(Info, "Client received RemoteMR for " << num_pages << " pages");
 
     for(uint64_t i=0; i<num_pages; i++ ){
       remote_mrs.push_back(*remote_mr_ptr);
       remote_mr_ptr ++;
-      printf("remote address %lu, rkey = %zu\n", remote_mrs.back().remote_addr, remote_mrs.back().rkey);
+      //printf("remote address %lu, rkey = %zu\n", remote_mrs.back().remote_addr, remote_mrs.back().rkey);
     }
 
     if( alignsize >= (size_t) endpoint->get_max_inline_data())
