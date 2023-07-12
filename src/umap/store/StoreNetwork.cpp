@@ -26,6 +26,8 @@
 #include "umap/util/Macros.hpp"
 #include "umap/RegionManager.hpp"
 
+#include "lz4.h"
+
 std::map<uint64_t, int> g_cq;
 std::mutex g_cq_mutex;
 
@@ -288,13 +290,13 @@ namespace Umap {
     return ibv_post_send(qp, &wr, &bad_wr);
   }
 
-  int  NetworkEndpoint::wait_completions(uint64_t wr_id, int is_write)
+  int  NetworkEndpoint::wait_completions(uint64_t wr_id, int is_write, Umap::StoreNetwork* store, uint64_t off, int compressed_bytes)
   {
     UMAP_ERROR(" virtual function ");
     return 0;
   }
 
-  int  NetworkServer::wait_completions(uint64_t wr_id, int is_write)
+  int  NetworkServer::wait_completions(uint64_t wr_id, int is_write, Umap::StoreNetwork* store, uint64_t off, int compressed_bytes)
   { // only one thread (the server) will call this
     UMAP_LOG(Info, "wr_id:"<<wr_id);
     int finished = 0, count = 1;
@@ -328,15 +330,15 @@ namespace Umap {
     return 0;
   }
 
-  int  NetworkClient::wait_completions(uint64_t wr_id, int is_write)
+  int  NetworkClient::wait_completions(uint64_t wr_id, int is_write, Umap::StoreNetwork* store, uint64_t off, int compressed_bytes)
   {
     //UMAP_LOG(Info, "wr_id = " << wr_id << " is_write = "<<is_write);
     bool done = false;
     while(!done){
       if(g_cq.find(wr_id)!=g_cq.end() && g_cq[wr_id] == 1){
-        //UMAP_LOG(Info, "g_cq[wr_id]=" << g_cq[wr_id]);
         g_cq_mutex.lock();
         g_cq[wr_id] = 0;
+        if(is_write) store->save_compressed(off, compressed_bytes);
         g_cq_mutex.unlock();
         return 0;
       }else{
@@ -347,8 +349,8 @@ namespace Umap {
           int n = ibv_poll_cq(cq, WC_BATCH, wc);
           if (n < 0)
           {
-              fprintf(stderr, "Poll CQ failed %d\n", n);
-              return 1;
+            fprintf(stderr, "Poll CQ failed %d\n", n);
+            return 1;
           }          
           for (int i = 0; i < n; i++)
           {
@@ -358,9 +360,10 @@ namespace Umap {
                       ibv_wc_status_str(wc[i].status), wc[i].status, (int)wc[i].wr_id);
               return 1;
             }
-            if(wc[i].wr_id==wr_id)
+            if(wc[i].wr_id==wr_id){
               done = true;//bypass lock/update map if this is the wr_id
-            else
+              if(is_write) store->save_compressed(off, compressed_bytes);
+            }else
               g_cq[wc[i].wr_id] = 1;
             //UMAP_LOG(Info, wc[i].wr_id << " finished");
           }
@@ -540,8 +543,6 @@ namespace Umap {
     res = connect_between_qps();
     if( res ) UMAP_ERROR(" failed to connect_between_qps");
 
-
-
     uint64_t num_evictors = Umap::RegionManager::getInstance().get_num_evictors();
     uint64_t umap_psize = Umap::RegionManager::getInstance().get_umap_page_size();
     char* send_buf_ptr = (char*) malloc(umap_psize * num_evictors);
@@ -656,7 +657,7 @@ namespace Umap {
   {
     region_name = std::string(_region_);
     UMAP_LOG(Info, "region_name: " << region_name << " rsize: " << rsize
-              << " alignsize: " << alignsize );
+                << " alignsize: "  << alignsize );
 
     endpoint = dynamic_cast<NetworkClient*>(_endpoint_);
 
@@ -691,17 +692,22 @@ namespace Umap {
       func_write = &Umap::StoreNetwork::write_to_store_inline;
     }
 
+    use_compression = true;
+    max_compressed_size = LZ4_compressBound(alignsize);
+    //printf("max_compressed_size = %d\n", max_compressed_size);
   }
 
-  int StoreNetwork::create_local_region(char* buf, size_t nb, int mode)
+  int StoreNetwork::create_recv_mr(char* buf)
   {
     ibv_mr *mr;
-    if( mode == 0 )
-      mr = ibv_reg_mr(endpoint->get_pd(), buf, nb,
+    if( !use_compression )
+      mr = ibv_reg_mr(endpoint->get_pd(), buf, alignsize,
                     IBV_ACCESS_LOCAL_WRITE); // | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
-    else
-      mr = ibv_reg_mr(endpoint->get_pd(), buf, nb,
+    else{
+      void* compressed_recv_buf = malloc(max_compressed_size);
+      mr = ibv_reg_mr(endpoint->get_pd(), compressed_recv_buf, max_compressed_size,
                     IBV_ACCESS_LOCAL_WRITE);
+    }
 
     if (!mr)
     {
@@ -729,27 +735,28 @@ namespace Umap {
     assert( nb == alignsize);
     //UMAP_LOG(Info, region_name << " off " << off);
 
-    int rval = 0;
-
     if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
     {
-        rval = create_local_region( buf, nb, 0);
-        if( rval ) 
-          UMAP_ERROR("Failed to create local region for buffer " << (uint64_t)buf );
+      create_recv_mr( buf );
     }
-    ibv_mr *local_mr = local_mrs_map[(uint64_t)buf];
+    ibv_mr *local_send_mr = local_mrs_map[(uint64_t)buf];
+
+
+    bool is_compressed = (use_compression && compress_map.find(off) != compress_map.end());
+    if( is_compressed ){
+      nb = compress_map[off];     
+    }
+    struct ibv_sge list = {
+      .addr	  = (uint64_t)local_send_mr->addr,
+      .length = (uint32_t)nb,
+      .lkey	  = local_send_mr->lkey
+    };     
+
 
     int page_id = off / alignsize;
-
-    struct ibv_sge list = {
-      .addr	  = (uint64_t)buf,
-      .length = (uint32_t) nb,
-      .lkey	  = local_mr->lkey
-    };
-
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_read;
-    memset(&wr_read, 0, sizeof(wr_read));
+    //memset(&wr_read, 0, sizeof(wr_read));
     uint64_t wr_id      = remote_mrs[page_id].rkey;
     wr_read.wr_id	     = wr_id;
     wr_read.sg_list    = &list;
@@ -760,7 +767,7 @@ namespace Umap {
     wr_read.wr.rdma.rkey = remote_mrs[page_id].rkey;
     wr_read.next         = NULL;
 
-    rval = ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
+    int rval = ibv_post_send(endpoint->get_qp(), &wr_read, &bad_wr);
     if( rval ) 
           UMAP_ERROR("Failed to send request request " );
 
@@ -768,30 +775,44 @@ namespace Umap {
     if( rval ) 
           UMAP_ERROR("Failed to wait_completions ");    
 
+    if( is_compressed ){
+      int bytes_returned = LZ4_decompress_safe((const char*)local_send_mr->addr, buf, nb, alignsize);
+      //double* tmp = (double*) buf;
+      //printf("decompressed_size = %d tmp[0]=%f, tmp[128]=%f\n", bytes_returned, tmp[0],  tmp[128]);      
+      if( bytes_returned!=alignsize )
+        UMAP_ERROR("bytes_returned=" << bytes_returned << " != alignsize=" << alignsize);   
+    }
+
     return rval;
   }
 
-  ssize_t  StoreNetwork::write_to_store_rdma(char* buf, size_t nb, off_t off)
+  ssize_t StoreNetwork::write_to_store_rdma(char* buf, size_t nb, off_t off)
   {
-    assert( off % alignsize == 0);
-    assert( nb == alignsize);
+    assert( off % alignsize == 0 );
+    assert( nb == alignsize );
     //UMAP_LOG(Info, region_name << " off " << off);
 
     int send_res_id = endpoint->get_send_res_id();
     struct ibv_mr *local_send_mr = endpoint->get_send_mr(send_res_id);    
-    memcpy(local_send_mr->addr, buf, nb);
-
-    int page_id = off / alignsize;
+  
+    if( use_compression )
+    {
+      nb = LZ4_compress_fast(buf, (char*)local_send_mr->addr, nb, nb, 1);
+      //printf("compressed_size = %d\n", nb);
+    }else{
+      memcpy(local_send_mr->addr, buf, nb);
+    }
 
     struct ibv_sge list = {
-      .addr	  = (uint64_t) local_send_mr->addr,
-      .length = (uint32_t) nb,
-      .lkey	  = local_send_mr->lkey
+        .addr	  = (uint64_t) local_send_mr->addr,
+        .length = (uint32_t) nb,
+        .lkey	  = local_send_mr->lkey
     };
 
+    int page_id = off / alignsize;
     struct ibv_send_wr *bad_wr;
     struct ibv_send_wr wr_write;
-    memset(&wr_write, 0, sizeof(wr_write));
+    //memset(&wr_write, 0, sizeof(wr_write));
     uint64_t wr_id      = remote_mrs[page_id].rkey;
     wr_write.wr_id	    = wr_id;
     wr_write.sg_list    = &list;
@@ -806,7 +827,7 @@ namespace Umap {
     if( rval ) 
       UMAP_ERROR("Failed to ibv_post_send " << (uint64_t)buf );
 
-    rval = endpoint->wait_completions(wr_id, 1);
+    rval = endpoint->wait_completions(wr_id, 1, this, off, nb);
     if( rval ) 
       UMAP_ERROR("Failed to wait_completions WRITE_WRID " << wr_id);
 
@@ -814,6 +835,11 @@ namespace Umap {
     endpoint->reset_send_res(send_res_id);
 
     return rval;
+  }
+
+  void StoreNetwork::save_compressed(uint64_t off, int compressed_bytes)
+  {
+    compress_map[off] = compressed_bytes;
   }
 
   ssize_t StoreNetwork::read_from_store_inline(char* buf, size_t nb, off_t off)
@@ -826,7 +852,7 @@ namespace Umap {
 
     if( local_mrs_map.find((uint64_t)buf) == local_mrs_map.end())
     {
-        rval = create_local_region( buf, nb, 0);
+        rval = create_recv_mr(buf);
         if( rval ) 
           UMAP_ERROR("Failed to create local region for buffer " << (uint64_t)buf );
     }

@@ -61,7 +61,7 @@ if (caliper_DIR)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
 endif()
 
-set (CMAKE_CXX_FLAGS "-g ${CMAKE_CXX_FLAGS} -libverbs")
+set (CMAKE_CXX_FLAGS "-g -I/home/peng8/bertha/lz4/lib ${CMAKE_CXX_FLAGS} -libverbs -L/home/peng8/bertha/lz4/lib/ -llz4")
 
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib

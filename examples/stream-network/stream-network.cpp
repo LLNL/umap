@@ -90,7 +90,6 @@ int main(int argc, char *argv[])
 	}
 	c[0]=5678.1234;
 
-
 	bytes[0] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[1] = 2 * sizeof(STREAM_TYPE) * array_size;
 	bytes[2] = 3 * sizeof(STREAM_TYPE) * array_size;
@@ -144,8 +143,8 @@ int main(int argc, char *argv[])
 	double t00 =  mysecond();
 	#pragma omp parallel for
 	for (size_t j=0; j<array_size; j++) {
-		a[j] = 1.0;
-		b[j] = 2.0;
+		a[j] = 1.0;//+1.0E-3*j;
+		b[j] = 2.0;//+1.0E-3*j;
 		c[j] = 0.0;
 	}
 	double t11 =  mysecond();
@@ -348,6 +347,20 @@ void checkSTREAMresults ()
 	bSumErr = 0.0;
 	cSumErr = 0.0;
 	for (j=0; j<array_size; j++) {
+
+		/* reproduce initialization */
+		aj = 1.0;//+1.0E-3*j;
+		bj = 2.0;//+1.0E-3*j;
+		cj = 0.0;
+		scalar = 3.0;
+		for (k=0; k<NTIMES; k++)
+		{
+			cj = aj;
+			bj = scalar*cj;
+			cj = aj+bj;
+			aj = bj+scalar*cj;
+		}		
+
 		aSumErr += abs(a[j] - aj);
 		bSumErr += abs(b[j] - bj);
 		cSumErr += abs(c[j] - cj);
