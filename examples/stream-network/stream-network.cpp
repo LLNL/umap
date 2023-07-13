@@ -143,8 +143,8 @@ int main(int argc, char *argv[])
 	double t00 =  mysecond();
 	#pragma omp parallel for
 	for (size_t j=0; j<array_size; j++) {
-		a[j] = 1.0;//+1.0E-3*j;
-		b[j] = 2.0;//+1.0E-3*j;
+		a[j] = 1.0;//+0.0001*j;
+		b[j] = 2.0;//+0.0001*j;
 		c[j] = 0.0;
 	}
 	double t11 =  mysecond();
@@ -349,8 +349,8 @@ void checkSTREAMresults ()
 	for (j=0; j<array_size; j++) {
 
 		/* reproduce initialization */
-		aj = 1.0;//+1.0E-3*j;
-		bj = 2.0;//+1.0E-3*j;
+		aj = 1.0;//+0.0001*j;
+		bj = 2.0;//+0.0001*j;
 		cj = 0.0;
 		scalar = 3.0;
 		for (k=0; k<NTIMES; k++)
@@ -364,7 +364,10 @@ void checkSTREAMresults ()
 		aSumErr += abs(a[j] - aj);
 		bSumErr += abs(b[j] - bj);
 		cSumErr += abs(c[j] - cj);
-		//if (j %16==0) printf("Index %d: c[j]: %f, cj: %f\n", j, c[j],cj);	// MCCALPIN
+
+		if (a[j] != aj) printf("Index %d: a[j]: %f, aj: %f\n", j, a[j], aj);	
+		if (b[j] != bj) printf("Index %d: b[j]: %f, bj: %f\n", j, b[j], bj);	
+		if (c[j] != cj) printf("Index %d: c[j]: %f, cj: %f\n", j, c[j], cj);	
 	}
 	aAvgErr = aSumErr / (STREAM_TYPE) array_size;
 	bAvgErr = bSumErr / (STREAM_TYPE) array_size;
