@@ -137,7 +137,12 @@ namespace Umap {
       std::vector<struct RemoteMR> remote_mrs;   //only significant on Client 
       std::map<uint64_t, ibv_mr*> local_mrs_map;
       bool use_compression;
+      bool use_lossless;
       int max_compressed_size;
+      const int dim = 1;
+      const double rate = 16.0;
+      const int elements_per_block = 4;
+      const int num_blocks;
       std::map<uint64_t, int32_t> compress_map;
       int create_recv_mr(char* buf);
       ssize_t read_from_store_rdma(char* buf, size_t nb, off_t off);

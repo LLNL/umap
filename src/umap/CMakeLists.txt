@@ -46,10 +46,38 @@ set(umapsrc
 
 find_package(Threads REQUIRED)
 
-add_library(umap SHARED ${umapsrc} )
-add_library(umap-static STATIC ${umapsrc} )
-set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
-target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+if (UMAP_ENABLE_ZFP)
+   include(ExternalProject)
+   # build ZFP from the official github
+   ExternalProject_Add(ZFP
+     PREFIX ${CMAKE_BINARY_DIR}/zfp
+     GIT_REPOSITORY https://github.com/LLNL/ZFP.git
+     GIT_TAG 1.0.0
+     #DOWNLOAD_COMMAND      ""
+     DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/zfp
+     UPDATE_COMMAND ""
+     CONFIGURE_COMMAND ""
+     BUILD_COMMAND cd ${CMAKE_BINARY_DIR}/zfp/src/ZFP && make -j
+     BUILD_ALWAYS FALSE
+     INSTALL_COMMAND ""
+     TEST_COMMAND ""
+   )
+
+   add_library(umap SHARED ${umapsrc} )
+   add_library(umap-static STATIC ${umapsrc} )
+   add_dependencies( umap ZFP )
+   add_dependencies( umap-static ZFP )
+   
+   include_directories("${CMAKE_BINARY_DIR}/zfp/src/ZFP/include")
+
+   set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
+   target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_BINARY_DIR}/zfp/src/ZFP/lib/libzfp.a)
+else(UMAP_ENABLE_ZFP)
+    add_library(umap SHARED ${umapsrc} )
+    add_library(umap-static STATIC ${umapsrc} )
+    set_target_properties(umap-static PROPERTIES OUTPUT_NAME umap)
+    target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT})
+endif(UMAP_ENABLE_ZFP)
 
 if (caliper_DIR)
    find_package(caliper REQUIRED)
@@ -61,7 +89,9 @@ if (caliper_DIR)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
 endif()
 
-set (CMAKE_CXX_FLAGS "-g -I/home/peng8/bertha/lz4/lib ${CMAKE_CXX_FLAGS} -libverbs -L/home/peng8/bertha/lz4/lib/ -llz4")
+set (CMAKE_CXX_FLAGS "-g -I/home/peng8/bertha/lz4/lib -I/home/peng8/umap_zfp/build/zfp/src/ZFP/include ${CMAKE_CXX_FLAGS} -libverbs -L/home/peng8/bertha/lz4/lib/ -llz4 ")
+
+target_link_libraries (umap ${CMAKE_THREAD_LIBS_INIT} /home/peng8/umap_zfp/build/zfp/src/ZFP/lib/libzfp.a)
 
 install(TARGETS umap umap-static
         LIBRARY DESTINATION lib

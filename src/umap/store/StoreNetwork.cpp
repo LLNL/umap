@@ -27,6 +27,7 @@
 #include "umap/RegionManager.hpp"
 
 #include "lz4.h"
+#include "zfp.h"
 
 std::map<uint64_t, int> g_cq;
 std::mutex g_cq_mutex;
@@ -653,7 +654,7 @@ namespace Umap {
   }
 
   StoreNetwork::StoreNetwork(const char* _region_, size_t _rsize_, NetworkEndpoint* _endpoint_)
-    : rsize{_rsize_}, alignsize{Umap::RegionManager::getInstance().get_umap_page_size()}
+    : rsize{_rsize_}, alignsize{Umap::RegionManager::getInstance().get_umap_page_size()}, num_blocks{alignsize/32}
   {
     region_name = std::string(_region_);
     UMAP_LOG(Info, "region_name: " << region_name << " rsize: " << rsize
@@ -693,8 +694,10 @@ namespace Umap {
     }
 
     use_compression = true;
+    use_lossless    = true;
     max_compressed_size = LZ4_compressBound(alignsize);
     //printf("max_compressed_size = %d\n", max_compressed_size);
+
   }
 
   int StoreNetwork::create_recv_mr(char* buf)
@@ -744,7 +747,8 @@ namespace Umap {
 
     bool is_compressed = (use_compression && compress_map.find(off) != compress_map.end());
     if( is_compressed ){
-      nb = compress_map[off];     
+      nb = compress_map[off];
+      //UMAP_LOG(Info, "compress_map[off]=" << nb);
     }
     struct ibv_sge list = {
       .addr	  = (uint64_t)local_send_mr->addr,
@@ -776,11 +780,33 @@ namespace Umap {
           UMAP_ERROR("Failed to wait_completions ");    
 
     if( is_compressed ){
-      int bytes_returned = LZ4_decompress_safe((const char*)local_send_mr->addr, buf, nb, alignsize);
-      //double* tmp = (double*) buf;
-      //printf("decompressed_size = %d tmp[0]=%f, tmp[128]=%f\n", bytes_returned, tmp[0],  tmp[128]);      
-      if( bytes_returned!=alignsize )
-        UMAP_ERROR("bytes_returned=" << bytes_returned << " != alignsize=" << alignsize);   
+
+      const char*compressed_buffer = (const char*)local_send_mr->addr;
+
+      if(use_lossless){
+        int bytes_returned = LZ4_decompress_safe(compressed_buffer, buf, nb, alignsize); 
+        if( bytes_returned!=alignsize )
+          UMAP_ERROR("bytes_returned=" << bytes_returned << " != alignsize=" << alignsize);
+      }else{
+
+        /* open bit stream  */
+        bitstream* stream = stream_open((void*)compressed_buffer, alignsize / sizeof(double) * rate / 8);
+      
+        /* allocate meta data for a compressed stream */
+        zfp_stream* zfp = zfp_stream_open(stream);
+
+        zfp_stream_set_rate(zfp, rate, zfp_type_double, dim, zfp_true);
+        zfp_stream_rewind(zfp);
+
+        double *ptr = (double*)buf;
+        for (size_t i = 0; i < num_blocks; i++) {
+          int bits = zfp_decode_block_double_1(zfp, ptr);
+          //assert( bits==256);
+          ptr += elements_per_block;
+          //printf("Read %zu th block (rate%f) encoded %d bits\n",i, rate, bits);
+        }
+      }
+
     }
 
     return rval;
@@ -797,8 +823,32 @@ namespace Umap {
   
     if( use_compression )
     {
-      nb = LZ4_compress_fast(buf, (char*)local_send_mr->addr, nb, nb, 1);
-      //printf("compressed_size = %d\n", nb);
+      void *compressed_buffer = local_send_mr->addr;
+
+      if(use_lossless){
+        nb = LZ4_compress_fast(buf, (char *)compressed_buffer, nb, nb, 1);
+        //printf("compressed_size = %d\n", nb);
+      }else{
+
+        /* open bit stream  */
+        bitstream* stream = stream_open(compressed_buffer, alignsize / sizeof(double) * rate / 8);
+      
+        /* allocate meta data for a compressed stream */
+        zfp_stream* zfp = zfp_stream_open(stream);
+
+        zfp_stream_set_rate(zfp, rate, zfp_type_double, dim, zfp_true);
+        zfp_stream_rewind(zfp);
+
+        double *ptr = (double*)buf;        
+        for (size_t i = 0; i < num_blocks; i++) {
+          int bits = zfp_encode_block_double_1(zfp, ptr);
+          //assert(bits==64);
+          ptr += elements_per_block;
+          //printf("Write %zu th block (rate%f) encoded %d bits\n",i, rate, bits);
+        }
+        stream_flush(stream);
+        nb = alignsize/4;
+      }
     }else{
       memcpy(local_send_mr->addr, buf, nb);
     }

@@ -143,8 +143,8 @@ int main(int argc, char *argv[])
 	double t00 =  mysecond();
 	#pragma omp parallel for
 	for (size_t j=0; j<array_size; j++) {
-		a[j] = 1.0;//+0.0001*j;
-		b[j] = 2.0;//+0.0001*j;
+		a[j] = 1.0;// +0.0001*j;
+		b[j] = 2.0;// +0.0001*j;
 		c[j] = 0.0;
 	}
 	double t11 =  mysecond();
@@ -349,8 +349,8 @@ void checkSTREAMresults ()
 	for (j=0; j<array_size; j++) {
 
 		/* reproduce initialization */
-		aj = 1.0;//+0.0001*j;
-		bj = 2.0;//+0.0001*j;
+		aj = 1.0;// +0.0001*j;
+		bj = 2.0;// +0.0001*j;
 		cj = 0.0;
 		scalar = 3.0;
 		for (k=0; k<NTIMES; k++)
