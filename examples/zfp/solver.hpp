@@ -2,6 +2,7 @@
 #define SOLVER_HPP
 
 #ifdef _OPENMP
+  #include <vector>
 #if POISSON_WITH_ZFP && !JACOBI
   #error "must use -DJACOBI with -DPOISSON_WITH_ZFP and OpenMP"
 #endif
@@ -17,6 +18,9 @@
 
 // initialize with analytical solution (set via Makefile)
 // #define INIT_CHEAT 1
+
+// initialize with zero on interior (set via Makefile)
+// #define INIT_ZERO 1
 
 // storage mask for querying array payload
 #ifdef ZFP_DATA_PAYLOAD
@@ -41,9 +45,10 @@ public:
     my(ny - 2 * ng),
     mz(nz - 2 * ng),
     dx(2. / mx),
-    dy(2. / my), 
-    dz(2. / mz), 
-    u(u)
+    dy(2. / my),
+    dz(2. / mz),
+    u(u),
+    v(u)
   {}
 
   // set initial conditions
@@ -64,34 +69,24 @@ public:
   // solve Poisson equation using Jacobi or Gauss-Seidel iteration
   void solve(size_t iterations)
   {
-#if JACOBI
-    // Jacobi: use separate array, v, for updated solution
-    array v = u;
-#else
-    // Gauss-Seidel: update solution u immediately (v is an alias for u)
-    array& v = u;
-#endif
-
     // outermost loop
     for (size_t iter = 0; iter < iterations; iter++) {
-      
-      std::chrono::time_point<std::chrono::steady_clock> timing_st = std::chrono::steady_clock::now();
       // advance solution one time step from u to v
-      double diff = advance(v);
-      std::chrono::time_point<std::chrono::steady_clock> timing_end = std::chrono::steady_clock::now();
-      fprintf(stderr, "%zu ms\n",std::chrono::duration_cast<std::chrono::milliseconds>(timing_end - timing_st).count());
-      
+      std::chrono::time_point<std::chrono::steady_clock> timing_st = std::chrono::steady_clock::now();
+      double diff = advance();
+
 #if JACOBI
       // Jacobi: update solution u
       u = v;
 #endif
+      std::chrono::time_point<std::chrono::steady_clock> timing_end = std::chrono::steady_clock::now();
 
       // compute error in solution and Laplacian
       std::pair<double, double> err = error();
 
       // end of iteration; print statistics
       double rate = 8. * u.size_bytes(PAYLOAD) / u.size();
-      fprintf(stderr, "%zu %.5e %.5e %.5e %6.3f\n", iter, diff, err.first, err.second, rate);
+      fprintf(stderr, "%zu %.5e %.5e %.5e %6.3f %6zu ms\n", iter, diff, err.first, err.second, rate, (size_t)std::chrono::duration_cast<std::chrono::milliseconds>(timing_end - timing_st).count());
     }
   }
 
@@ -145,16 +140,25 @@ protected:
 #if INIT_CHEAT
     // cheat by initializing u to analytical solution
     return f(x, y, z);
-#else
+#elif INIT_ZERO
     // initialize interior to zero, boundary to analytical solution
     return (ng <= i && i < nx - ng &&
             ng <= j && j < ny - ng &&
             ng <= k && k < nz - ng) ? 0.0 : f(x, y, z);
+#else
+    // use transfinite interpolation on interior
+    return (ng <= i && i < nx - ng &&
+            ng <= j && j < ny - ng &&
+            ng <= k && k < nz - ng)
+             ? + f(1, y, z) + f(x, 1, z) + f(x, y, 1)
+               - f(x, 1, 1) - f(1, y, 1) - f(1, 1, z)
+               + f(1, 1, 1)
+             : f(x, y, z);
 #endif
   }
 
   // advance solution u one time step to v (may be an alias for u)
-  virtual double advance(array& v) const
+  virtual double advance()
   {
     double diff = 0;
     LaplaceOperator<array, order> ddu(u, ng);
@@ -226,6 +230,11 @@ protected:
   const size_t mx, my, mz; // grid dimensions without ghost layers
   const double dx, dy, dz; // grid spacing
   array& u;                // solution array
+#if JACOBI
+  array v;                 // Jacobi: v is separate array for updated solution
+#else
+  array& v;                // Gauss-Seidel: v is an alias for u
+#endif
 };
 
 // generic solver
@@ -241,7 +250,31 @@ public:
 template <int order>
 class PoissonSolver<zfp::array3d, order> : public PoissonSolverBase<zfp::array3d, order> {
 public:
-  PoissonSolver(zfp::array3d& u) : PoissonSolverBase<zfp::array3d, order>(u) {}
+  PoissonSolver(zfp::array3d& u) :
+    PoissonSolverBase<zfp::array3d, order>(u)
+#ifdef _OPENMP
+  {
+    // determine number of threads for subsequent parallel regions
+    #pragma omp parallel
+    {
+      if (!omp_get_thread_num())
+        threads = omp_get_num_threads();
+    }
+    // ensure subsequent parallel regions use the same number of threads
+    omp_set_num_threads(threads);
+    // initialize views
+    for (int i = 0; i < threads; i++) {
+      // initialize read-only view into u
+      uview.push_back(zfp::array3d::private_const_view(&this->u));
+      // initialize read-write view that partitions v
+      vview.push_back(zfp::array3d::private_view(&this->v));
+      vview.back().partition(i, threads);
+    }
+  }
+#else
+  {}
+#endif
+
   virtual ~PoissonSolver() {}
 
   // set initial conditions
@@ -257,8 +290,6 @@ public:
   }
 
 protected:
-// use thread-safe zfp array views with OpenMP
-#ifdef _OPENMP
   using PoissonSolverBase<zfp::array3d, order>::f;
   using PoissonSolverBase<zfp::array3d, order>::ddf;
   using PoissonSolverBase<zfp::array3d, order>::coord;
@@ -274,22 +305,29 @@ protected:
   using PoissonSolverBase<zfp::array3d, order>::dy;
   using PoissonSolverBase<zfp::array3d, order>::dz;
   using PoissonSolverBase<zfp::array3d, order>::u;
+  using PoissonSolverBase<zfp::array3d, order>::v;
 
+// use thread-safe zfp array views with OpenMP
+#ifdef _OPENMP
   // advance solution u one time step to v (parallel zfp array implementation)
-  virtual double advance(zfp::array3d& v) const
+  virtual double advance()
   {
     double diff = 0;
     // flush shared cache to ensure cache consistency across threads
     u.flush_cache();
+#if JACOBI
+    // clear v's cache to avoid stale cache lines when later copying v to u
+    v.clear_cache();
+#endif
     // update subdomains of v in parallel
     #pragma omp parallel reduction(+:diff)
     {
-      // create read-only private view of entire array u
-      zfp::array3d::private_const_view myu(&u);
+      int thread = omp_get_thread_num();
+      // read-only private view of entire array u
+      zfp::array3d::private_const_view& myu = uview[thread];
       LaplaceOperator<zfp::array3d::private_const_view, order> ddu(myu, ng);
-      // create read-write private view into rectangular subset of v
-      zfp::array3d::private_view myv(&v);
-      myv.partition(omp_get_thread_num(), omp_get_num_threads());
+      // read-write private view into rectangular subset of v
+      zfp::array3d::private_view& myv = vview[thread];
 #if 0
       // process subdomain assigned to this thread using indices
       for (size_t k = 0; k < myv.size_z(); k++) {
@@ -346,6 +384,8 @@ protected:
       }
 #endif
 
+      // empty read-only cache to avoid stale cache lines in next iteration
+      myu.clear_cache();
       // compress all private cached blocks to shared storage
       myv.flush_cache();
     }
@@ -353,7 +393,7 @@ protected:
     return std::sqrt(diff / (mx * my * mz));
   }
 
-  // error in solution and Laplacian
+  // error in solution and Laplacian (parallel zfp array implementation)
   virtual std::pair<double, double> error() const
   {
     double esol = 0; // error in solution
@@ -361,12 +401,13 @@ protected:
 
     #pragma omp parallel reduction(+:esol,elap)
     {
-      // create read-only private view of entire array u
-      zfp::array3d::private_const_view myu(&u);
+      int thread = omp_get_thread_num();
+      // use read-only private view of entire array u
+      const zfp::array3d::private_const_view& myu = uview[thread];
       LaplaceOperator<zfp::array3d::private_const_view, order> ddu(myu, ng);
       // determine outer loop iterations assigned to this thread
-      size_t kmin = ng + mz * (omp_get_thread_num() + 0) / omp_get_num_threads();
-      size_t kmax = ng + mz * (omp_get_thread_num() + 1) / omp_get_num_threads();
+      size_t kmin = ng + mz * (thread + 0) / threads;
+      size_t kmax = ng + mz * (thread + 1) / threads;
       // process subdomain assigned to this thread
       for (size_t k = kmin; k < kmax; k++) {
         double z = coord(k, dz);
@@ -394,8 +435,14 @@ protected:
 
     return std::pair<double, double>(esol, elap);
   }
-#endif
+
+  int threads; // number of threads
+
+  // persistent thread-private views of u (read-only) and v (read-write)
+  std::vector<zfp::array3d::private_const_view> uview;
+  std::vector<zfp::array3d::private_view> vview;
+#endif // _OPENMP
 };
-#endif
+#endif // POISSON_WITH_ZFP
 
 #endif

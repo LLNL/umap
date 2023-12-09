@@ -21,7 +21,7 @@
 
 // include support for half precision?
 #ifdef __GNUC__
-  #define POISSON_WITH_HALF 0
+  #define POISSON_WITH_HALF 1
 #endif
 
 // include support for posits?
@@ -70,7 +70,7 @@ execute(array& u, int order, size_t iterations, const char* upath, const char* d
   }
   std::chrono::time_point<std::chrono::steady_clock> timing_end = std::chrono::steady_clock::now();
   fprintf(stderr, "%zu ms\n",
-	  std::chrono::duration_cast<std::chrono::milliseconds>(timing_end - timing_st).count());
+	  (size_t)std::chrono::duration_cast<std::chrono::milliseconds>(timing_end - timing_st).count());
 
   return EXIT_SUCCESS;
 }
@@ -88,21 +88,23 @@ execute_linear_array(size_t nx, size_t ny, size_t nz, int order, size_t iteratio
 // use uncompressed tiled array
 template <typename Real>
 int
-execute_tiled_array(size_t nx, size_t ny, size_t nz, int order, size_t iterations, const char* upath, const char* ddupath)
+execute_tiled_array(size_t nx, size_t ny, size_t nz, int order, size_t iterations, const char* upath, const char* ddupath, size_t cache_size = 0)
 {
-  const size_t cache_size = 8 * nx * ny * sizeof(double);
+  if (!cache_size)
+    cache_size = nx * ny * 8 * sizeof(double);
   zfp::array3< double, zfp::codec::generic3<double, Real> > u(nx, ny, nz, sizeof(Real) * CHAR_BIT, 0, cache_size);
   return execute(u, order, iterations, upath, ddupath);
 }
 
 // use compressed zfp array
 int
-execute_zfp_array(size_t nx, size_t ny, size_t nz, int order, size_t iterations, const char* upath, const char* ddupath, double rate, bool use_umap=false)
+execute_zfp_array(size_t nx, size_t ny, size_t nz, int order, size_t iterations, const char* upath, const char* ddupath, double rate, size_t cache_size = 0, bool use_umap=false)
 {
 #ifdef USE_UMAP
   if( !use_umap ){
 #endif
-    const size_t cache_size = 8 * nx * ny * sizeof(double);
+    if (!cache_size)
+      cache_size = nx * ny * 8 * sizeof(double);
     zfp::array3d u(nx, ny, nz, rate, 0, cache_size);
     return execute(u, order, iterations, upath, ddupath);
 #ifdef USE_UMAP
@@ -116,7 +118,7 @@ execute_zfp_array(size_t nx, size_t ny, size_t nz, int order, size_t iterations,
 // stub for silencing compiler (should never arrive here)
 template <typename Real>
 int
-execute_tiled_array(size_t, size_t, size_t, int, size_t, const char*, const char*)
+execute_tiled_array(size_t, size_t, size_t, int, size_t, const char*, const char*, size_t = 0)
 {
   return EXIT_FAILURE;
 }
@@ -137,6 +139,7 @@ int usage()
 #if POISSON_WITH_ZFP
   fprintf(stderr, "  -r <rate> [-u]: zfp fixed rate [use Umap backend]\n");
   fprintf(stderr, "  -z : use zfp tiled arrays with scalar storage\n");
+  fprintf(stderr, "  -c <size> : cache size in bytes\n");
 #endif
   fprintf(stderr, "  -o <path> : output solution to file\n");
   fprintf(stderr, "  -l <path> : output Laplacian to file\n");
@@ -150,6 +153,7 @@ int main(int argc, char* argv[])
   size_t mx = 512; // number of grid cells per dimension
   size_t my = 512; // number of grid cells per dimension
   size_t mz = 512; // number of grid cells per dimension
+  size_t cache_size = 0; // cache size in bytes
   int order = 2; // differential operator order of accuracy
   bool tiled_array = false; // use zfp tiled array
   size_t iterations = 3; //10000; // number of iterations
@@ -197,6 +201,10 @@ int main(int argc, char* argv[])
     }
     else if (std::string(argv[i]) == "-z")
       tiled_array = true;
+    else if (std::string(argv[i]) == "-c") {
+      if (++i == argc || sscanf(argv[i], "%zu", &cache_size) != 1)
+        return usage();
+    }
 #endif
     else if (std::string(argv[i]) == "-o") {
       if (++i == argc)
@@ -221,40 +229,40 @@ int main(int argc, char* argv[])
 #if POISSON_WITH_HALF
     case typeHalf:
       if (tiled_array)
-        return execute_tiled_array<__fp16>(nx, ny, nz, order, iterations, upath, ddupath);
+        return execute_tiled_array<__fp16>(nx, ny, nz, order, iterations, upath, ddupath, cache_size);
       else
         return execute_linear_array<__fp16>(nx, ny, nz, order, iterations, upath, ddupath);
 #endif
     case typeFloat:
       if (tiled_array)
-        return execute_tiled_array<float>(nx, ny, nz, order, iterations, upath, ddupath);
+        return execute_tiled_array<float>(nx, ny, nz, order, iterations, upath, ddupath, cache_size);
       else
         return execute_linear_array<float>(nx, ny, nz, order, iterations, upath, ddupath);
     case typeDouble:
       if (tiled_array)
-        return execute_tiled_array<double>(nx, ny, nz, order, iterations, upath, ddupath);
+        return execute_tiled_array<double>(nx, ny, nz, order, iterations, upath, ddupath, cache_size);
       else
         return execute_linear_array<double>(nx, ny, nz, order, iterations, upath, ddupath);
 #if POISSON_WITH_POSITS
     case typePosit16:
       if (tiled_array)
-        return execute_tiled_array<Posit16>(nx, ny, nz, order, iterations, upath, ddupath);
+        return execute_tiled_array<Posit16>(nx, ny, nz, order, iterations, upath, ddupath, cache_size);
       else
         return execute_linear_array<Posit16>(nx, ny, nz, order, iterations, upath, ddupath);
     case typePosit32:
       if (tiled_array)
-        return execute_tiled_array<Posit32>(nx, ny, nz, order, iterations, upath, ddupath);
+        return execute_tiled_array<Posit32>(nx, ny, nz, order, iterations, upath, ddupath, cache_size);
       else
         return execute_linear_array<Posit32>(nx, ny, nz, order, iterations, upath, ddupath);
     case typePosit64:
       if (tiled_array)
-        return execute_tiled_array<Posit64>(nx, ny, nz, order, iterations, upath, ddupath);
+        return execute_tiled_array<Posit64>(nx, ny, nz, order, iterations, upath, ddupath, cache_size);
       else
         return execute_linear_array<Posit64>(nx, ny, nz, order, iterations, upath, ddupath);
 #endif
 #if POISSON_WITH_ZFP
     case typeZFP:
-      return execute_zfp_array(nx, ny, nz, order, iterations, upath, ddupath, rate, use_umap);
+      return execute_zfp_array(nx, ny, nz, order, iterations, upath, ddupath, rate, cache_size, use_umap);
 #endif
     default:
       return EXIT_FAILURE;
