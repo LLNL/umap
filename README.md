@@ -100,7 +100,6 @@ If you have build problems, we have comprehensive
 
 ## Contact
 
-- Ivy Peng  (peng8@llnl.gov)
+- Ivy Peng  (ivybopeng@gmail.com)
 - Maya Gokhale (gokhale2@llnl.gov)
 - Eric Green (green77@llnl.gov)
-- Abhik Sarkar (sarkar6@llnl.gov)
