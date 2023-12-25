@@ -44,9 +44,14 @@ namespace Umap {
       struct dirent *ent;
       std::string metadata_file_path = root_path + "/_metadata";
       if ((directory = opendir(root_path.c_str())) != NULL){
-        UMAP_ERROR("Directory already exist. Needs to be opened in open mode: store = new SparseStore(root_path,is_read_only); ");
+        UMAP_LOG(Warning, "Directory already exist... removing and creating a new directory"); // Needs to be opened in open mode: store = new SparseStore(root_path,is_read_only); ");
+        std::string mkdir_command("rm -r " + root_path);
+        const int status = std::system(mkdir_command.c_str());
+        if (status == -1){
+          UMAP_ERROR("Failed to remove directory" + root_path);
+        }
       }
-      else{
+      //else{
         int directory_creation_status = mkdir(root_path.c_str(),S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         if (directory_creation_status != 0){
           UMAP_ERROR("ERROR: Failed to create directory" << " - " << strerror(errno));
@@ -60,7 +65,7 @@ namespace Umap {
           // set current capacity to be the file granularity
           metadata << std::max(file_size,rsize);
         }
-      }
+      // }
     }
 
     // Open mode
