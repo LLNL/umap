@@ -160,11 +160,6 @@ namespace Umap {
       if (status == -1){
         UMAP_ERROR("SparseStore: Error unmapping zero page - " << strerror(errno));
       }
-      
-      /* size_t written = pwrite(filemap_fd, (void*) file_exists_map, num_files * sizeof(int8_t), 0);
-      if (written == -1){
-        UMAP_ERROR("SparseStore: failed to write filemap metadata - " << strerror(errno));
-      } */
       if (close(filemap_fd) == -1){
         UMAP_ERROR("SparseStore: failed to close filemap metadata - " << strerror(errno));
       }
@@ -176,14 +171,12 @@ namespace Umap {
       off_t file_offset;
       int fd_index = off / file_size;
       if (file_exists_map[fd_index] == 0){
-        std::cout << "Reading Nonexistent block" << std::endl;
         // return zero page
         memcpy(buf, (void*) zero_page, file_size);
         return file_size;
       }
       else{
-        std::cout << "Reading existing block" << std::endl;
-        int fd = get_fd(off, file_offset, 0); 
+        int fd = get_fd(off, file_offset, 0);
         #ifdef USE_COMPRESSION
           // Get compressed size using lseek
           size_t compressed_block_size = lseek(fd, 0, SEEK_END);
@@ -196,7 +189,7 @@ namespace Umap {
             UMAP_ERROR("SparseStore: Failed reset lseek with error - " << strerror(errno));
           }
 
-          char* read_buffer; 
+          char* read_buffer;
           int memaligned_status = posix_memalign((void **)&read_buffer, ::umapcfg_get_umap_page_size(), compressed_block_size);
           if (memaligned_status != 0){
             UMAP_ERROR("SparseStore: Allocating temporary decompression buffer failed");
@@ -213,6 +206,11 @@ namespace Umap {
         }
         #endif
         numreads++;
+        int close_status = close(fd);
+        if (close_status == -1){
+          UMAP_ERROR("Error Closing file descriptor for block " << (uint64_t) off << " - " << strerror(errno))
+        }
+        file_descriptors[fd_index].id = -1;
         return read;
       }
     }
@@ -220,6 +218,7 @@ namespace Umap {
     ssize_t SparseStore::write_to_store(char* buf, size_t nb, off_t off) {
       ssize_t written = 0;
       off_t file_offset;
+      int fd_index = off / file_size;
       int fd = -1;
       #ifdef USE_COMPRESSION
         std::pair<void*,size_t> compressed_buffer_and_size = Umap::compress(buf, file_size);
@@ -240,6 +239,11 @@ namespace Umap {
         UMAP_ERROR("SparseStore: failed to write filemap metadata - " << strerror(errno));
       }
       numwrites++;
+      int close_status = close(fd);
+      if (close_status == -1){
+        UMAP_ERROR("Error Closing file descriptor for block " << (uint64_t) off << " - " << strerror(errno))
+      }
+      file_descriptors[fd_index].id = -1;
       return written;
     }
 
@@ -252,7 +256,7 @@ namespace Umap {
             UMAP_LOG(Warning,"SparseStore: Failed to close file with id: " << i << " - " << strerror(errno));
           }
           return_status = return_status | close_status;
-        }  
+        }
       }
       return return_status;
     }
@@ -260,10 +264,10 @@ namespace Umap {
     size_t SparseStore::get_current_capacity(){
       return current_capacity;
     }
-    
+
     /**
      * To get the size of any persistent region created using SparseStore without the need to instianiate an object
-    **/ 
+    **/
     size_t SparseStore::get_capacity(std::string base_path){
       size_t capacity = 0;
       std::string metadata_path = base_path + "/_metadata";
