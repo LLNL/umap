@@ -22,7 +22,7 @@ namespace Umap {
     static size_t get_capacity(std::string base_path);
     int close_files();
   private:
-    int fd;
+    // int fd;
     size_t file_size;
     size_t current_capacity;
     uint64_t num_files;
@@ -40,7 +40,10 @@ namespace Umap {
     };
     file_descriptor* file_descriptors; 
     std::mutex creation_mutex;
-    int get_fd(off_t offset, off_t &file_offset);
+    char *zero_page{nullptr};
+    int8_t *file_exists_map;
+    int filemap_fd;
+    int get_fd(off_t offset, off_t &file_offset, size_t trunc_size);
     // ssize_t get_file_size(const std::string file_path);
   };
 }

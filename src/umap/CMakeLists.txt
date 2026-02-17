@@ -59,6 +59,17 @@ if (caliper_DIR)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCALIPER")
 endif()
 
+if (ZSTD_ROOT)
+  find_library(LIBZSTD NAMES zstd PATHS ${ZSTD_ROOT}/lib)
+  message(STATUS "Using ZSTD Compression" )
+  target_include_directories(umap PUBLIC ${ZSTD_ROOT}/lib)
+  target_include_directories(umap-static PUBLIC ${ZSTD_ROOT}/lib)
+  target_link_libraries(umap ${LIBZSTD})
+  target_link_libraries(umap-static ${LIBZSTD})
+  target_compile_definitions(umap PUBLIC USE_COMPRESSION)
+  target_compile_definitions(umap-static PUBLIC USE_COMPRESSION)
+endif()
+
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 install(TARGETS umap umap-static
