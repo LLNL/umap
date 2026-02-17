@@ -15,6 +15,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef BFS_BFS_KERNEL_HPP
 #define BFS_BFS_KERNEL_HPP
 
+#include <cstdint>
 #include <iostream>
 #include <limits>
 
